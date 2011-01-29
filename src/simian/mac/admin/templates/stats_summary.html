@@ -1,0 +1,213 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Statistics{% endblock %}
+
+{% block page-content %}
+{% ifequal report_type "track" %}
+  <h2>Statistics for track: {{ report_filter }}</h2>
+{% endifequal %}
+
+{% if summary %}
+
+<div class="wrap">
+  {% block cache_info %}
+    {% if not cached %}
+      <span class="realtime">Viewing real-time stats.  Save CPU and <a href="/admin/stats/">view cached stats</a></span>
+      <p><a href="/admin/stats/installs">View all installs</a></p>
+      <h3>Summary</h3>
+      {% if next_page %}
+        <p>Over {{ limit }} computers found; summary data limited to viewable results.</p>
+      {% endif %}
+    {% else %}
+      <div class="last-cached">Last cached {{ mtime|timesince }} ago.</div>
+      <script type="text/javascript">
+      <!--
+        setTimeout("location.reload(true);", 60000);
+      -->
+      </script>
+    {% endif %}
+  {% endblock %}
+
+  <div class="column">
+    <table class="stats-table">
+      <tr><th colspan="4">Active Clients</th></tr>
+      <tr>
+        <th class="subhead">30 day</th>
+        <th class="subhead">14 day</th>
+        <th class="subhead">7 day</th>
+        <th class="subhead">24 hour</th>
+      </tr>
+      <tr>
+        <td>{{ summary.active }}</td>
+        <td>{{ summary.active_14d }}</td>
+        <td>{{ summary.active_7d }}</td>
+        <td>{{ summary.active_1d }}</td>
+      </tr>
+    </table>
+
+    {% ifnotequal report_type "track" %}
+    <table class="stats-table">
+      <tr><th colspan="4">Tracks</th></tr>
+        {% for track in summary.tracks %}
+          <tr class="{% cycle lbg,dbg %}">
+            <td><a href="/admin/stats/?type=track&filter={{ track.0 }}"
+                >{{ track.0 }}</a></td>
+            <td>{{ track.1 }}</td>
+            <td><a href="/manifests/track={{ track.0 }}">manifest</a></td>
+          </tr>
+        {% endfor %}
+    </table>
+    {% endifnotequal %}
+
+    <table class="stats-table">
+      <tr><th colspan="2">Connections</th></tr>
+      <tr>
+        <th class="subhead">On Corp</th>
+        <th class="subhead">Off Corp</th>
+      </tr>
+      <tr>
+        <td>
+          {{ summary.conns_on_corp_percent|floatformat }}%
+        </td>
+        <td>
+          {{ summary.conns_off_corp_percent|floatformat }}%
+        </td>
+      </tr>
+    </table>
+
+    <table class="stats-table">
+      <tr><th colspan="2">OS Versions</th></tr>
+      {% for version in summary.os_versions %}
+       <tr class="{% cycle lbg,dbg %}">
+         <td><a href="/admin/stats/?type=os_version&filter={{ version.0 }}"
+                >{{ version.0 }}</a></td>
+         <td>{{ version.1 }}</td>
+       </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="column">
+    <table cellspacing="0" class="stats-table">
+      <tr class="multi-header">
+        <th>% Off Corp</th>
+        <th>Clients</th>
+      </tr>
+      {% for percent in summary.off_corp_conns_histogram %}
+        <tr class="{% cycle lbg,dbg %}"><td>{{ percent.0 }}%</td><td>{{ percent.1|floatformat }}%</td></tr>
+      {% endfor %}
+    </table>
+
+    <table class="stats-table">
+      <tr><th colspan="2">Client Versions</th></tr>
+      {% for version in summary.client_versions %}
+        <tr class="{% cycle lbg,dbg %}">
+          <td><a href="/admin/stats/?type=client_version&filter={{ version.0 }}"
+                >{{ version.0 }}</a></td>
+          <td>{{ version.1 }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div style="clear: both;"></div>
+
+  {% ifnotequal report_type "site" %}
+  <h3>Client count by site:</h3>
+  <div style="max-width: 80%;">
+    <ol class="clients-by-site">
+    {% for site in summary.sites_histogram %}
+      <li>
+        <b>{{ site.0 }}</b>:
+        <a href="/admin/stats/?type=site&filter={{ site.0 }}"
+           >{{ site.1 }}</a>
+      </li>
+    {% endfor %}
+    </ol>
+  </div>
+  {% endifnotequal %}
+  {% endif %}  {# endif summary  #}
+
+  {% ifequal report_type "diskfree" %}
+    <h3>Disk Free Report</h3>
+    <a href="/admin/stats">Back to stats home</a><br />
+  {% endifequal %}
+
+  {% if computers %}
+    <h3>Computers</h3>
+    Results limited to {{ limit }} computers.
+
+  {% if next_page %}
+    <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       {% ifequal report_type "diskfree" %}
+         <th>Disk Free</th>
+       {% endifequal %}
+       {% ifequal report_type "uptime" %}
+         <th>Uptime</th>
+       {% endifequal %}
+       <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
+       <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
+       <th>Site</th><th>Office</th>
+       <th>(on/off corp)</th>
+       <th>Last MSU Popup</th>
+       <th>Last Preflight</th>
+       <th>Last Postflight</th>
+    </tr>
+    {% for computer in computers %}
+    <tr class="{% cycle lbg,dbg %}">
+      {% ifequal report_type "diskfree" %}
+        <td>{{ computer.root_disk_free|filesizeformat }}</td>
+      {% endifequal %}
+      {% ifequal report_type "uptime" %}
+        <td>{{ computer.uptime }}</td>
+      {% endifequal %}
+      <td>{{ computer.hostname }}</td>
+      <td>
+        {% ifequal report "host" %}
+          {{ computer.uuid }}
+        {% else %}
+          <a href="/admin/stats/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
+        {% endifequal %}
+      </td>
+      <td><a href="{{ owner_lookup_url }}/{{ computer.owner }}"
+          >{{ computer.owner }}</a></td>
+      <td>{{ computer.track }}</td>
+      <td>{{ computer.config_track }}</td>
+      <td>{{ computer.os_version }}</td>
+      <td>{{ computer.client_version }}</td>
+      <td>{{ computer.site }}</td>
+      <td>{{ computer.office }}</td>
+      <td>{{ computer.connections_on_corp }} /
+          {{ computer.connections_off_corp }}
+      </td>
+      <td>{{ computer.last_notified_datetime|timesince }}</td>
+      <td>{{ computer.preflight_datetime|timesince }}</td>
+      <td>{{ computer.postflight_datetime|timesince }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  {% if next_page %}
+    Results limited to {{ limit }} computers.
+    <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+  {% endif %}
+
+  {% endif %}
+
+  <p>
+    <h3>Other Reports</h3>
+    <ul>
+      <li><a href="/admin/stats/installs">View all installs</a></li>
+      <li><a href="/admin/stats/diskfree">View low disk free report</a></li>
+      <li><a href="/admin/stats/uptime">View longest uptime report</a></li>
+      <li><a href="/admin/stats/brokenclients">View broken clients</a></li>
+      <li><a href="/admin/stats/installproblems">View install problems</a></li>
+      <li><a href="/admin/stats/preflightexits">View preflight exits</a></li>
+    </ul>
+  </p>
+</div>
+{% endblock %}

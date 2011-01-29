@@ -1,0 +1,74 @@
+indexes:
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: track
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: root_disk_free
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: uptime
+    direction: desc
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: preflight_datetime
+    direction: desc
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: track
+  - name: preflight_datetime
+    direction: desc
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: site
+  - name: preflight_datetime
+    direction: desc
+
+- kind: ComputerMSULog
+  properties:
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: InstallLog
+  properties:
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: InstallLog
+  properties:
+  - name: package
+  - name: mtime
+    direction: desc
+
+- kind: PreflightExitLog
+  properties:
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: ClientLog
+  properties:
+  - name: action
+  - name: mtime
+    direction: desc
+
+- kind: ClientLog
+  properties:
+  - name: action
+  - name: uuid
+  - name: mtime
+    direction: desc

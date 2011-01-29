@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+#
+# Copyright 2010 Google Inc. All Rights Reserved.
+
+"""Custom postflight script to run before bulk of Munki executions."""
+
+
+
+
+import os
+import sys
+import flight_common
+from munkilib import FoundationPlist as fpl
+from munkilib import munkicommon
+munkicommon.cleanUpTmpDir()  # munkicommon creates a tempdir on import.
+
+
+def ReportInstallsToServerAndLogout(on_corp):
+  """Reports any installs, updates, uninstalls back to Simian server.
+
+  Args:
+    on_corp: str on_corp status from flight_common.GetClientIdentifier.
+  """
+  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
+  install_report_path = os.path.join(
+      managed_installs_dir, 'ManagedInstallReport.plist')
+  try:
+    install_report = fpl.readPlist(install_report_path)
+  except fpl.NSPropertyListSerializationException, e:
+    print >>sys.stderr, 'Error reading ', install_report_path, ': ', str(e)
+    return
+
+  installs = install_report.get('InstallResults', [])  # includes updates.
+  removals = install_report.get('RemovalResults', [])
+  problem_installs = install_report.get('ProblemInstalls', [])
+  # convert dict problems to strings.
+  for i in xrange(0, len(problem_installs)):
+    p = problem_installs[i]
+    if p.__class__.__name__ == 'NSCFDictionary':
+      problem_installs[i] = '%s: %s' % (p.get('name', ''), p.get('note', ''))
+
+  if installs or removals or problem_installs:
+    data = {
+        'on_corp': on_corp,
+        'installs': installs,
+        'removals': removals,
+        'problem_installs': problem_installs
+    }
+    flight_common.PostReportToServer('install_report', data)
+  else:
+    flight_common.PerformServerRequest(logout=True)
+
+
+def RemoveAuthTokenHeaderFromPlist(plist):
+  """Expires auth token and removes cookie header from a plist object.
+
+  Args:
+    plist: FoundationPlist.NSCFDictionary object.
+  """
+  headers = []
+
+  # Expire the auth token, and preserve all non-Cookie headers that may exist.
+  if munkicommon.ADDITIONAL_HTTP_HEADERS_KEY in plist:
+    # remove cookie headers from the plist.
+    for header in plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]:
+      if not header.startswith('Cookie:'):
+        headers.append(header)
+    if headers:
+      plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
+    else:
+      # if there are no headers remaining, delete the key entirely.
+      del(plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY])
+
+
+def main():
+  # read SecureConfig.plist.
+  plist = fpl.readPlist(munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
+
+  # Post client_id to server.
+  # TODO(user): refactor PostReport* to support multiple reports at once
+  # and move this into ReportInstallsToServerAndLogout.
+  client_id = flight_common.GetClientIdentifier()
+  params = {'client_id': flight_common.ClientIdDictToStr(client_id)}
+  flight_common.PostReportToServer('postflight', params, logout=False)
+
+  # Report installs/etc to server.
+  ReportInstallsToServerAndLogout(client_id.get('on_corp', 'None'))
+
+  # expire auth token and remove cookie from plist.
+  RemoveAuthTokenHeaderFromPlist(plist)
+
+  # save SecureConfig.plist.
+  fpl.writePlist(plist, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
+
+
+if __name__ == '__main__':
+  main()

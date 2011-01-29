@@ -1,0 +1,99 @@
+application: ###APPID###
+version: 1
+runtime: python
+api_version: 1
+inbound_services:
+- warmup
+builtins:
+- remote_api: on
+#- appstats: on
+skip_files:
+- ^(.*/)?mac/client/.*
+
+default_expiration: '3650d'
+
+handlers:
+
+### warmup url
+
+- url: /_ah/warmup
+  script: main.py
+  login: admin
+  secure: always
+
+### admin interface
+
+- url: /ahadmin/.*
+  script: $PYTHON_LIB/google/appengine/ext/admin
+  login: admin
+  secure: always
+
+### crons
+
+- url: /cron/maintenance/.*
+  script: simian/mac/cron/maintenance.py
+  login: admin
+  secure: always
+
+- url: /cron/reports_cache/.*
+  script: simian/mac/cron/reports_cache.py
+  login: admin
+  secure: always
+
+- url: /cron/welcome_email
+  script: simian/mac/cron/welcome_email.py
+  login: admin
+  secure: always
+
+### URLs commonly requested by Munki clients
+
+- url: /pkgs/.*
+  script: main.py
+  secure: always
+
+- url: /pkgsinfo/.*
+  script: main.py
+  secure: always
+
+- url: /catalogs/.*
+  script: main.py
+  secure: always
+
+- url: /manifests/.*
+  script: main.py
+  secure: always
+
+- url: /deletepkg
+  script: main.py
+  secure: always
+
+- url: /reports
+  script: main.py
+  secure: always
+
+# intentionally omit "secure: always" for Scotty/Blobstore functionality.
+- url: /uploadpkg
+  script: main.py
+
+- url: /auth
+  script: main.py
+  secure: always
+
+- url: /uauth
+  script: main.py
+  login: required
+  secure: always
+
+### deferred tasks
+
+- url: /_ah/queue/deferred
+  script: simian/mac/deferred_wrapper.py
+  secure: always
+  login: admin
+
+### catchall handler
+
+- url: /.*
+  script: main.py
+  secure: always
+  login: required

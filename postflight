@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# Copyright 2010 Google.
+#
+# Install postflight script
+#
+# Note: this script ends up running from the directory that the installer
+# was invoked from, e.g.  maybe / from the GUI, or a /Volumes/blah if
+# invoked from CLI
+
+set -e
+
+export PATH="$PATH:/usr/bin"
+PKG="$1"
+DEFAULT_PATH="$2"
+TARGET_PATH="$3"
+RESOURCES="${PKG}/Contents/Resources"
+BASETMPDIR="${TARGET_PATH}/tmp/"
+OSX=$(sw_vers -productVersion | cut -d. -f1-2)
+VERSION="0.5"
+
+### set up sane logging
+d=$(date '+%Y%m%d%H%M')
+exec 2>&1
+exec 1> "${BASETMPDIR}/postflight.${d}.$$.log"
+
+### create temp work directory
+TMPDIR=$(mktemp -d ${BASETMPDIR}/postflightXXXXXX)
+ORIGPWD="${PWD}"
+#trap "rm -rf ${TMPDIR}" EXIT
+
+
+### install supplied eggs, like M2Crypto.
+
+if [ "${OSX}" = "10.6" ] && [ -x "/usr/bin/easy_install-2.6" ]; then
+  EZ="/usr/bin/easy_install-2.6"
+else
+  EZ="/usr/bin/easy_install"
+fi
+
+[ -x "$EZ" ]
+
+for egg in ${RESOURCES}/*-${OSX}-*.egg ; do
+  ${EZ} -N "${egg}"
+done
+
+### install dependencies
+# setuptools does not like to upgrade some packages automatically
+# when running setup.py below, e.g. python-dateutil from 1.2 to 1.4.
+# so, just upgrade them all in advance. :(
+${EZ} -U setuptools
+${EZ} -U python-dateutil
+${EZ} -U pyasn1
+${EZ} -U tlslite
+${EZ} -U pyyaml
+${EZ} -U google_apputils
+
+### install main source package
+
+tar -zxf "${RESOURCES}/simian-${VERSION}.tar.gz" -C "${TMPDIR}"
+cd "${TMPDIR}/simian-${VERSION}"
+mkdir -p src/tests  # fake out google test
+python setup.py install 2>&1
+cd "${ORIGPWD}"
+
+### update munki configuration
+
+server=`python -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
+defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL https://${server}
+
+### TODO: remove any files unnecessary on clients
+

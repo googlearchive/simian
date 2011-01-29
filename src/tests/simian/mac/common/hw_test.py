@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+# 
+# Copyright 2010 Google Inc. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS-IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# #
+
+"""hw module tests."""
+
+
+
+from google.apputils import app
+from google.apputils import basetest
+import mox
+import stubout
+from simian.mac.common import hw
+
+
+class HwModuleTest(mox.MoxTestBase):
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+
+class SystemProfileTest(mox.MoxTestBase):
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+    self.sp = hw.SystemProfile()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testInit(self):
+    """Test __init__()."""
+    self.assertEqual(self.sp._profile, {})
+
+  def testGetSystemProfilerOutput(self):
+    """Test _GetSystemProfilerOutput()."""
+    stdout = 'out'
+    stderr = ''
+    self.mox.StubOutWithMock(hw.subprocess, 'Popen', True)
+    mock_sp = self.mox.CreateMockAnything()
+    hw.subprocess.Popen(
+        ['/usr/bin/system_profiler', '-XML'],
+        stdout = hw.subprocess.PIPE,
+        stderr = hw.subprocess.PIPE).AndReturn(mock_sp)
+    mock_sp.communicate().AndReturn((stdout, stderr))
+    mock_sp.wait().AndReturn(0)
+
+    self.mox.ReplayAll()
+    self.assertEqual(stdout, self.sp._GetSystemProfilerOutput())
+    self.mox.VerifyAll()
+
+  def testGetSystemProfile(self):
+    """Test _GetSystemProfile()."""
+    sp_xml = 'foo'
+    mock_plist = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(self.sp, '_GetSystemProfilerOutput')
+    self.mox.StubOutWithMock(hw.plist, 'ApplePlist', True)
+
+    self.sp._GetSystemProfilerOutput().AndReturn(sp_xml)
+    hw.plist.ApplePlist(sp_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+    mock_plist.GetContents().AndReturn('contents')
+
+    self.mox.ReplayAll()
+    self.sp._GetSystemProfile()
+    self.assertEqual(self.sp._system_profile_xml, sp_xml)
+    self.assertEqual(self.sp._system_profile, 'contents')
+    self.mox.VerifyAll()
+
+  def testFindAll(self):
+    """Test _FindAll()."""
+    funcs = (
+        '_GetSystemProfile',
+        '_FindSerialNumber',
+        '_FindMacAddresses',
+        '_FindBatteryInfo',
+        '_FindUSBDevices')
+    for func_name in funcs:
+      self.mox.StubOutWithMock(self.sp, func_name)
+      getattr(self.sp, func_name)().AndReturn(None)
+    self.mox.ReplayAll()
+    self.sp._FindAll()
+    self.mox.VerifyAll()
+
+  def testGetProfile(self):
+    """Test GetProfile()."""
+    self.sp._profile = {}
+    self.mox.StubOutWithMock(self.sp, '_FindAll')
+    self.sp._FindAll().AndReturn(None)
+    self.mox.ReplayAll()
+    self.assertEqual({}, self.sp.GetProfile())
+    self.mox.VerifyAll()
+
+  def testGetProfileWhenReady(self):
+    """Test GetProfile()."""
+    self.sp._profile = 'foo'
+    self.mox.ReplayAll()
+    self.assertEqual('foo', self.sp.GetProfile())
+    self.mox.VerifyAll()
+
+
+def main(unused_argv):
+  basetest.main()
+
+
+if __name__ == '__main__':
+  app.run()

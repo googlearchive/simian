@@ -1,0 +1,50 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Preflight Exits{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block page-content %}
+
+{% if host_report %}
+  <h3>Preflight Exits</h2>
+{% else %}
+  <h2>Preflight Exits</h2>
+  <a href="/admin/stats">Back to stats home</a>
+{% endif %}
+
+<p>{{ preflight_exits|length }} exits found (limit {{ limit }}).</p>
+{% if next_page %}
+  <a href="/admin/stats/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
+{% endif %}
+
+
+{% if preflight_exits %}
+  <table class="stats-table">
+    <tr>
+       <th>Exit Reason</th>
+       {% if not host_report %}<th>UUID</th>{% endif %}
+       <th>Time</th>
+    </tr>
+    {% for exit in preflight_exits %}
+      <tr class="{% cycle lbg,dbg %}">
+        <td>{{ exit.exit_reason }}</td>
+        {% if not host_report %}
+        <td><a href="/admin/stats/host/{{ exit.uuid }}">{{ exit.uuid }}</a></td>
+        {% endif %}
+        <td>{{ exit.mtime }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  {% if next_page %}
+    <a href="/admin/stats/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
+  {% endif %}
+
+{% endif %}
+
+{% endblock %}
+
+

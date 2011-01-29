@@ -1,0 +1,39 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Broken Clients{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block page-content %}
+<h3>Broken Clients Reports</h3>
+
+<a href="/admin/stats">Back to stats home</a><br /><br />
+
+{% if computers %}
+
+  <table class="stats-table">
+    <tr>
+      <th>Hostname</th><th>Owner</th><th>UUID</th><th>Ticket</th>
+      <th>Details</th><th>First Broken Time</th><th>All broken times</th>
+    </tr>
+  {% for c in computers %}
+    <tr class="{% cycle lbg,dbg %}">
+      <td>{{ c.hostname }}</td><td>{{ c.owner }}</td>
+      <td><a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
+      <td>
+        <a href="http://tick/{{ c.ticket_number }}">{{ c.ticket_number }}</a>
+      </td>
+      <td><a href="javascript:var w = window.open('', 'details', 'width=600, height=800'); w.document.write('{{ c.details|escape }}'); w.focus();">View Details</a></td>
+      <td>{{ c.first_broken_datetime|timesince }}</td>
+      <td style="max-width: 40em;">
+        {% for d in c.broken_datetimes %}
+          {{ d|timesince }} ...
+        {% endfor %}
+      </td>
+  {% endfor %}
+  </table>
+{% else %}
+  <p>Yay!! There are currently no broken clients.</p>
+{% endif %}
+
+{% endblock %}

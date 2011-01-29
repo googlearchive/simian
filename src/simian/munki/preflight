@@ -1,0 +1,365 @@
+#!/usr/bin/env python
+#
+# Copyright 2010 Google Inc. All Rights Reserved.
+
+"""Custom preflight script to run before bulk of Munki executions.
+
+Exit codes: see constants below.
+"""
+
+
+
+import errno
+import logging
+import os
+import re
+import shutil
+import sys
+import time
+import urllib
+import flight_common
+from munkilib import FoundationPlist as fpl
+from munkilib import munkicommon
+munkicommon.cleanUpTmpDir()  # munkicommon creates a tempdir on import.
+
+
+IFCONFIG = '/sbin/ifconfig'
+# Start exit codes
+STATUS_SUCCESS = (0, 'SUCCESS')
+STATUS_FAIL_AUTH = (1, 'failure obtaining auth token')
+STATUS_FAIL_WWAN_ACTIVE = (2, 'WWAN device ppp0 is active')
+STATUS_FAIL_ANDROID_WAP_ACTIVE = (3, 'Android WAP tether is active')
+STATUS_FAIL_CONFIG_SETUP = (4, 'Config setup errors')
+# End exit codes
+PLIST_EMPTY = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+</dict>
+</plist>
+"""
+MUNKI_CLIENT_ID_HEADER_KEY = 'X-munki-client-id'
+MAX_ATTEMPTS = 4
+MSULOGFILE = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.log'
+
+
+def LoginToServer(plist, client_id, user_settings):
+  """Sets an auth token cookie header to a plist object.
+
+  Args:
+    plist: FoundationPlist.NSCFDictionary object.
+    client_id: dict client identifier.
+    user_settings: dict of user settings.
+  Returns:
+    str auth token.
+  """
+  headers = []
+
+  # Preserve all non-Cookie and non-ClientID headers that may exist.
+  if munkicommon.ADDITIONAL_HTTP_HEADERS_KEY in plist:
+    for header in plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]:
+      if (not header.startswith('Cookie:') and
+          not header.startswith(MUNKI_CLIENT_ID_HEADER_KEY)):
+        headers.append(header)
+
+  # Write CA cert and get a token from server.
+  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
+  certs_dir = os.path.join(managed_installs_dir, 'certs')
+  cert_file_path = os.path.join(certs_dir, 'ca.pem')
+  if not os.path.isdir(certs_dir):
+    os.makedirs(certs_dir)
+  script_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
+  script_path = os.path.join(script_dir, flight_common.AUTH_BINARY)
+
+  client_id_str = flight_common.ClientIdDictToStr(client_id)
+  user_settings_str = ''
+  client_params = {
+      '_report_type': 'preflight',
+      'client_id': client_id_str,
+      'user_settings': user_settings_str,
+  }
+  client_params = urllib.urlencode(client_params)
+
+  cmd = [
+      script_path, '--login', '--print-cookie',
+      '--write-root-ca-certs', cert_file_path,
+      '--report', 'body:%s' % client_params,
+  ]
+  return_code, stdout, stderr = flight_common.Exec(cmd)
+  token = stdout.strip()
+  if return_code != 0 or not stdout:
+    logging.error(
+        'preflight failure obtaining token (%d): %s', return_code, stderr)
+    sys.exit(STATUS_FAIL_AUTH[0])
+  # Add the Cookie and client id to the headers.
+  headers.append('Cookie: %s' % token)
+  headers.append('%s: %s' % (MUNKI_CLIENT_ID_HEADER_KEY, client_id_str))
+  # Replace AdditionalHttpHeaders with the new headers list.
+  plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
+  return token
+
+
+def IsOnWWAN():
+  """"Checks WWAN device connection status.
+
+  Note: this may produce false-positives, and may not catch all WWAN devices.
+    Several Sprint and Verizon devices were tested, all of which create ppp0
+    upon connection. However, L2TP VPN also creates ppp0 (Google no longer uses
+    this as of Q2-2010 in favor of SSLVPN). A stronger check is probably needed
+    at some point.
+
+  Returns:
+    Boolean. True if WWAN device is active, False otherwise.
+  """
+  wwan_iface = 'ppp0'
+  return_code, unused_out, unused_err = flight_common.Exec(
+      [IFCONFIG, wwan_iface])
+  return return_code == 0  # ifconfig exits with 1 if interface doesn't exist.
+
+
+def IsOnAndroidWAP():
+  """Checks if the AirPort is connection to Android WAP tether.
+
+  Returns:
+    Boolean. True if Android WAP is connected, False otherwise.
+  """
+  airport_iface = 'en1'
+  # Android WAP uses a very specific subnet (192.168.43.0/24) as well as
+  # dnsmasq.
+  return_code, stdout, unused_err = flight_common.Exec(
+      [IFCONFIG, airport_iface])
+  if return_code != 0:  # interface was likely not found.
+    return False
+  # 0xffffff00 is a hex representation of /24.
+  android_wap_match = re.search(
+      r'inet\s+192\.168\.43\.\d{1,3}\s+netmask\s+0xffffff00\s+', stdout)
+  if android_wap_match is not None:
+    # IP and netmask look like Android WAP, so check dnsmasq.
+    cmd = ['host', '-W', '5', '-c', 'CHAOS', '-t', 'txt', 'VERSION.BIND',
+           '192.168.43.1']
+    return_code, stdout, unused_err = flight_common.Exec(cmd)
+    if return_code != 0:
+      return False
+    dnsmasq_match = re.search(
+        'VERSION\.BIND descriptive text "dnsmasq-.*"', stdout)
+    if dnsmasq_match is not None:
+      # IP, netmask and dnsmasq all match Android WAP tethering.
+      return True
+
+  return False
+
+
+def CreateEmptyDirectory(attempt=0):
+  """Create and/or maintain an empty directory.
+
+  Args:
+    attempt: int, default 0, the attempt number.
+  Returns:
+    str, path to empty directory
+  Exits:
+    with status STATUS_FAIL_CONFIG_SETUP[0] if MAX_ATTEMPTS have been made.
+  """
+  if attempt == MAX_ATTEMPTS:
+    logging.error('preflight failure setting up empty dir')
+    sys.exit(STATUS_FAIL_CONFIG_SETUP[0])
+
+  time.sleep(attempt)
+
+  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
+  path = os.path.join(managed_installs_dir, '.purposefully_empty_dir')
+
+  remove = False
+  create = False
+
+  if os.path.exists(path):
+    if os.path.isdir(path):
+      if os.listdir(path):
+        remove = 'd'
+    else:
+      remove = 'f'
+  else:
+    create = True
+
+  if remove:
+    try:
+      if remove == 'd':
+        shutil.rmtree(path)
+      elif remove == 'f':
+        os.unlink(path)
+    except OSError, e:
+      if e.args[0] == errno.ENOENT:
+        # it went missing after we just found it.  try to regain control.
+        logging.critical('%s went missing after it existed', path)
+        return CreateEmptyDirectory(attempt + 1)
+      else:
+        # some other error.
+        return CreateEmptyDirectory(attempt + 1)
+
+  if remove or create:
+    try:
+      os.mkdir(path)
+    except OSError, e:
+      if e.args[0] == errno.EEXIST:
+        # it already exists.  try to regain control of it.
+        return CreateEmptyDirectory(attempt + 1)
+      else:
+        # some other error.  try again.
+        logging.critical('mkdir(%s) error: %s', path, str(e))
+        return CreateEmptyDirectory(attempt + 1)
+
+  return path
+
+
+def GetManagedSoftwareUpdateLogs():
+  """Get logs from MSU.
+
+  This function modifies the existing log file by removing it, thus
+  rolling the logs also.
+
+  Returns:
+    array of dicts in form = {
+      'time': float, Unix timestamp
+      'user': str, like "username"
+      'source': str, like "MSU",
+      'event': str, like "launched"
+      'desc': str, like "additional descriptive text"
+    }
+  """
+  if not os.path.exists(MSULOGFILE):
+    return []
+
+  name = '%s.%d.%d' % (MSULOGFILE, os.getpid(), time.time())
+  try:
+    os.link(MSULOGFILE, name)
+  except OSError:
+    return []
+
+  fd = open(name, 'r')
+  os.unlink(MSULOGFILE)
+  logs = []
+
+  try:
+    log_re = re.compile('^(\d+\.\d+) INFO (\w+) : @@([^:]+):([^:]+)@@\s?(.*)')
+
+    r = fd.readline()
+    while r != '':
+      r = r.strip()
+      m = log_re.search(r)
+      if m:
+        logs.append({
+            'time': float(m.group(1)),
+            'user': m.group(2),
+            'source': m.group(3),
+            'event': m.group(4),
+            'desc': m.group(5),
+        })
+      r = fd.readline()
+
+    fd.close()
+  except IOError, e:
+    # some error parsing the logs, logs may have been lost now.
+    # returning the symlink is possible to put the log file back, but
+    # problematic if new log files were written during processing.
+    # just continue with what we have and mark failure.
+    logs.append({
+        'time': time.time(),
+        'user': 'preflight',
+        'source': 'truncate',
+        'event': 'truncate',
+        'desc': str(e)})
+
+  try:
+    os.unlink(name)
+  except OSError:
+    pass
+
+  return logs
+
+
+def PostManagedSoftwareUpdateLogs(logs, token):
+  """Post Managed Software Update logs to Munki server.
+
+  Args:
+    logs: same format as output from GetManagedSoftwareUpdateLogs
+    token: str, token for auth
+  """
+  args = []
+  for log in logs:
+    kv = ':'.join(map(lambda k: '%s=%s' % (k, log[k]), log))
+    args.extend(['--report', 'dict:msu_log:%s' % kv])
+
+  if args:
+    flight_common.PerformServerRequest(args, token, login=False, logout=False)
+
+
+def main(args):
+  config_file_path = munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH
+
+  # create the secure ManagedInstalls.plist file if it doesn't exist.
+  if not os.path.isfile(config_file_path):
+    logging.info('secure config does not exist; attempting to create')
+    f = open(config_file_path, 'w')
+    f.write(PLIST_EMPTY)
+    f.close()
+
+  # read secure ManagedInstalls.plist.
+  plist = fpl.readPlist(config_file_path)
+
+  # update the ClientIdentifier key with the custom client id.
+  client_id = flight_common.GetClientIdentifier()
+  plist['ClientIdentifier'] = client_id['track']
+
+  user_settings = {}
+
+  # get a client auth token/cookie from the server, and post connection data.
+  token = LoginToServer(plist, client_id, user_settings)
+
+  # post recent MSU logs
+  logs = GetManagedSoftwareUpdateLogs()
+  PostManagedSoftwareUpdateLogs(logs, token)
+
+  # If the munki exec is an auto run (launchd), exit if on WWAN or Android WAP.
+  if len(args) > 1 and args[1] == 'auto':
+    # Exit if WWAN device is active.
+    if IsOnWWAN():
+      response = flight_common.PostReportToServer(
+          'preflight_exit', {'message': STATUS_FAIL_WWAN_ACTIVE[1]},
+          token=token)
+      if response != flight_common.ReportFeedback.FORCE_CONTINUE:
+        logging.warning(STATUS_FAIL_WWAN_ACTIVE[1])
+        sys.exit(STATUS_FAIL_WWAN_ACTIVE[0])
+      else:
+        logging.warning('Report status from server: %s', response)
+
+    # Exit if Android WAP tether is active.
+    if IsOnAndroidWAP():
+      response = flight_common.PostReportToServer(
+          'preflight_exit', {'message': STATUS_FAIL_ANDROID_WAP_ACTIVE[1]},
+          token=token)
+      if response != flight_common.ReportFeedback.FORCE_CONTINUE:
+        logging.warning(STATUS_FAIL_ANDROID_WAP_ACTIVE[1])
+        sys.exit(STATUS_FAIL_ANDROID_WAP_ACTIVE[0])
+      else:
+        logging.warning('Report status from server: %s', response)
+
+  # save secure ManagedInstalls.plist.
+  fpl.writePlist(plist, config_file_path)
+
+  # load user settings into the NONSECURE ManagedInstalls.plist
+  plist = fpl.readPlist(munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+  if user_settings:
+    plist['UserSettings'] = user_settings
+  else:
+    if 'UserSettings' in plist:
+      del(plist['UserSettings'])  # wipe existing UserSettings.
+
+  # setup blank directory for capath setting
+  path = CreateEmptyDirectory()
+  plist['SoftwareRepoCAPath'] = path
+
+  # write NONSECURE ManagedInstalls.plist
+  fpl.writePlist(plist, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+
+
+if __name__ == '__main__':
+  main(sys.argv)

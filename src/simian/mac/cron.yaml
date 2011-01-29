@@ -1,0 +1,16 @@
+cron:
+- description: auth session cleanup
+  url: /cron/maintenance/authsession_cleanup
+  schedule: every 10 minutes
+
+- description: Mark Computers inactive after X days without a connection.
+  url: /cron/maintenance/mark_computers_inactive
+  schedule: every 9 hours
+
+- description: PackageInfo and Blobstore integrity verification
+  url: /cron/maintenance/verify_packages
+  schedule: every 9 hours
+
+- description: Stats Summary Cache
+  url: /cron/reports_cache/summary
+  schedule: every 30 minutes

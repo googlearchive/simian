@@ -1,0 +1,81 @@
+Simian
+App Engine server and client enhancements for Munki client
+
+
+OVERVIEW
+
+The machine you untarred this distribution onto can become your
+administrative workstation.  From here you can setup configuration, push
+config and code to your App Engine instance, and build .DMGs to install on
+your clients.
+
+
+PREREQUISITES
+
+App Engine SDK
+-------------
+Portions of the App Engine SDK are supplied in zips for importing where
+necessary.
+
+src/tests/simian/auth/gae_server.zip supplies the App Engine SDK so that all
+unit tests may run without requiring the SDK.
+
+src/simian/client/gae_client.zip supplies a small portion of the App Engine
+SDK so that client functions may run without needing the full SDK on each
+client.
+
+However, you will need the full App Engine SDK so that you can upload the
+Simian site to your App Engine instance.
+
+For information on downloading and installing the SDK, see:
+  http://code.google.com/appengine/downloads.html
+
+
+Other packages
+--------------
+google-apputils-python
+M2Crypto
+python_dateutil
+pyyaml
+
+These should be resolved automatically by setuptools, however if you have
+trouble, run easy_install -U modulename.
+
+
+TESTING
+
+Before installation, run the unit tests to make sure that your Python is
+working correctly.  Run:
+
+  make test
+
+For more information about testing, see:
+  https://code.google.com/p/simian/wiki/Testing
+
+
+INSTALLATION
+
+Installation can be broken up into five tasks:
+
+  * Configuring your installation
+  * Pushing the server code to your App Engine instance
+  * Rolling a .DMG to install on clients, based on your configuration
+
+For information on configuration, see:
+  https://code.google.com/p/simian/wiki/Configuration
+
+For information on pushing your server code to your AppEngine instance, see:
+  https://code.google.com/p/simian/wiki/AdminSetup
+
+
+Briefly, to roll your own .DMG after configuring, run:
+  make dmg
+
+
+DEVELOPMENT
+
+To join in on the development with others, see:
+  http://code.google.com/p/simian
+
+To make patches yourself, it's advised to edit the code in this directory
+under src/, and run "make test" to run unit tests before releasing.

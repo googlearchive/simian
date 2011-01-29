@@ -1,0 +1,101 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Host: {{ computer.hostname }}{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  <h2>Single host view</h2>
+  <a href="/admin/stats">Back to stats home</a><br /><br />
+
+{% if computer %}
+  <table class="stats-table">
+    <tr class="multi-header">
+       <th>Hostname</th><th>UUID</th><th>Host Details</th><th>Owner</th>
+       <th>Site</th><th>Office</th><th>Config Track</th><th>OS Version</th>
+       <th>HDD Bytes Free</th><th>Uptime</th>
+    </tr>
+    <tr>
+      <td>{{ computer.hostname }}</td>
+      <td>
+        {% if host_report %}
+          {{ computer.uuid }}
+        {% else %}
+          <a href="/admin/stats/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
+        {% endif %}
+      </td>
+      <td>
+        <a href="{{ uuid_lookup_url }}/{{ computer.uuid }}">View</a>
+      </td>
+      <td>
+        <a href="{{ owner_lookup_url }}/{{ computer.owner }}">
+        {{ computer.owner }}</a>
+      </td>
+      <td>{{ computer.site }}</td>
+      <td>{{ computer.office }}</td>
+      <td>{{ computer.config_track }}</td>
+      <td>{{ computer.os_version }}</td>
+      <td>{{ computer.root_disk_free|filesizeformat }}</td>
+      <td>{{ uptime }}</td>
+    </tr>
+  </table>
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       <th>Track</th>
+       <th>Munki Version</th>
+       <th>(on/off corp)</th>
+       <th>Last MSU Popup</th>
+       <th>Last Preflight</th>
+       <th>Last Postflight</th>
+    </tr>
+    <tr>
+      <td>{{ computer.track }}</td>
+      <td>{{ computer.client_version }}</td>
+      <td>{{ computer.connections_on_corp }} /
+          {{ computer.connections_off_corp }}
+      </td>
+      <td>{{ computer.last_notified_datetime|timesince }}</td>
+      <td>{{ computer.preflight_datetime|timesince }}</td>
+      <td>{{ computer.postflight_datetime|timesince }}</td>
+  </table>
+
+  <h4>Connection Dates</h4>
+  <p>
+    {% for cd in computer.connection_dates %}
+      {{ cd|date }} ...
+    {% endfor %}
+  </p>
+
+  <h4>Time Since Last Connections...</h4>
+  <p>
+    {% for cdt in computer.connection_datetimes %}
+      {{ cdt|timesince }} ...
+    {% endfor %}
+  </p>
+
+  <h4>MSU Logs</h4>
+  {% if msu_log %}
+    <table class="stats-table">
+      <tr class="multi-header"><th>Event</th><th>Source</th><th>Time</th></tr>
+      {% for log in msu_log %}
+        <tr class="{% cycle lbg,dbg %}">
+          <td>{{ log.event }}</td><td>{{ log.source }}</td>
+          <td>{{ log.mtime|timesince }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No MSU logs found for this host.</p>
+  {% endif %}
+
+  {% include "stats_installs.html" %}
+  {% include "stats_installproblems.html" %}
+  {% include "stats_preflightexits.html" %}
+
+  {% else %}
+    <p>No computer with the specified UUID was found.</p>
+  {% endif %}
+</div>
+{% endblock %}

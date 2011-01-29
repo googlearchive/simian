@@ -1,0 +1,92 @@
+#!/usr/bin/python
+#
+# Copyright 2010 Google Inc. All Rights Reserved.
+
+"""Script to output Simian dependent facter-like output of various variables."""
+
+
+import subprocess
+import ConfigParser
+
+
+CONFIG_FILE = '/etc/simian/simian.cfg'
+SECTION = 'config'
+CONFIG_NAMES = [
+    'certname', 'primary_user', 'hostname', 'configtrack', 'simiantrack',
+    'site', 'location',
+]
+
+
+def Exec(cmd):
+  """Executes a process and returns exit code, stdout, stderr.
+
+  Args:
+    cmd: str or sequence, command and optional arguments to execute.
+
+  Returns:
+    Tuple. (Integer return code, string standard out, string standard error).
+  """
+  if type(cmd) is str:
+    shell = True
+  else:
+    shell = False
+  try:
+    p = subprocess.Popen(
+      cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
+    stdout, stderr = p.communicate()
+    return p.returncode, stdout, stderr
+  except (IOError, OSError), e:
+    return (99, '', str(e))
+
+
+def GetFacterFacts():
+  """Returns a dictionary of facter facts."""
+  return_code, stdout, unused_stderr = Exec(['facter', '-p'])
+
+  # If execution of factor was successful build the client identifier
+  if return_code != 0:
+    return {}
+
+  facts = {}
+
+  # Iterate over the facter output and create a dictionary of the output
+  lines = stdout.splitlines()
+  for line in lines:
+    (key, unused_sep, value) = line.split(' ', 2)
+    value = value.strip()
+    facts[key] = value
+  return facts
+
+
+def GetSimianConfigs():
+  """Return a dictionary of Simian configurations."""
+  c = ConfigParser.ConfigParser()
+  c.read(CONFIG_FILE)
+
+  config_values = {}
+  for name in CONFIG_NAMES:
+    try:
+      config_values[name] = c.get(SECTION, name)
+    except ConfigParser.NoOptionError:
+      config_values[name] = ''
+  return config_values
+
+
+def main():
+  facts = GetFacterFacts()
+  configs = GetSimianConfigs()
+  # place Simian configs where facter is lacking (may be 100%).
+  for name in CONFIG_NAMES:
+    if name not in facts:
+      facts[name] = configs[name]
+  print """certname => %(certname)s
+primary_user => %(primary_user)s
+sp_local_host_name => %(hostname)s
+configtrack => %(configtrack)s
+simiantrack => %(simiantrack)s
+site => %(site)s
+location => %(location)s""" % facts
+
+
+if __name__ == '__main__':
+  main()

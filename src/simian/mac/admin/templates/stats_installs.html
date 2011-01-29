@@ -1,0 +1,82 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Installs{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block page-content %}
+
+{% if host_report %}
+  <h3>Installs</h3>
+{% else %}
+  {% if pkg %}
+    <h2>Installs: {{ pkg }}</h2>
+    <a href="/admin/stats/installs">Back to all installs</a>
+  {% else %}
+    <h2>Installs</h2>
+    <a href="/admin/stats">Back to stats home</a>
+  {% endif %}
+{% endif %}
+
+{% if packages %}
+  <table class="stats-table">
+  <tr><th>Install</th><th>Filename</th><th>Pkginfo</th><th>Forced</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+  {% for pkg in packages %}
+    <tr class="{% cycle lbg,dbg %}">
+      <td>
+        <a href="/admin/stats/installs?pkg={{ pkg.munki_install_name }}"
+            >{{ pkg.munki_install_name }}</a>
+      </td>
+      <td>{{ pkg.filename }}</td>
+      <td><a href="/pkgsinfo/{{ pkg.filename }}">view</a></td>
+      <td>{% if pkg.forced %}True{% else %}False{% endif %}</td>
+      <td>{{ pkg.install_types|join:", " }}</td>
+      <td>{{ pkg.catalogs|join:", " }}</td>
+      <td>{{ pkg.manifests|join:", " }}</td>
+      <td>{{ pkg.description }}</td>
+    </tr>
+  {% endfor %}
+  </table>
+{% else %}
+
+  <p>
+    {{ installs|length }} installs found (limit {{ limit }}).
+    {% if next_page %}
+      <a href="/admin/stats/installs?pkg={{ pkg }}&page={{ next_page }}">Next Page &raquo;</a>
+    {% endif %}
+  </p>
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       <th>Package</th>
+       <th>Status</th>
+       <th>On Corp</th>
+       {% if not host_report %}<th>UUID</th>{% endif %}
+       <th>Time</th>
+    </tr>
+    {% for install in installs %}
+      <tr class="{% cycle lbg,dbg %}">
+        <td><a href="/admin/stats/installs?pkg={{ install.package }}"
+            >{{ install.package }}</a></td>
+        <td>{{ install.status }}</td>
+        <td>{{ install.on_corp }}</td>
+        {% if not host_report %}
+        <td>
+          <a href="/admin/stats/host/{{  install.uuid }}">{{ install.uuid }}</a>
+        </td>
+        {% endif %}
+        <td>{{ install.mtime }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  {% if next_page %}
+    <a href="/admin/stats/installs?pkg={{ pkg }}&page={{ next_page }}">Next Page &raquo;</a>
+  {% endif %}
+
+{% endif %}
+
+{% endblock %}
+

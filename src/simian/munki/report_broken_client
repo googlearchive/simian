@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+#
+# Copyright 2010 Google Inc. All Rights Reserved.
+
+"""Custom script to report broken installs to Simian.
+
+In case machines have broken Python installs, this script cannot contain any
+Python imports requiring ObjC bindings.  This means we cannot use
+flight_import, munkicommon, etc.
+"""
+
+
+
+
+import flight_common
+
+
+def main():
+  return_code, stdout, stderr = flight_common.Exec(['facter', '-p'])
+  details = 'Facter Return Code: %s\n\nStdOut: %s\n\nStdErr%s' % (
+      return_code, stdout, stderr)
+
+  flight_common.PostReportToServer(
+      'broken_client', {'details': details}, login=True)
+  print 'Reported broken client to server.'
+
+
+if __name__ == '__main__':
+  main()
