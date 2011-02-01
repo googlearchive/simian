@@ -293,6 +293,17 @@ def PostManagedSoftwareUpdateLogs(logs, token):
 
 
 def main(args):
+  if len(args) > 1:
+    runtype = args[1]
+  else:
+    runtype = 'custom'
+
+  # support enterprise/802.1x user-context wifi auth.
+  # don't bother to perform preflight and exit OK immediately since there's no
+  # network connection.
+  if runtype == 'logoutinstall' or runtype == 'installwithnologout':
+    sys.exit(0)
+
   config_file_path = munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH
 
   # create the secure ManagedInstalls.plist file if it doesn't exist.
@@ -319,7 +330,7 @@ def main(args):
   PostManagedSoftwareUpdateLogs(logs, token)
 
   # If the munki exec is an auto run (launchd), exit if on WWAN or Android WAP.
-  if len(args) > 1 and args[1] == 'auto':
+  if runtype == 'auto':
     # Exit if WWAN device is active.
     if IsOnWWAN():
       response = flight_common.PostReportToServer(
