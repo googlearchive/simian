@@ -301,7 +301,7 @@ def main(args):
   # support enterprise/802.1x user-context wifi auth.
   # don't bother to perform preflight and exit OK immediately since there's no
   # network connection.
-  if runtype == 'logoutinstall' or runtype == 'installwithnologout':
+  if runtype == 'logoutinstall':
     sys.exit(0)
 
   config_file_path = munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH
