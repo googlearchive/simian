@@ -371,6 +371,10 @@ def main(args):
   # write NONSECURE ManagedInstalls.plist
   fpl.writePlist(plist, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
 
+  # Report installs/etc to server.
+  flight_common.ReportInstallsToServerAndLogout(
+      client_id.get('on_corp', 'None'), logout=False)
+
 
 if __name__ == '__main__':
   main(sys.argv)

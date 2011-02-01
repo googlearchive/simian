@@ -454,7 +454,8 @@ def ClientIdDictToStr(client_id):
 
 
 def PostReportToServer(
-    report_type, params, token=None, login=False, logout=True):
+    report_type, params,
+    token=None, login=False, logout=True, raise_exc=False):
   """POSTs report to server.
 
   Args:
@@ -464,8 +465,13 @@ def PostReportToServer(
     login: optional boolean; True to pass --login to simianauth binary.
         Default False. If True, token is ignored.
     logout: optional boolean. True to logout after posting the report.
+    raise_exc: bool, optional, True to raise exceptions on non 0 status
+      from underlying server request handler, False (default) to nicely
+      log and ignore.
   Returns:
     None or a status string like 'FORCE_CONTINUE'
+  Raises:
+    ServerRequestError: if raise_exc is True and a server exception occurs
   """
   params['_report_type'] = report_type  # add report type to post data.
   # encode post dict to url query string; doseq=True for sequence support.
@@ -488,6 +494,8 @@ def PostReportToServer(
       else:
         raise ServerRequestError(e)
   except ServerRequestError, e:
+    if raise_exc is True:
+      raise
     # gracefully allow report posting failures, but display notification.
     print >>sys.stderr, 'Failure post to report to server: %s', str(e)
   return response
@@ -562,3 +570,53 @@ def Flatten(o):
   elif hasattr(o, 'initWithInteger_'):
     o = int(o)
   return o
+
+
+def ReportInstallsToServerAndLogout(on_corp, logout=False):
+  """Reports any installs, updates, uninstalls back to Simian server.
+
+  If no reports of installs/updates/uninstalls exist to report,
+  then this function only contacts the server if logout is True.
+
+  Args:
+    on_corp: str, on_corp status from GetClientIdentifier.
+    logout: bool, default False, whether to logout or not.
+  """
+  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
+  install_report_path = os.path.join(
+      managed_installs_dir, 'ManagedInstallReport.plist')
+  try:
+    install_report = fpl.readPlist(install_report_path)
+  except fpl.NSPropertyListSerializationException, e:
+    print >>sys.stderr, 'Error reading ', install_report_path, ': ', str(e)
+    return
+
+  installs = install_report.get('InstallResults', [])  # includes updates.
+  removals = install_report.get('RemovalResults', [])
+  problem_installs = install_report.get('ProblemInstalls', [])
+  # convert dict problems to strings.
+  for i in xrange(0, len(problem_installs)):
+    p = problem_installs[i]
+    if p.__class__.__name__ == 'NSCFDictionary':
+      problem_installs[i] = '%s: %s' % (p.get('name', ''), p.get('note', ''))
+
+  if installs or removals or problem_installs:
+    data = {
+        'on_corp': on_corp,
+        'installs': installs,
+        'removals': removals,
+        'problem_installs': problem_installs
+    }
+    try:
+      PostReportToServer('install_report', data, logout=logout, raise_exc=True)
+    except ServerRequestError:
+      return
+
+    # clear reportable information now that is has been published.
+    install_report['InstallResults'] = []
+    install_report['RemovalResults'] = []
+    install_report['ProblemInstalls'] = []
+    fpl.writePlist(install_report, install_report_path)
+  else:
+    if logout:
+      PerformServerRequest(logout=True)
