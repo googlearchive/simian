@@ -13,7 +13,6 @@
   {% block cache_info %}
     {% if not cached %}
       <span class="realtime">Viewing real-time stats.  Save CPU and <a href="/admin/stats/">view cached stats</a></span>
-      <p><a href="/admin/stats/installs">View all installs</a></p>
       <h3>Summary</h3>
       {% if next_page %}
         <p>Over {{ limit }} computers found; summary data limited to viewable results.</p>
@@ -74,17 +73,6 @@
         </td>
       </tr>
     </table>
-
-    <table class="stats-table">
-      <tr><th colspan="2">OS Versions</th></tr>
-      {% for version in summary.os_versions %}
-       <tr class="{% cycle lbg,dbg %}">
-         <td><a href="/admin/stats/?type=os_version&filter={{ version.0 }}"
-                >{{ version.0 }}</a></td>
-         <td>{{ version.1 }}</td>
-       </tr>
-      {% endfor %}
-    </table>
   </div>
 
   <div class="column">
@@ -97,7 +85,9 @@
         <tr class="{% cycle lbg,dbg %}"><td>{{ percent.0 }}%</td><td>{{ percent.1|floatformat }}%</td></tr>
       {% endfor %}
     </table>
+  </div>
 
+  <div class="column">
     <table class="stats-table">
       <tr><th colspan="2">Client Versions</th></tr>
       {% for version in summary.client_versions %}
@@ -106,6 +96,19 @@
                 >{{ version.0 }}</a></td>
           <td>{{ version.1 }}</td>
         </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="column">
+    <table class="stats-table">
+      <tr><th colspan="2">OS Versions</th></tr>
+      {% for version in summary.os_versions %}
+       <tr class="{% cycle lbg,dbg %}">
+         <td><a href="/admin/stats/?type=os_version&filter={{ version.0 }}"
+                >{{ version.0 }}</a></td>
+         <td>{{ version.1 }}</td>
+       </tr>
       {% endfor %}
     </table>
   </div>
@@ -133,12 +136,21 @@
     <a href="/admin/stats">Back to stats home</a><br />
   {% endifequal %}
 
+  {% ifequal report_type "pkgs_to_install" %}
+    <h3>Pending: {{ pkg }}</h3>
+    <a href="/admin/stats/installs">Back to installs list</a><br />
+  {% endifequal %}
+
   {% if computers %}
     <h3>Computers</h3>
     Results limited to {{ limit }} computers.
 
   {% if next_page %}
-    <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+    {% ifequal report_type "pkgs_to_install" %}
+      <a href="/admin/stats/installs?pkg={{ pkg }}&pending=1&page={{ next_page }}">Next Page &raquo;</a>
+    {% else %}
+      <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+    {% endifequal %}
   {% endif %}
 
   <table class="stats-table">
@@ -173,7 +185,7 @@
           <a href="/admin/stats/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
         {% endifequal %}
       </td>
-      <td><a href="{{ owner_lookup_url }}/{{ computer.owner }}"
+      <td><a href="/admin/stats/?type=owner&filter={{ computer.owner }}"
           >{{ computer.owner }}</a></td>
       <td>{{ computer.track }}</td>
       <td>{{ computer.config_track }}</td>
@@ -207,6 +219,11 @@
       <li><a href="/admin/stats/brokenclients">View broken clients</a></li>
       <li><a href="/admin/stats/installproblems">View install problems</a></li>
       <li><a href="/admin/stats/preflightexits">View preflight exits</a></li>
+      <li><a href="/admin/stats/user_settings">View UserSettings report</a></li>
+      <li>View MSU log summaries:
+      		<a href="/admin/stats/msulogsummary">for all time</a> or
+      		<a href="/admin/stats/msulogsummary/1">since 1 day</a> or
+      		<a href="/admin/stats/msulogsummary/7">since 7 days</a></li>
     </ul>
   </p>
 </div>

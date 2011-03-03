@@ -27,6 +27,7 @@
        <th>Exit Reason</th>
        {% if not host_report %}<th>UUID</th>{% endif %}
        <th>Time</th>
+       <th>Time Since</th>
     </tr>
     {% for exit in preflight_exits %}
       <tr class="{% cycle lbg,dbg %}">
@@ -35,6 +36,7 @@
         <td><a href="/admin/stats/host/{{ exit.uuid }}">{{ exit.uuid }}</a></td>
         {% endif %}
         <td>{{ exit.mtime }}</td>
+        <td>{{ exit.mtime|timesince }}</td>
       </tr>
     {% endfor %}
   </table>

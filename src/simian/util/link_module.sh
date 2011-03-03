@@ -20,11 +20,11 @@ function link_module() {
   local module="$1"
   local path=`find_module $module`
   if [ ! -z "$path" ]; then
-    ln -s "$path" $GAE_BUNDLE/$module
+    rm -f "$GAE_BUNDLE/$module"
+    ln -s "$path" "$GAE_BUNDLE/$module"
   else
-    echo ERROR: path not found for $module. symlink creation failure. 
+    echo ERROR: path not found for $module. symlink creation failure.
   fi
 }
-
 
 link_module $1

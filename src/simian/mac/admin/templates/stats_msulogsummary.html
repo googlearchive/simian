@@ -1,0 +1,22 @@
+{% extends "stats_base.html" %}
+
+{% block title %}MSU Logs Summary{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block page-content %}
+<h3>MSU Logs Summary</h3>
+<h4>Generated {{ mtime|timesince }} ago</h4>
+
+<table class="stats-table">
+  <tr><th colspan="2">MSU logs since {{ since }}</th></tr>
+  {% for stat in summary %}
+  <tr class="{% cycle lbg,dbg %}">
+    <td><b>{{ stat.var }}</b></td>
+    <td>{{ stat.val }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}
+

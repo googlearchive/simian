@@ -57,79 +57,17 @@ class Manifests(handlers.AuthenticationHandler, webapp.RequestHandler):
       client_id = urllib.unquote(client_id)
       client_id = common.ParseClientId(client_id)
 
-    if common.IsPanicModeNoPackages():
-      plist_xml = '%s%s' % (plist_module.PLIST_HEAD, plist_module.PLIST_FOOT)
-    else:
-      manifest_name = client_id['track']
-      m = models.Manifest.MemcacheWrappedGet(manifest_name)
-      if not m:
-        logging.debug('Invalid manifest requested: %s', manifest_name)
-        self.response.set_status(404)
-        return
-      elif not m.enabled:
-        logging.debug('Disabled manifest requested: %s', manifest_name)
-        self.response.set_status(503)
-        return
-
-      plist_xml = GenerateDynamicManifest(m.plist, client_id)
+    try:
+      plist_xml = common.GetComputerManifest(
+          client_id=client_id, packagemap=False)
+    except common.ManifestNotFoundError, e:
+      logging.debug('Invalid manifest requested: %s', str(e))
+      self.response.set_status(404)
+      return
+    except common.ManifestDisabledError, e:
+      logging.debug('Disabled manifest requested: %s', str(e))
+      self.response.set_status(503)
+      return
 
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
     self.response.out.write(plist_xml)
-
-
-def _ModifyList(l, value):
-  """Adds or removes a value from a list.
-
-  Args:
-    l: list to modify.
-    value: str value; "foo" to add or "-foo" to remove "foo".
-  """
-  if value.startswith('-'):
-    try:
-      l.remove(value[1:])
-    except ValueError:
-      pass  # item is already not a member of the list, so ignore error.
-  else:
-    l.append(value)
-
-
-def GenerateDynamicManifest(plist_xml, client_id):
-  """Generate a dynamic manifest based on a the various client_id fields.
-
-  Args:
-    plist_xml: str XML manifest to start with.
-    client_id: dict client_id parsed by common.ParseClientId.
-  Returns:
-    str XML manifest with any custom modifications based on the client_id.
-    """
-  manifest = client_id['track']
-  # TODO(user): we'll probably want to memcache *all* site modificiations,
-  #    since there will be very few, but not hostname/owner modifications as
-  #    they'll be widespread after Stuff integration.
-  site_mods = models.SiteManifestModification.all().filter(
-      'site =', client_id['site'])
-  os_version_mods = models.OSVersionManifestModification.all().filter(
-      'os_version =', client_id['os_version'])
-  # host_mods = mods.HostManifestModification.all().filter(
-  #   'hostname =', client_id['hostname'])
-  host_mods = []  # temporary.
-
-  def __ApplyModifications(manifest, mod, plist):
-    """Applies a manifest modification if the manifest matches mod manifest."""
-    if mod.enabled and manifest in mod.manifests:
-      logging.debug(
-          'Applying manifest mod: %s %s', mod.install_type, mod.value)
-      plist_module.UpdateIterable(
-          plist, mod.install_type, mod.value, default=[], op=_ModifyList)
-
-  if site_mods or host_mods or os_version_mods:
-    plist = plist_module.MunkiManifestPlist(plist_xml)
-    plist.Parse()
-    for mod in site_mods:
-      __ApplyModifications(manifest, mod, plist)
-    for mod in host_mods:
-      __ApplyModifications(manifest, mod, plist)
-    for mod in os_version_mods:
-      __ApplyModifications(manifest, mod, plist)
-    plist_xml = plist.GetXml()
-  return plist_xml

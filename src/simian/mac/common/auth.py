@@ -73,6 +73,10 @@ def DoAnyAuth(is_admin=None, require_level=None):
     NotAuthenticated: there is no authentication user for this request.
     IsAdminMismatch: the current user is not an administrator.
   """
+  #TODO(user): The unexpected return of two different return classes
+  #here can be hard to code around.  We should fix this someday if we
+  #start using the return value more frequently, rather than just
+  #calling this as a procedure to cause auth to occur.
   try:
     return DoUserAuth(is_admin=is_admin)
   except NotAuthenticated:
@@ -86,3 +90,4 @@ def DoAnyAuth(is_admin=None, require_level=None):
     pass
 
   raise NotAuthenticated
+

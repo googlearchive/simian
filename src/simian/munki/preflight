@@ -20,7 +20,6 @@ import urllib
 import flight_common
 from munkilib import FoundationPlist as fpl
 from munkilib import munkicommon
-munkicommon.cleanUpTmpDir()  # munkicommon creates a tempdir on import.
 
 
 IFCONFIG = '/sbin/ifconfig'
@@ -368,12 +367,21 @@ def main(args):
   path = CreateEmptyDirectory()
   plist['SoftwareRepoCAPath'] = path
 
+  # If setting is enabled, force Simian Apple SUS integration.
+  if client_id.get('applesus'):
+    plist['InstallAppleSoftwareUpdates'] = True
+    # Get Apple Software Update Service catalog from server and set locally.
+    flight_common.GetAppleSUSCatalog()
+
   # write NONSECURE ManagedInstalls.plist
   fpl.writePlist(plist, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
 
   # Report installs/etc to server.
   flight_common.ReportInstallsToServerAndLogout(
       client_id.get('on_corp', 'None'), logout=False)
+  
+  # Delete the temp dir that munkicommon creates on import.
+  munkicommon.cleanUpTmpDir()
 
 
 if __name__ == '__main__':

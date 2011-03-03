@@ -25,6 +25,7 @@ from simian.mac.admin import stats as admin_stats
 from simian.mac.admin import panic as admin_panic
 from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import uauth
+from simian.mac.munki.handlers import applesus
 from simian.mac.munki.handlers import catalogs
 from simian.mac.munki.handlers import manifests
 from simian.mac.munki.handlers import pkgs
@@ -43,12 +44,16 @@ class ServeHello(webapp.RequestHandler):
 
 
 application = webapp.WSGIApplication([
+    # GET Apple Software Update Service catalog with header client-id.
+    (r'/applesus/?$', applesus.AppleSUS),
+    # GET/PUT Apple Software Update Service catalogs.
+    (r'/applesus/([\w\-\_\.\=\|\%]+)/?$', applesus.AppleSUS),
     # GET munki catalogs.
     (r'/catalogs/([\w\-\.]+)$', catalogs.Catalogs),
     # GET munki manifests.
     (r'/manifests/([\w\-\_\.\=\|\%]+)$', manifests.Manifests),
     # GET munki packages.
-    (r'/pkgs/([\w\-\.]+)$', pkgs.Packages),
+    (r'/pkgs/([\w\-\. \%]+)$', pkgs.Packages),
     # GET list of all munki packages.
     (r'/pkgsinfo/?$', pkgsinfo.PackagesInfo),
     # GET munki pkginfo, PUT updated pkginfo

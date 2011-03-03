@@ -29,6 +29,10 @@ from simian.mac import models
 from simian.mac import common as main_common
 from simian.mac.munki import common
 from simian.mac.munki import handlers
+from simian.mac.common import util
+
+# int number of days after which postflight_datetime is considered stale.
+POSTFLIGHT_STALE_DAYS = 7
 
 
 class ReportFeedback(object):
@@ -71,8 +75,17 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
       else:
         c = models.Computer.get_by_key_name(uuid)
 
-      if (c and c.track == 'unstable') or c is None:
+
+      if c is None or c.postflight_datetime is None:
+        # host has never fully executed Simian.
         report = ReportFeedback.FORCE_CONTINUE
+      else:
+        now = datetime.datetime.utcnow()
+        postflight_stale_datetime = now - datetime.timedelta(
+            days=POSTFLIGHT_STALE_DAYS)
+        if c.postflight_datetime < postflight_stale_datetime:
+          # host hasn't fully executed Simian in POSTFLIGHT_STALE_DAYS days.
+          report = ReportFeedback.FORCE_CONTINUE
 
     if report != ReportFeedback.OK:
       logging.warning('Feedback to %s: %s', uuid, report)
@@ -99,7 +112,9 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
       client_id = common.ParseClientId(client_id_str, uuid=uuid)
       user_settings_str = self.request.get('user_settings')
       user_settings = None
-      common.LogClientConnection(report_type, client_id, user_settings)
+      pkgs_to_install = self.request.get_all('pkgs_to_install')
+      common.LogClientConnection(
+          report_type, client_id, user_settings, pkgs_to_install)
     elif report_type == 'install_report':
       on_corp = self.request.get('on_corp')
       if on_corp == '1':
@@ -110,12 +125,13 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
         on_corp = None
       for install in self.request.get_all('installs'):
         logging.debug('Install: %s', install)
-        match = re.match('^Install of (.*): (.*)$', install)
-        if match:
-          install = match.group(1)
-          status = match.group(2)
-        else:
+        try:
+          install, status = install.split(':', 1)
+        except ValueError:
           status = 'UNKNOWN'
+        else:
+          install = install[len('Install of '):]
+          status = status.strip()
         logging.debug(
             'Package: %s, Status: %s, On Corp: %s', install, status, on_corp)
         common.WriteClientLog(

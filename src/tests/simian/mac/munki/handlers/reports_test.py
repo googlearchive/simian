@@ -41,47 +41,65 @@ class HandlersTest(test.RequestHandlerTest):
     track = 'unstable'
     computer = self.mox.CreateMockAnything()
     computer.track = track
+    computer.postflight_datetime = reports.datetime.datetime.utcnow()
     self.assertEqual(
-        reports.ReportFeedback.FORCE_CONTINUE,
+        reports.ReportFeedback.OK,
         self.c.GetReportFeedback('uuid', report_type, computer=computer))
 
   def testGetReportFeedbackWithoutPassedComputer(self):
-    """Tests GetReportFeedback() with a passed Computer object."""
+    """Tests GetReportFeedback() without a passed Computer object."""
     report_type = 'preflight_exit'
     track = 'unstable'
     uuid = 'foouuid'
     computer = self.mox.CreateMockAnything()
     computer.track = track
+    computer.postflight_datetime = reports.datetime.datetime.utcnow()
     self.mox.StubOutWithMock(reports.models.Computer, 'get_by_key_name')
     reports.models.Computer.get_by_key_name(uuid).AndReturn(computer)
     self.mox.ReplayAll()
     self.assertEqual(
-        reports.ReportFeedback.FORCE_CONTINUE,
+        reports.ReportFeedback.OK,
         self.c.GetReportFeedback(uuid, report_type))
+    self.mox.VerifyAll()
+
+  def testGetReportFeedbackWithNonePostflightDatetime(self):
+    """Tests GetReportFeedback() with a Computer.postflight_datetime=None."""
+    report_type = 'preflight_exit'
+    track = 'unstable'
+    uuid = 'foouuid'
+    computer = self.mox.CreateMockAnything()
+    computer.track = track
+    computer.postflight_datetime = None
+    self.mox.ReplayAll()
+    self.assertEqual(
+        reports.ReportFeedback.FORCE_CONTINUE,
+        self.c.GetReportFeedback(uuid, report_type, computer=computer))
+    self.mox.VerifyAll()
+
+  def testGetReportFeedbackWithStalePostflightDatetime(self):
+    """Tests GetReportFeedback() with a stale Computer.postflight_datetime."""
+    report_type = 'preflight_exit'
+    track = 'unstable'
+    uuid = 'foouuid'
+    computer = self.mox.CreateMockAnything()
+    computer.track = track
+    stale_days = reports.POSTFLIGHT_STALE_DAYS + 1  # 1 day stale.
+    computer.postflight_datetime = (reports.datetime.datetime.utcnow() -
+        reports.datetime.timedelta(days=stale_days))
+    self.mox.ReplayAll()
+    self.assertEqual(
+        reports.ReportFeedback.FORCE_CONTINUE,
+        self.c.GetReportFeedback(uuid, report_type, computer=computer))
     self.mox.VerifyAll()
 
   def testGetReportFeedbackWithNoneComputer(self):
     """Tests GetReportFeedback() with a passed Computer object."""
     report_type = 'preflight_exit'
-    track = 'unstable'
     uuid = 'foouuid'
     self.mox.ReplayAll()
     self.assertEqual(
         reports.ReportFeedback.FORCE_CONTINUE,
         self.c.GetReportFeedback(uuid, report_type, computer=None))
-    self.mox.VerifyAll()
-
-  def testGetReportFeedbackWithUnmatchedTrack(self):
-    """Tests GetReportFeedback() with a passed Computer object."""
-    report_type = 'preflight_exit'
-    track = 'definitely not matching'
-    uuid = 'foouuid'
-    computer = self.mox.CreateMockAnything()
-    computer.track = track
-    self.mox.ReplayAll()
-    self.assertEqual(
-        reports.ReportFeedback.OK,
-        self.c.GetReportFeedback(uuid, report_type, computer=computer))
     self.mox.VerifyAll()
 
   def PostSetup(self, uuid=None, report_type=None, feedback=None):
@@ -102,6 +120,7 @@ class HandlersTest(test.RequestHandlerTest):
     client_id_str = 'clientidstring'
     client_id_dict = {'nothing': True}
     feedback = 'foofeedback'
+    pkgs_to_install = ['FooApp1', 'FooApp2']
     user_settings = None
     user_settings_data = None
 
@@ -111,9 +130,10 @@ class HandlersTest(test.RequestHandlerTest):
     reports.common.ParseClientId(client_id_str, uuid=uuid).AndReturn(
         client_id_dict)
     self.request.get('user_settings').AndReturn(user_settings_data)
+    self.request.get_all('pkgs_to_install').AndReturn(pkgs_to_install)
     self.mox.StubOutWithMock(reports.common, 'LogClientConnection')
     reports.common.LogClientConnection(
-        report_type, client_id_dict, user_settings)
+        report_type, client_id_dict, user_settings, pkgs_to_install)
     self.mox.StubOutWithMock(self.c, 'GetReportFeedback')
     self.c.GetReportFeedback(
         uuid, report_type, message=None, details=None, computer=None).AndReturn(
@@ -137,8 +157,9 @@ class HandlersTest(test.RequestHandlerTest):
     uuid = 'foouuid'
     report_type = 'install_report'
     installs = [
-        'Install of FooApp1: SUCCESS',
-        'Install of FooApp2: FAILURE',
+        'Install of FooApp1: SUCCESSFUL',
+        'Install of FooApp2: FAILED with return code: 1',
+        'NOT A VALID INSTALL STRING',
     ]
     self.PostSetup(uuid=uuid, report_type=report_type)
     if on_corp:
@@ -147,11 +168,14 @@ class HandlersTest(test.RequestHandlerTest):
       self.request.get('on_corp').AndReturn('0')
     self.request.get_all('installs').AndReturn(installs)
     reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='FooApp1', status='SUCCESS',
+        reports.models.InstallLog, uuid, package='FooApp1', status='SUCCESSFUL',
         on_corp=on_corp)
     reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='FooApp2', status='FAILURE',
-        on_corp=on_corp)
+        reports.models.InstallLog, uuid, package='FooApp2',
+        status='FAILED with return code: 1', on_corp=on_corp)
+    reports.common.WriteClientLog(
+        reports.models.InstallLog, uuid, package='NOT A VALID INSTALL STRING',
+        status='UNKNOWN', on_corp=on_corp)
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])

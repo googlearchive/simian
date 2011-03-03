@@ -15,4 +15,4 @@
 # limitations under the License.
 # #
 
-VERSION = 'simian-0.5'
+VERSION = 'simian-1.0.1'

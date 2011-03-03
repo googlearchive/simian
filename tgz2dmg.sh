@@ -14,18 +14,24 @@ if [[ $(uname) != "Darwin" ]]; then
 fi
 
 TGZ="$1"
-DMG="$2"
+OUT="$2"
 ORIGPWD="$PWD"
+ID="com.google.code.simian"
+VERSION="1"
+PKGONLY=""
 
 if [[ "$#" -lt 2 ]]; then
-  echo usage: $0 tgz_input_file dmg_output_file [options...]
+  echo usage: $0 tgz_input_file dmg\|pkg_output_file [options...]
   echo
   echo options:
-  echo -s script_file     add script to package
-  echo -r resource_file   add resource file to package
-  echo -R resource_dir    add an entire dir into resources
-  echo -c src dst         copy a file into the installation tree of package
-  echo                    e.g. -c /tmp/foo.py Library/Foo/Bar/foo.py
+  echo -pkgonly             do not create a dmg, just create a pkg
+  echo -version version     set package version to version
+  echo -id id               set package id, default $ID
+  echo -s script_file       add script to package
+  echo -r resource_file     add resource file to package
+  echo -R resource_dir      add an entire dir into resources
+  echo -c src dst           copy a file into the installation tree of package
+  echo                      e.g. -c /tmp/foo.py Library/Foo/Bar/foo.py
   echo
   exit 1
 fi
@@ -41,10 +47,10 @@ mkdir -p "$TMPDIR/scripts"
 trap "rm -rf \"$TMPDIR\"" EXIT
 
 if [[ "$TGZ" != "" ]]; then
-  tar -zxf "$TGZ" -C "$TMPDIR/contents"
+  tar -zpxf "$TGZ" -C "$TMPDIR/contents"
 fi
 
-# copy optional resources and scripts...
+# parse argv
 next=""
 while [[ "$#" -gt 0 ]]; do
   if [[ "$next" = "" ]]; then
@@ -56,6 +62,13 @@ while [[ "$#" -gt 0 ]]; do
       next="copy"
     elif [[ "$1" = "-R" ]]; then
       next="rsrcdir"
+    elif [[ "$1" = "-id" ]]; then
+      next="id"
+    elif [[ "$1" = "-version" ]]; then
+      next="version"
+    elif [[ "$1" = "-pkgonly" ]]; then
+      PKGONLY="1"
+      next=""
     fi
   else
     if [[ "$next" = "script" ]]; then
@@ -64,6 +77,10 @@ while [[ "$#" -gt 0 ]]; do
       cp "$1" "$TMPDIR/resources"
     elif [[ "$next" = "rsrcdir" ]]; then
       cp -R "$1" "$TMPDIR/resources"
+    elif [[ "$next" = "id" ]]; then
+      ID="$1"
+    elif [[ "$next" = "version" ]]; then
+      VERSION="$1"
     elif [[ "$next" = "copy" ]]; then
       src="$1"
       shift
@@ -82,15 +99,23 @@ cd "$TMPDIR/contents"
 
 cd "$ORIGPWD"
 
+if [[ -z "$PKGONLY" ]]; then
+  pkgout="$TMPDIR/pkg/simian.pkg"
+else
+  pkgout="$OUT"
+fi
+
 /Developer/usr/bin/packagemaker \
 --root "$TMPDIR/contents" \
---id com.google.code.simian \
---out "$TMPDIR/pkg/simian.pkg" \
+--id "$ID" \
+--out "$pkgout" \
 --resources "$TMPDIR/resources" \
---scripts "$TMPDIR/scripts"
+--scripts "$TMPDIR/scripts" \
+--version "$VERSION"
 
-hdiutil create -srcfolder "$TMPDIR/pkg" -layout NONE -volname Simian "$DMG"
+if [[ -z "$PKGONLY" ]]; then
+  hdiutil create -srcfolder "$TMPDIR/pkg" -layout NONE -volname Simian "$OUT"
+fi
 
 rm -rf "$TMPDIR"
-
-echo DMG at "$DMG"
+echo output at "$OUT"

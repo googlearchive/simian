@@ -67,7 +67,7 @@ class AuthModuleTest(mox.MoxTestBase):
 
     is_admin = True
     require_level = 123
-    
+
     self.mox.StubOutWithMock(auth, 'DoUserAuth')
     self.mox.StubOutWithMock(auth.gaeserver, 'DoMunkiAuth')
 
@@ -81,8 +81,8 @@ class AuthModuleTest(mox.MoxTestBase):
     auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
     auth.gaeserver.DoMunkiAuth(require_level=require_level).AndRaise(
         auth.gaeserver.NotAuthenticated)
-    
-    self.mox.ReplayAll()    
+
+    self.mox.ReplayAll()
 
     self.assertEqual(auth.DoAnyAuth(is_admin=is_admin), 'user')
 

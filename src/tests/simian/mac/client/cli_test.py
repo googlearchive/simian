@@ -59,6 +59,7 @@ class SimianCliClient(mox.MoxTestBase):
     self.assertEqual(type(self.mpcc.config), dict)
     self.assertEqual(self.mpcc.command, None)
 
+  #TODO(user):  Hopelessly out of date, need to add tests.
 
 def main(unused_argv):
   basetest.main()

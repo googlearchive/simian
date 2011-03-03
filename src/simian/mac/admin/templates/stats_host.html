@@ -12,12 +12,18 @@
 {% if computer %}
   <table class="stats-table">
     <tr class="multi-header">
-       <th>Hostname</th><th>UUID</th><th>Host Details</th><th>Owner</th>
-       <th>Site</th><th>Office</th><th>Config Track</th><th>OS Version</th>
-       <th>HDD Bytes Free</th><th>Uptime</th>
+       <th>Hostname</th><th>UUID</th>
+       {% if uuid_lookup_url %}<th>Host Details</th>{% endif %}
+       <th>Owner</th>
+       {% if owner_lookup_url %}<th>Owner Details</th>{% endif %}
+       <th>Site</th><th>Office</th><th>Config Track</th>
+       <th>OS Version</th><th>HDD Bytes Free</th><th>Uptime</th>
     </tr>
     <tr>
-      <td>{{ computer.hostname }}</td>
+      <td>
+        <a href="/admin/stats?type=hostname&filter={{ computer.hostname }}"
+          >{{ computer.hostname }}</a>
+      </td>
       <td>
         {% if host_report %}
           {{ computer.uuid }}
@@ -25,13 +31,16 @@
           <a href="/admin/stats/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
         {% endif %}
       </td>
+      {% if uuid_lookup_url %}
+        <td><a href="{{ uuid_lookup_url }}/{{ computer.uuid }}">view</a></td>
+      {% endif %}
       <td>
-        <a href="{{ uuid_lookup_url }}/{{ computer.uuid }}">View</a>
+        <a href="/admin/stats?type=owner&filter={{ computer.owner }}"
+          >{{ computer.owner }}</a>
       </td>
-      <td>
-        <a href="{{ owner_lookup_url }}/{{ computer.owner }}">
-        {{ computer.owner }}</a>
-      </td>
+      {% if owner_lookup_url %}
+        <td><a href="{{ owner_lookup_url }}/{{ computer.owner }}">view</a></td>
+      {% endif %}
       <td>{{ computer.site }}</td>
       <td>{{ computer.office }}</td>
       <td>{{ computer.config_track }}</td>
@@ -43,22 +52,34 @@
 
   <table class="stats-table">
     <tr class="multi-header">
+       {% if not computer.active %}<th>Status</th>{% endif %}
        <th>Track</th>
        <th>Munki Version</th>
        <th>(on/off corp)</th>
+       <th>Manifest</th>
        <th>Last MSU Popup</th>
        <th>Last Preflight</th>
        <th>Last Postflight</th>
     </tr>
     <tr>
+      {% if not computer.active %}
+        <td style="color: red;">Inactive</td>
+      {% endif %}
       <td>{{ computer.track }}</td>
       <td>{{ computer.client_version }}</td>
       <td>{{ computer.connections_on_corp }} /
           {{ computer.connections_off_corp }}
       </td>
-      <td>{{ computer.last_notified_datetime|timesince }}</td>
-      <td>{{ computer.preflight_datetime|timesince }}</td>
-      <td>{{ computer.postflight_datetime|timesince }}</td>
+      <td>
+        <a href="/admin/stats/hostmanifest/{{ computer.uuid }}"
+          >view</a>
+      </td>
+      <td>{{ computer.last_notified_datetime }}
+          ({{ computer.last_notified_datetime|timesince }})</td>
+      <td>{{ computer.preflight_datetime }}
+          ({{ computer.preflight_datetime|timesince }})</td>
+      <td>{{ computer.postflight_datetime }}
+          ({{ computer.postflight_datetime|timesince }})</td>
   </table>
 
   <h4>Connection Dates</h4>
@@ -75,19 +96,42 @@
     {% endfor %}
   </p>
 
+  <h4>Remaining Packages To Install</h4>
+  {% if computer.pkgs_to_install %}
+    <table class="stats-table">
+    <tr class="multi-header"><th>Package Name</th></tr>
+    {% for pkg in computer.pkgs_to_install %}
+      <tr><td>{{ pkg }}</td></tr>
+    {% endfor %}
+    </table>
+  {% else %}
+    This client has no packages to install.
+  {% endif %}
+
+
   <h4>MSU Logs</h4>
   {% if msu_log %}
     <table class="stats-table">
-      <tr class="multi-header"><th>Event</th><th>Source</th><th>Time</th></tr>
+      <tr class="multi-header">
+        <th>Event</th><th>Source</th><th>Time</th><th>Time Since</th>
+      </tr>
       {% for log in msu_log %}
         <tr class="{% cycle lbg,dbg %}">
           <td>{{ log.event }}</td><td>{{ log.source }}</td>
+          <td>{{ log.mtime }}</td>
           <td>{{ log.mtime|timesince }}</td>
         </tr>
       {% endfor %}
     </table>
   {% else %}
     <p>No MSU logs found for this host.</p>
+  {% endif %}
+  
+  <h4>User Settings</h4>
+  {% if computer.user_settings %}
+    <pre>{{ computer.user_settings }}</pre>
+  {% else %}
+    There are no user settings for this host.
   {% endif %}
 
   {% include "stats_installs.html" %}

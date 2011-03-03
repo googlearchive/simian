@@ -19,12 +19,12 @@
 
 
 
-import cPickle
 import datetime
 import gc
 from google.appengine.ext import db
 from google.appengine.api import memcache
-
+from simian.mac import zip
+from simian.mac.common import util
 
 class Error(Exception):
   """Class for domain exceptions."""
@@ -106,6 +106,51 @@ class BaseModel(db.Model):
 
     return entities
 
+  @classmethod
+  def MemcacheWrappedSet(cls, key_name, prop_name, value, memcache_secs=300):
+    """Sets an entity by key name and property wrapped by Memcache.
+
+    Args:
+      key_name: str, key name of entity to fetch
+      prop_name: str, property name to set with value
+      value: object, value to set
+      memcache_secs: int, default 300, seconds to store in memcache.
+    """
+    memcache_key = 'mwg_%s_%s' % (cls.kind(), key_name)
+    entity = cls.get_or_insert(key_name)
+    setattr(entity, prop_name, value)
+    entity.put()
+    memcache.set(memcache_key, entity, memcache_secs)
+
+
+class BasePlistModel(BaseModel):
+  """Base model which can easy store a utf-8 plist."""
+
+  _plist = db.TextProperty()  # catalog/manifest/pkginfo plist file.
+
+  def _GetPlist(self):
+    """Returns the _plist property encoded in utf-8."""
+    return self._plist.encode('utf-8')
+
+  def _SetPlist(self, plist):
+    """Sets the _plist property.
+
+    if plist is unicode, store as is.
+    if plist is other, store it and attach assumption that encoding is utf-8.
+
+    therefore, the setter only accepts unicode or utf-8 str (or ascii, which
+    would fit inside utf-8)
+
+    Args:
+      plist: str or unicode XML plist.
+    """
+    if type(plist) is unicode:
+      self._plist = db.Text(plist)
+    else:
+      self._plist = db.Text(plist, encoding='utf-8')
+
+  plist = property(_GetPlist, _SetPlist)
+
 
 class Computer(db.Model):
   """Computer model."""
@@ -117,6 +162,8 @@ class Computer(db.Model):
   preflight_datetime = db.DateTimeProperty()  # last preflight execution.
   postflight_datetime = db.DateTimeProperty()  # last postflight execution.
   last_notified_datetime = db.DateTimeProperty()  # last MSU.app popup.
+  pkgs_to_install = db.StringListProperty()  # pkgs needed to be installed.
+  all_pkgs_installed = db.BooleanProperty()  # True=all installed, False=not.
   owner = db.StringProperty()  # i.e. foouser
   client_version = db.StringProperty()  # i.e. 0.6.0.759.0.
   os_version = db.StringProperty()  # i.e. 10.5.3, 10.6.1, etc.
@@ -132,6 +179,7 @@ class Computer(db.Model):
   # Counts of connections on/off corp.
   connections_on_corp = db.IntegerProperty(default=0)
   connections_off_corp = db.IntegerProperty(default=0)
+  last_on_corp_preflight_datetime = db.DateTimeProperty()
   uptime = db.FloatProperty()  # float seconds since last reboot.
   root_disk_free = db.IntegerProperty()  # int of bytes free on / partition.
   user_disk_free = db.IntegerProperty()  # int of bytes free in owner User dir.
@@ -171,9 +219,9 @@ class Computer(db.Model):
     earliest_active_date = now - datetime.timedelta(days=COMPUTER_ACTIVE_DAYS)
     if self.preflight_datetime:
       if self.preflight_datetime > earliest_active_date:
-        active = True
+        self.active = True
       else:
-        active = False
+        self.active = False
     super(Computer, self).put()
 
 
@@ -207,7 +255,7 @@ class Log(db.Model):
   """Base Log class to be extended for Simian logging."""
 
   # UTC datetime when the event occured.
-  mtime = db.DateTimeProperty(auto_now=True)
+  mtime = db.DateTimeProperty(auto_now_add=True)
 
 
 class ClientLogBase(Log):
@@ -245,7 +293,7 @@ class AdminLogBase(Log):
   user = db.StringProperty()  # i.e. fooadminuser.
 
 
-class AdminPackageLog(AdminLogBase):
+class AdminPackageLog(AdminLogBase, BasePlistModel):
   """AdminPackageLog model for all admin pkg interaction."""
 
   action = db.StringProperty()  # i.e. upload, delete, etc.
@@ -253,7 +301,6 @@ class AdminPackageLog(AdminLogBase):
   catalogs = db.StringListProperty()
   manifests = db.StringListProperty()
   install_types = db.StringListProperty()
-  plist = db.TextProperty()
 
 
 class KeyValueCache(BaseModel):
@@ -267,6 +314,8 @@ class ReportsCache(KeyValueCache):
   """Model for various reports data caching."""
 
   _SUMMARY_KEY = 'summary'
+  _INSTALL_COUNTS_KEY = 'install_counts'
+  _MSU_USER_SUMMARY_KEY = 'msu_user_summary'
   _TRACK_PREFIX = 'client_count__'
   _ALL_SUFFIX = '__ALL'
 
@@ -313,7 +362,7 @@ class ReportsCache(KeyValueCache):
   def GetStatsSummary(cls):
     """Returns tuples (stats summary dictionary, datetime) from Datastore."""
     entity = cls.get_by_key_name(cls._SUMMARY_KEY)
-    return cPickle.loads(entity.blob_value), entity.mtime
+    return util.Deserialize(entity.blob_value), entity.mtime
 
   @classmethod
   def SetStatsSummary(cls, d):
@@ -325,8 +374,77 @@ class ReportsCache(KeyValueCache):
     entity = cls.get_by_key_name(cls._SUMMARY_KEY)
     if not entity:
       entity = cls(key_name=cls._SUMMARY_KEY)
-    entity.blob_value = cPickle.dumps(d)
+    entity.blob_value = util.Serialize(d)
     entity.put()
+
+  @classmethod
+  def GetInstallCounts(cls):
+    """Returns tuple (install counts dict, datetime) from Datastore."""
+    entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
+    if not entity:
+      return {}, None
+    return util.Deserialize(entity.blob_value), entity.mtime
+
+  @classmethod
+  def SetInstallCounts(cls, d):
+    """Sets a the install counts dictionary to Datastore.
+
+    Args:
+      d: dict of summary data.
+    """
+    entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
+    if not entity:
+      entity = cls(key_name=cls._INSTALL_COUNTS_KEY)
+    entity.blob_value = util.Serialize(d)
+    entity.put()
+
+  @classmethod
+  def SetMsuUserSummary(cls, d, since=None, tmp=False):
+    """Sets the msu user summary dictionary to Datstore.
+
+    Args:
+      d: dict of summary data.
+    """
+    if since is not None:
+      since = '_since_%s_' % since
+    else:
+      since = ''
+    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
+    entity = cls.get_by_key_name(key)
+    if not entity:
+      entity = cls(key_name=key)
+    entity.blob_value = util.Serialize(d)
+    entity.put()
+
+  @classmethod
+  def GetMsuUserSummary(cls, since, tmp=False):
+    """Gets the MSU user summary dictionary from Datastore.
+
+    Returns:
+      (dict of summary data, datetime mtime)
+    """
+    if since is not None:
+      since = '_since_%s_' % since
+    else:
+      since = ''
+    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
+    entity = cls.get_by_key_name(key)
+    if not entity:
+      return None
+    return util.Deserialize(entity.blob_value), entity.mtime
+
+  @classmethod
+  def DeleteMsuUserSummary(cls, since, tmp=False):
+    """Deletes the MSU user summary entity from Datastore."""
+    if since is not None:
+      since = '_since_%s_' % since
+    else:
+      since = ''
+    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
+    entity = cls.get_by_key_name(key)
+    if not entity:
+      return None
+    entity.delete()
 
 
 # Munki ########################################################################
@@ -345,16 +463,23 @@ class AuthSession(db.Model):
   level = db.IntegerProperty(default=0)
 
 
-class BaseMunkiModel(BaseModel):
+class BaseMunkiModel(BasePlistModel):
   """Base class for Munki related models."""
 
   name = db.StringProperty()
   mtime = db.DateTimeProperty(auto_now=True)
-  _plist = db.TextProperty()  # catalog/manifest/pkginfo plist file.
+
+
+class BaseCompressedMunkiModel(BaseModel):
+  """Base class for Munki related models."""
+
+  name = db.StringProperty()
+  mtime = db.DateTimeProperty(auto_now=True)
+  _plist = db.BlobProperty()  # catalog/manifest/pkginfo plist file.
 
   def _GetPlist(self):
     """Returns the _plist property encoded in utf-8."""
-    return self._plist.encode('utf-8')
+    return unicode(zip.CompressedText(self._plist)).encode('utf-8')
 
   def _SetPlist(self, plist):
     """Sets the _plist property.
@@ -369,11 +494,19 @@ class BaseMunkiModel(BaseModel):
       plist: str or unicode XML plist.
     """
     if type(plist) is unicode:
-      self._plist = db.Text(plist)
+      self._plist = db.Blob(
+          zip.CompressedText(plist).Compressed())
     else:
-      self._plist = db.Text(plist, encoding='utf-8')
+      self._plist = db.Blob(
+          zip.CompressedText(plist, encoding='utf-8').Compressed())
 
   plist = property(_GetPlist, _SetPlist)
+
+
+class AppleSUSCatalog(BaseCompressedMunkiModel):
+  """Apple Software Update Service Catalog."""
+
+  last_modified_header = db.StringProperty()
 
 
 class Catalog(BaseMunkiModel):

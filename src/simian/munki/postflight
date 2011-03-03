@@ -44,7 +44,10 @@ def main():
   # TODO(user): refactor PostReport* to support multiple reports at once
   # and move this into ReportInstallsToServerAndLogout.
   client_id = flight_common.GetClientIdentifier()
-  params = {'client_id': flight_common.ClientIdDictToStr(client_id)}
+  params = {
+     'client_id': flight_common.ClientIdDictToStr(client_id),
+     'pkgs_to_install': flight_common.GetRemainingPackagesToInstall(),
+  }
   flight_common.PostReportToServer('postflight', params, logout=False)
 
   # Report installs/etc to server.

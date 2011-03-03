@@ -27,6 +27,10 @@ import logging
 import os.path
 import subprocess
 import sys
+import warnings
+warnings.filterwarnings(
+    'ignore',
+    '.*Python 2\.\d is unsupported; use 2.\d.*', DeprecationWarning, '.*', 0)
 from simian.client import simianauth
 from simian.mac.client import client
 from simian.mac.munki import plist

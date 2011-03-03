@@ -6,8 +6,13 @@
 
 
 
+import datetime
+import logging
 import os
 from simian.auth import base as _auth_base
+
+
+HEADER_DATE_FORMAT = '%a, %d %b %Y %H:%M:%S GMT'
 
 
 class Error(Exception):
@@ -63,6 +68,48 @@ def IsBlobstore():
   return os.environ.get('REMOTE_ADDR', None) == '0.1.0.30' or (
      os.environ.get('SERVER_SOFTWARE', '').startswith('Development') and
      os.environ.get('HTTP_USER_AGENT', None) is None)
+
+
+def StrHeaderDateToDatetime(str_header_dt):
+  """Converts a string header date to a datetime object.
+
+  Args:
+    str_header_dt: str date from header, i.e. If-Modified-Since.
+  Returns:
+    datetime.datetime object, or None if there's a parsing error.
+  """
+  if not str_header_dt:
+    return
+  try:
+    # NOTE(user): strptime is a py2.5+ feature.
+    return datetime.datetime.strptime(str_header_dt, HEADER_DATE_FORMAT)
+  except ValueError:
+    logging.exception(
+        'Error parsing If-Modified-Since date: %s', str_header_dt)
+
+
+def IsClientResourceExpired(resource_dt, str_header_dt):
+  """Compares an If-Modified-Since header date to a passed datetime.
+
+  Args:
+    resource_dt: datetime to use for comparison.
+    str_header_dt: str date value like "Wed, 06 Oct 2010 03:23:34 GMT".
+  Returns:
+    Boolean. True if client resource requires an update due to unmatched dates.
+  """
+  header_dt = StrHeaderDateToDatetime(str_header_dt)
+  if not header_dt:
+    return True
+
+  # if datetime and header date are the same (disregarding ms) then not modified
+  if resource_dt.replace(microsecond=0) == header_dt:
+    return False
+  else:
+    # this should be very rare - so log it.
+    logging.debug(
+      'resource_dt %s != header %s',
+       resource_dt.replace(microsecond=0), header_dt)
+    return True
 
 
 class AuthenticationHandler(object):

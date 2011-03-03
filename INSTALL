@@ -67,9 +67,8 @@ For information on configuration, see:
 For information on pushing your server code to your AppEngine instance, see:
   https://code.google.com/p/simian/wiki/AdminSetup
 
-
 Briefly, to roll your own .DMG after configuring, run:
-  make dmg
+  make dmg 
 
 
 DEVELOPMENT

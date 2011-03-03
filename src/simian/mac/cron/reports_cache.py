@@ -27,10 +27,13 @@ import datetime
 import gc
 import logging
 import os
+import time
 from google.appengine.ext import webapp
+from google.appengine.api import taskqueue
 from google.appengine.ext.webapp.util import run_wsgi_app
 from simian.mac import common
 from simian.mac import models
+from simian.mac.munki import plist
 
 
 # list of integer days to keep "days active" counts for.
@@ -40,13 +43,36 @@ DAYS_ACTIVE = [1, 7, 14, 30]
 class ReportsCache(webapp.RequestHandler):
   """Class to cache reports on a regular basis."""
 
-  def get(self, name=None):
+  USER_EVENTS = [
+      'launched',
+      'install_with_logout',
+      'install_without_logout',
+      'cancelled',
+      'exit_later_clicked',
+      'exit_installwithnologout',
+      'conflicting_apps'
+  ]
+
+  FETCH_LIMIT = 500
+
+  def get(self, name=None, arg=None):
     """Handle GET"""
 
     if name == 'client_counts':
       self._SetClientCounts()
     elif name == 'summary':
       self._GenerateSummary()
+    elif name == 'installcounts':
+      self._GenerateInstallCounts()
+    elif name == 'msu_user_summary':
+      if arg:
+        try:
+          kwargs = {'since_days': int(arg)}
+        except ValueError:
+          kwargs = {}
+      else:
+        kwargs = {}
+      self._GenerateMsuUserSummary(**kwargs)
     else:
       logging.warning('Unknown ReportsCache cron requested: %s', name)
       self.response.set_status(404)
@@ -191,6 +217,140 @@ class ReportsCache(webapp.RequestHandler):
     logging.debug('Saving stats summary to Datastore: %s', summary)
     models.ReportsCache.SetStatsSummary(summary)
 
+  def _GenerateMsuUserSummary(self, since_days=None, now=None):
+    """Generate summary of MSU user data.
+
+    Args:
+      since_days: int, optional, only report on the last x days
+      now: datetime.datetime, optional, supply an alternative
+        value for the current date/time
+    """
+    # TODO: when running from a taskqueue, this value could be higher.
+    RUNTIME_MAX_SECS = 15
+
+    cursor_name = 'msu_user_summary_cursor'
+
+    if since_days is None:
+      since = None
+    else:
+      since = '%dD' % since_days
+      cursor_name = '%s_%s' % (cursor_name, since)
+
+    interested_events = self.USER_EVENTS
+
+    lquery = models.ComputerMSULog.all()
+    cursor = models.KeyValueCache.MemcacheWrappedGet(
+        cursor_name, 'text_value')
+    summary = models.ReportsCache.GetMsuUserSummary(
+        since=since, tmp=True)
+
+    if cursor and summary:
+      lquery.with_cursor(cursor)
+      summary = summary[0]
+    else:
+      summary = {}
+      for event in interested_events:
+        summary[event] = 0
+      summary['total_events'] = 0
+      summary['total_users'] = 0
+      summary['total_uuids'] = 0
+      models.ReportsCache.SetMsuUserSummary(
+          summary, since=since, tmp=True)
+
+    begin = time.time()
+    if now is None:
+      now = datetime.datetime.utcnow()
+
+    while True:
+      reports = lquery.fetch(self.FETCH_LIMIT)
+      if not reports:
+        break
+
+      userdata = {}
+      last_user = None
+      last_user_cursor = None
+      prev_user_cursor = None
+
+      n = 0
+      for report in reports:
+        userdata.setdefault(report.user, {})
+        userdata[report.user].setdefault(
+            report.uuid, {}).update(
+                {report.event: report.mtime})
+        if last_user != report.user:
+          last_user = report.user
+          prev_user_cursor = last_user_cursor
+          last_user_cursor = str(lquery.cursor())
+        n += 1
+
+      if n == self.FETCH_LIMIT:
+        # full fetch, might not have finished this user -- rewind
+        del(userdata[last_user])
+        last_user_cursor = prev_user_cursor
+
+      for user in userdata:
+        events = 0
+        for uuid in userdata[user]:
+          if 'launched' not in userdata[user][uuid]:
+            continue
+          for event in userdata[user][uuid]:
+            if since_days is None or IsTimeDelta(
+                userdata[user][uuid][event], now, days=since_days):
+              summary.setdefault(event, 0)
+              summary[event] += 1
+              summary['total_events'] += 1
+              events += 1
+          if events:
+            summary['total_uuids'] += 1
+        if events:
+          summary['total_users'] += 1
+          summary.setdefault('total_users_%d_events' % events, 0)
+          summary['total_users_%d_events' % events] += 1
+
+      lquery = models.ComputerMSULog.all()
+      lquery.with_cursor(last_user_cursor)
+
+      end = time.time()
+      if (end - begin) > RUNTIME_MAX_SECS:
+        break
+
+    if reports:
+      models.ReportsCache.SetMsuUserSummary(
+          summary, since=since, tmp=True)
+      models.KeyValueCache.MemcacheWrappedSet(
+          cursor_name, 'text_value', last_user_cursor)
+      if since_days:
+        args = '/%d' % since_days
+      else:
+        args = ''
+      taskqueue.add(
+          url='/cron/reports_cache/msu_user_summary%s' % args,
+          method='GET',
+          countdown=5)
+    else:
+      models.ReportsCache.SetMsuUserSummary(
+          summary, since=since)
+      models.KeyValueCache.ResetMemcacheWrap(cursor_name)
+      summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
+          since=since, tmp=True)
+
+  def _GenerateInstallCounts(self):
+    """Generate install counts reports cache."""
+    install_counts = {}
+    for p in models.PackageInfo.all().order('name'):
+      pl = plist.MunkiPackageInfoPlist(p.plist)
+      pl.Parse()
+      pl_dict = pl.GetContents()
+      if 'display_name' in pl_dict:
+        munki_name = '%s-%s' % (pl_dict['display_name'], pl_dict['version'])
+      else:
+        munki_name = '%s-%s' % (pl_dict['name'], pl_dict['version'])
+
+      count = models.InstallLog.all(keys_only=True).filter(
+          'package =', munki_name).count(999999)
+      install_counts[munki_name] = count
+    models.ReportsCache.SetInstallCounts(install_counts)
+
 
 def IsWithinPastXHours(datetime_val, hours=24):
   """Returns True if datetime is within past X hours, False otherwise."""
@@ -200,6 +360,37 @@ def IsWithinPastXHours(datetime_val, hours=24):
     return True
   return False
 
+
+def IsTimeDelta(dt1, dt2, seconds=None, minutes=None, hours=None, days=None):
+  """Returns delta if datetime values are within a time period.
+
+  Note that only one unit argument may be used at once because of a
+  limitation in the way that we process the delta units (only in seconds).
+
+  Args:
+    dt1: datetime obj, datetime value 1 to compare
+    dt2: datetime obj, datetime value 2 to compare
+    seconds: int, optional, within seconds   OR
+    minutes: int, optional, within minutes   OR
+    hours: int, optional, within minutes     OR
+    days: int, optional, without days
+  Returns:
+    None or datetime.timedelta object
+  """
+  delta = abs(dt2 - dt1)
+  if days is not None:
+    dseconds = days * 86400
+  elif hours is not None:
+    dseconds = hours * 3600
+  elif minutes is not None:
+    dseconds = minutes * 60
+  elif seconds is not None:
+    dseconds = seconds
+  else:
+    return
+
+  if ((delta.days * 86400) + delta.seconds) <= dseconds:
+    return delta
 
 def DictToList(d, sort=True, reverse=True):
   """Converts a dict to a list of tuples.
@@ -221,6 +412,7 @@ def DictToList(d, sort=True, reverse=True):
 
 application = webapp.WSGIApplication([
     (r'/cron/reports_cache/([a-z_]+)$', ReportsCache),
+    (r'/cron/reports_cache/([a-z_]+)/(.*)$', ReportsCache),
 ])
 
 

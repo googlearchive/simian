@@ -31,7 +31,6 @@ from simian.mac import models
 from simian.mac import common
 from simian.mac.munki import plist as plist_module
 
-
 CLIENT_ID_FIELDS = {
     'uuid': str, 'owner': str, 'hostname': str, 'config_track': str,
     'track': str, 'site': str, 'office': str, 'os_version': str,
@@ -62,8 +61,20 @@ class ManifestCreationError(Error):
   """There was an error updating the manifest."""
 
 
+class ComputerNotFoundError(Error):
+  """Computer could not be found."""
+
+
+class ManifestNotFoundError(Error):
+  """Manifest requested was not found."""
+
+
+class ManifestDisabledError(Error):
+  """Disable manifest was requested."""
+
+
 # Munki catalog plist XML with Apple DTD/etc, and empty array for filling.
-CATALOG_PLIST_XML = '%s<array>\n  %s\n</array>%s' % (
+CATALOG_PLIST_XML = '%s<array>\n%s\n</array>%s' % (
     plist_module.PLIST_HEAD, '%s', plist_module.PLIST_FOOT)
 
 
@@ -190,9 +201,9 @@ def CreateCatalog(name, delay=0):
     for p in package_infos:
       apl = plist_module.ApplePlist(p.plist)
       apl.Parse()
-      pkgsinfo_dicts.append(apl.GetXmlContent())
+      pkgsinfo_dicts.append(apl.GetXmlContent(indent_num=1))
 
-    catalog = CATALOG_PLIST_XML % '\n  '.join(pkgsinfo_dicts)
+    catalog = CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
 
     c = models.Catalog.get_or_insert(name)
     c.name = name
@@ -226,32 +237,37 @@ def _SaveFirstConnection(client_id, computer):
   e.put()
 
 
-def LogClientConnection(event, client_id, user_settings, delay=0):
+def LogClientConnection(
+    event, client_id, user_settings=None, pkgs_to_install=None, delay=0):
   """Logs a host checkin to Simian.
 
   Args:
     event: str name of the event that prompted a client connection log.
     client_id: dict client id with fields: uuid, hostname, owner.
+    user_settings: optional dict of user settings.
+    pkgs_to_install: optional list of string packages remaining to install.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
   """
   logging.debug(
-      'LogClientConnection(%s, %s, user_settings? %s, delay=%s)',
-      event, client_id, user_settings not in [None, {}], delay)
+      ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
+       'delay=%s)'),
+      event, client_id, user_settings not in [None, {}], pkgs_to_install, delay)
 
   if delay:
     logging.debug('Delaying LogClientConnection call %s seconds', delay)
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
     deferred_name = 'log-client-conn-%s-%s' % (client_id['uuid'], now_str)
     deferred.defer(
-        LogClientConnection, event, client_id, user_settings,
-        _name=deferred_name, _countdown=delay)
+        LogClientConnection, event, client_id, user_settings=user_settings,
+        pkgs_to_install=pkgs_to_install, _name=deferred_name, _countdown=delay)
     return
 
   if not client_id['uuid']:
     logging.debug('uuid is unknown, skipping log.')
     return
 
-  def __UpdateComputerEntity(event, _client_id, _user_settings):
+  def __UpdateComputerEntity(
+      event, _client_id, _user_settings, _pkgs_to_install):
     """Update the computer entity, or create a new one if it doesn't exists."""
     now = datetime.datetime.utcnow()
     c = models.Computer.get_by_key_name(_client_id['uuid'])
@@ -282,16 +298,21 @@ def LogClientConnection(event, client_id, user_settings, delay=0):
         logging.warning(
             'Non-standard last_notified_datetime: %s', last_notified_datetime)
 
-    # Update the appropriate datetime, preflight/postflight.
+    # Update event specific (preflight vs postflight) report values.
     if event == 'preflight':
       c.preflight_datetime = now
+      if _client_id['on_corp'] == True:
+        c.last_on_corp_preflight_datetime = now
     elif event == 'postflight':
       c.postflight_datetime = now
-    else:
-      logging.warning('Unknown event value: %s', event)
+      # Update pkgs_to_install.
+      if _pkgs_to_install:
+        c.pkgs_to_install = _pkgs_to_install
+        c.all_pkgs_installed = False
+      else:
+        c.pkgs_to_install = []
+        c.all_pkgs_installed = True
 
-    # Update the connection dates/etc only if postflight is calling log.
-    if event == 'postflight':
       # Keep the last CONNECTION_DATETIMES_LIMIT connection datetimes.
       if len(c.connection_datetimes) == CONNECTION_DATETIMES_LIMIT:
         c.connection_datetimes.pop(0)
@@ -311,6 +332,8 @@ def LogClientConnection(event, client_id, user_settings, delay=0):
         if len(c.connection_dates) == CONNECTION_DATES_LIMIT:
           c.connection_dates.pop(0)
         c.connection_dates.append(now_date)
+    else:
+      logging.warning('Unknown event value: %s', event)
 
     c.put()
     if is_new_client:  # Queue welcome email to be sent.
@@ -322,13 +345,14 @@ def LogClientConnection(event, client_id, user_settings, delay=0):
   try:
     db.run_in_transaction(
         __UpdateComputerEntity,
-        event, client_id, user_settings)
+        event, client_id, user_settings, pkgs_to_install)
     # to run w/o transaction:
-    # __UpdateComputerEntity(event, client_id, user_settings)
+    # __UpdateComputerEntity(event, client_id, user_settings, pkgs_to_install)
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
     logging.warning('LogClientConnection put() failure; deferring...')
     LogClientConnection(
-        event, client_id, user_settings, delay=DATASTORE_NOWRITE_DELAY)
+        event, client_id, user_settings, pkgs_to_install,
+        delay=DATASTORE_NOWRITE_DELAY)
 
 
 def WriteClientLog(model, uuid, **kwargs):
@@ -527,3 +551,158 @@ def SetPanicModeNoPackages(enabled):
     enabled: bool, to enable or disable the mode
   """
   SetPanicMode(PANIC_MODE_NO_PACKAGES, enabled)
+
+
+def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
+  """For a computer uuid or client_id, return the current manifest.
+
+  Args:
+    uuid: str, computer uuid    OR
+    client_id: dict, client_id
+    packagemap: bool, default False, whether to return packagemap or not
+  Returns:
+    if packagemap, dict = {
+        'plist': plist.MunkiManifestPlist instance,
+        'packagemap': {   # if packagemap == True
+            'Firefox': 'Firefox-3.x.x.x.dmg',
+        },
+    }
+
+    if not packagemap, str, manifest plist
+  Raises:
+    ValueError: error in type of arguments supplied to this method
+    ComputerNotFoundError: computer cannot be found for uuid
+    ManifestNotFoundError: manifest requested is invalid (not found)
+    ManifestDisabledError: manifest requested is disabled
+  """
+  if uuid is not None:
+    c = models.Computer.get_by_key_name(uuid)
+    if not c:
+      raise ComputerNotFoundError
+
+    client_id = {
+        'uuid': uuid,
+        'owner': c.owner,
+        'hostname': c.hostname,
+        'config_track': c.config_track,
+        'track': c.track,
+        'site': c.site,
+        'office': c.office,
+        'os_version': c.os_version,
+        'client_version': c.client_version,
+        'on_corp': c.connections_on_corp > c.connections_off_corp,
+        'last_notified_datetime': c.last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+  elif client_id is not None:
+    if type(client_id) is not dict:
+      raise ValueError('client_id must be dict')
+  else:
+    raise ValueError('uuid or client_id must be supplied')
+
+  # Step 1: Obtain a manifest for this uuid.
+  manifest_plist_xml = None
+
+  if IsPanicModeNoPackages():
+    manifest_plist_xml = '%s%s' % (
+        plist_module.PLIST_HEAD, plist_module.PLIST_FOOT)
+  else:
+    manifest_name = client_id['track']
+    m = models.Manifest.MemcacheWrappedGet(manifest_name)
+    if not m:
+      raise ManifestNotFoundError(manifest_name)
+    elif not m.enabled:
+      raise ManifestDisabledError(manifest_name)
+
+    manifest_plist_xml = GenerateDynamicManifest(m.plist, client_id)
+
+  if not manifest_plist_xml:
+    raise ManifestNotFoundError(manifest_name)
+
+  # Step 1: Return now with xml if packagemap not requested.
+  if not packagemap:
+    return manifest_plist_xml
+
+  # Step 2: Build lookup table from PackageName to PackageName-VersionNumber
+  # for packages found in catalogs used by the client.
+
+  manifest_plist = plist_module.MunkiManifestPlist(manifest_plist_xml)
+  manifest_plist.Parse()
+
+  catalogs = manifest_plist.GetContents()['catalogs']
+  packages = {}
+
+  pkginfo_q = models.PackageInfo.all()
+
+  for pkginfo in pkginfo_q:
+    pkginfo_plist = plist_module.MunkiPackageInfoPlist(pkginfo.plist)
+    pkginfo_plist.Parse()
+    pd = pkginfo_plist.GetContents()
+    display_name = pd.get('display_name', pd.get('name')).strip()
+    version = pd.get('version', '')
+    pkg_name = pkginfo.name
+    packages[pkg_name] = '%s-%s' % (display_name, version)
+
+  return {
+      'plist': manifest_plist,
+      'packagemap': packages,
+  }
+
+def _ModifyList(l, value):
+  """Adds or removes a value from a list.
+
+  Args:
+    l: list to modify.
+    value: str value; "foo" to add or "-foo" to remove "foo".
+  """
+  if value.startswith('-'):
+    try:
+      l.remove(value[1:])
+    except ValueError:
+      pass  # item is already not a member of the list, so ignore error.
+  else:
+    l.append(value)
+
+
+def GenerateDynamicManifest(plist_xml, client_id):
+  """Generate a dynamic manifest based on a the various client_id fields.
+
+  Args:
+    plist_xml: str XML manifest to start with.
+    client_id: dict client_id parsed by common.ParseClientId.
+  Returns:
+    str XML manifest with any custom modifications based on the client_id.
+  """
+  manifest = client_id['track']
+  # TODO(user): we'll probably want to memcache *all* site modificiations,
+  #    since there will be very few, but not hostname/owner modifications as
+  #    they'll be widespread after Stuff integration.
+  site_mods = models.SiteManifestModification.all().filter(
+      'site =', client_id['site'])
+  os_version_mods = models.OSVersionManifestModification.all().filter(
+      'os_version =', client_id['os_version'])
+  # host_mods = mods.HostManifestModification.all().filter(
+  #   'hostname =', client_id['hostname'])
+  host_mods = []  # temporary.
+
+  def __ApplyModifications(manifest, mod, plist):
+    """Applies a manifest modification if the manifest matches mod manifest."""
+    if mod.enabled and manifest in mod.manifests:
+      logging.debug(
+          'Applying manifest mod: %s %s', mod.install_type, mod.value)
+      plist_module.UpdateIterable(
+          plist, mod.install_type, mod.value, default=[], op=_ModifyList)
+
+  if site_mods or host_mods or os_version_mods:
+    plist = plist_module.MunkiManifestPlist(plist_xml)
+    plist.Parse()
+    for mod in site_mods:
+      __ApplyModifications(manifest, mod, plist)
+    for mod in host_mods:
+      __ApplyModifications(manifest, mod, plist)
+    for mod in os_version_mods:
+      __ApplyModifications(manifest, mod, plist)
+    plist_xml = plist.GetXml()
+  return plist_xml

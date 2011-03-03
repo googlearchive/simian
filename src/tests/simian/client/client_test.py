@@ -820,7 +820,7 @@ class HttpsAuthClientTest(mox.MoxTestBase):
         self.client.FACTER_CACHE_PATH, self.client.FACTER_CACHE_DEFAULT_PATH)
     self.mox.VerifyAll()
 
-  
+
   def testCacheFacterContents(self):
     """Test CacheFacterContents()."""
     self.mox.StubOutWithMock(self.client, '_SudoExec')
@@ -839,7 +839,7 @@ class HttpsAuthClientTest(mox.MoxTestBase):
         ])
 
     mock_open = self.mox.CreateMockAnything()
-    mock_file = self.mox.CreateMockAnything()    
+    mock_file = self.mox.CreateMockAnything()
     mock_open(self.client.FACTER_CACHE_PATH, 'w').AndReturn(mock_file)
     client.Pickle.dump(facts, mock_file).AndReturn(None)
     mock_file.close()
@@ -1170,36 +1170,40 @@ class SimianClientTest(mox.MoxTestBase):
     """Test _SimianRequest()."""
     method = 'zGET'
     url = '/url'
+    headers = {'foo': 'bar'}
     output_filename = None
 
     good_response = client.Response(status=200, body='hello there')
 
     self.mox.StubOutWithMock(self.client, 'Do')
     self.client.Do(
-        method, url, body=None, output_filename=output_filename).AndReturn(
-            good_response)
+        method, url, body=None, headers=headers,
+        output_filename=output_filename).AndReturn(good_response)
 
     self.mox.ReplayAll()
-    self.assertEqual(good_response.body, self.client._SimianRequest(method, url))
+    self.assertEqual(
+        good_response.body,
+        self.client._SimianRequest(method, url, headers=headers))
     self.mox.VerifyAll()
 
   def testSimianRequestWithError(self):
     """Test _SimianRequest() with an error status returned."""
     method = 'zGET'
     url = '/url'
+    headers = {'foo': 'bar'}
     output_filename = None
 
     error_response = client.Response(status=401, body='')
 
     self.mox.StubOutWithMock(self.client, 'Do')
     self.client.Do(
-        method, url, body=None, output_filename=output_filename).AndReturn(
-            error_response)
+        method, url, body=None, headers=headers,
+        output_filename=output_filename).AndReturn(error_response)
 
     self.mox.ReplayAll()
     self.assertRaises(
         client.SimianServerError,
-        self.client._SimianRequest, method, url)
+        self.client._SimianRequest, method, url, headers=headers)
     self.mox.VerifyAll()
 
   def testSimianRequestRetry(self):
@@ -1209,6 +1213,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     method = 'get'
     url = '/url'
+    headers = {'foo': 'bar'}
     retry_on_status = [500]
 
     response = self.mox.CreateMockAnything()
@@ -1218,23 +1223,24 @@ class SimianClientTest(mox.MoxTestBase):
 
     client.time.sleep(0).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(5).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(10).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndReturn(response)
 
     self.mox.ReplayAll()
     self.assertEqual(
         'OK',
-        self.client._SimianRequestRetry(method, url, retry_on_status))
+        self.client._SimianRequestRetry(
+            method, url, retry_on_status, headers=headers))
     self.mox.VerifyAll()
 
   def testSimianRequestRetryUnsuccessful(self):
@@ -1244,28 +1250,30 @@ class SimianClientTest(mox.MoxTestBase):
 
     method = 'get'
     url = '/url'
+    headers = {'foo': 'bar'}
     retry_on_status = [500]
 
     client.time.sleep(0).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(5).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(10).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
 
     self.mox.ReplayAll()
     self.assertRaises(
         client.SimianServerError,
-        self.client._SimianRequestRetry, method, url, retry_on_status)
+        self.client._SimianRequestRetry,
+            method, url, retry_on_status, headers=headers)
     self.mox.VerifyAll()
 
   def testSimianRequestRetryUnsuccessfulOtherFailure(self):
@@ -1275,27 +1283,29 @@ class SimianClientTest(mox.MoxTestBase):
 
     method = 'get'
     url = '/url'
+    headers = {'foo': 'bar'}
     retry_on_status = [500]
 
     client.time.sleep(0).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(5).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(500, '500 error'))
     client.time.sleep(10).AndReturn(None)
     self.client._SimianRequest(
-        method, url, body=None,
+        method, url, body=None, headers=headers,
         output_filename=None, full_response=True).AndRaise(
             client.SimianServerError(400, 'unexpected error'))
 
     self.mox.ReplayAll()
     try:
-      response = self.client._SimianRequestRetry(method, url, retry_on_status)
+      response = self.client._SimianRequestRetry(
+          method, url, retry_on_status, headers=headers)
       self.fail('the above method should not have succeeded')
     except client.SimianServerError, e:
       self.assertEqual(e.args, (400, 'unexpected error'))

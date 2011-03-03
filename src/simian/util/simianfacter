@@ -13,7 +13,7 @@ CONFIG_FILE = '/etc/simian/simian.cfg'
 SECTION = 'config'
 CONFIG_NAMES = [
     'certname', 'primary_user', 'hostname', 'configtrack', 'simiantrack',
-    'site', 'location',
+    'site', 'location', 'applesus',
 ]
 
 
@@ -85,7 +85,8 @@ sp_local_host_name => %(hostname)s
 configtrack => %(configtrack)s
 simiantrack => %(simiantrack)s
 site => %(site)s
-location => %(location)s""" % facts
+location => %(location)s
+applesus => %(applesus)s""" % facts
 
 
 if __name__ == '__main__':

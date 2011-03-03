@@ -23,7 +23,6 @@ and gMac, not gWindows.
 
 
 
-import cPickle as pickle
 import datetime
 import getopt
 import logging
@@ -126,7 +125,6 @@ class SimianAuthCliClient(object):
         where report is a string in format:
             "body:URLENCODED_PARAMS"
             "dict:REPORT_TYPE:KEY1=VALUE2:KEY2=VALUE2:..."
-            "pickle:REPORT_TYPE:PICKLED_PARAMS"
 
         the report string above may be prepended with a feedback request
         in the format:
@@ -435,7 +433,6 @@ class SimianAuthCliClient(object):
     Args:
       arg: str, argument supplied by user, e.g.
         body:URLENCODED_REPORT
-        pickle:REPORT_TYPE:PICKLED_REPORT
         dict:REPORT_TYPE:foo=1:bar=2:zoo=3
     Returns:
       tuple of (report_type, params, feedback)
@@ -455,7 +452,7 @@ class SimianAuthCliClient(object):
       i = 1
       feedback = {}
       arg = arg[len('feedback:'):]
-      while i < len(a) and a[i] not in ['body', 'dict', 'pickle']:
+      while i < len(a) and a[i] not in ['body', 'dict']:
         k, v = a[i].split('=', 1)
         try:
           feedback[k] = int(v)
@@ -484,10 +481,6 @@ class SimianAuthCliClient(object):
         for kv in a[2:]:
           k, v = kv.split('=', 1)
           params[k] = v
-    # pickle: defines report_type and params in pickled format
-    elif arg.startswith('pickle:'):
-      (unused, report_type, params) = arg.split(':', 2)
-      params = pickle.loads(params)
 
     if params is None:
       raise UnknownReportFormatError(arg, params, feedback)
@@ -520,6 +513,7 @@ class SimianAuthCliClient(object):
                 'Exiting with status %d because of report feedback %s',
                 feedback[response], response)
             sys.exit(feedback[response])
+
 
 def main(argv, simian_cli_class=None):
   if simian_cli_class is None:

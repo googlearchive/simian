@@ -30,6 +30,11 @@ handlers:
 
 ### crons
 
+- url: /cron/applesus/.*
+  script: simian/mac/cron/applesus.py
+  login: admin
+  secure: always
+
 - url: /cron/maintenance/.*
   script: simian/mac/cron/maintenance.py
   login: admin
@@ -68,6 +73,12 @@ handlers:
   secure: always
 
 - url: /reports
+  script: main.py
+  secure: always
+
+### MacPushy specific Apple SUS integration.
+
+- url: /applesus/.*
   script: main.py
   secure: always
 

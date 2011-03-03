@@ -188,6 +188,21 @@ class RequestHandlerTest(TestBase):
     else:
       auth.DoAnyAuth().AndReturn(and_return)
 
+  def MockDoAdminMachineAuth(self, fail=False, and_return=None, **kwargs):
+    """Mock calling auth.AdminMachineAuth().
+
+    Args:
+      fail: bool, whether to fail or not
+      and_return: any, variable to pass to AndReturn, default None
+    """
+    if not 'authDoAdminMachineAuth' in self._set_mock:
+      self.mox.StubOutWithMock(auth, 'DoAdminMachineAuth')
+      self._set_mock['authDoAdminMachineAuth'] = 1
+    if fail:
+      auth.DoAdminMachineAuth(**kwargs).AndRaise(auth.NotAuthenticated)
+    else:
+      auth.DoAdminMachineAuth(**kwargs).AndReturn(and_return)
+
   def MockModelStaticBase(self, model_name, method_name, *args):
     """Mock a model static method, return a mock setup.
 

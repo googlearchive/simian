@@ -35,7 +35,115 @@ class HandlersTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return manifests
 
-  def testGetSuccessNonStable(self):
+  def testGetSuccessWhenSessionUuid(self):
+    """Tests Manifests.get()."""
+    track = 'testing'
+    client_id = 'track=%s|foo=withpipe' % track
+    client_id_quoted = manifests.urllib.quote(client_id)
+    client_id_dict = {'track': track}
+    uuid = 'foouuid'
+    mock_session = self.mox.CreateMockAnything()
+    mock_session.uuid = uuid
+    plist_xml = 'manifest xml'
+
+    self.mox.StubOutWithMock(manifests.common, 'ParseClientId')
+    self.mox.StubOutWithMock(manifests.common, 'GetComputerManifest')
+
+    self.MockDoAnyAuth(and_return=mock_session)
+    self.request.headers.get('X-munki-client-id', '').AndReturn(
+        client_id_quoted)
+    manifests.common.ParseClientId(
+        client_id, uuid=mock_session.uuid).AndReturn(client_id_dict)
+    manifests.common.GetComputerManifest(
+        client_id=client_id_dict, packagemap=False).AndReturn(plist_xml)
+    self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
+    self.response.out.write(plist_xml).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.get()
+    self.mox.VerifyAll()
+
+  def testGetSuccessWhenSessionNoUuid(self):
+    """Tests Manifests.get()."""
+    track = 'testing'
+    client_id = 'track=%s|foo=withpipe' % track
+    client_id_quoted = manifests.urllib.quote(client_id)
+    client_id_dict = {'track': track}
+    uuid = 'foouuid'
+    mock_session = self.mox.CreateMockAnything()
+    plist_xml = 'manifest xml'
+
+    self.mox.StubOutWithMock(manifests.common, 'ParseClientId')
+    self.mox.StubOutWithMock(manifests.common, 'GetComputerManifest')
+
+    self.MockDoAnyAuth(and_return='has no uuid')
+    manifests.common.ParseClientId(client_id).AndReturn(client_id_dict)
+    manifests.common.GetComputerManifest(
+        client_id=client_id_dict, packagemap=False).AndReturn(plist_xml)
+    self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
+    self.response.out.write(plist_xml).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.get(client_id)
+    self.mox.VerifyAll()
+
+  def testGetSuccessWhenManifestNotFoundError(self):
+    """Tests Manifests.get()."""
+    track = 'testing'
+    client_id = 'track=%s|foo=withpipe' % track
+    client_id_quoted = manifests.urllib.quote(client_id)
+    client_id_dict = {'track': track}
+    uuid = 'foouuid'
+    mock_session = self.mox.CreateMockAnything()
+    mock_session.uuid = uuid
+    plist_xml = 'manifest xml'
+
+    self.mox.StubOutWithMock(manifests.common, 'ParseClientId')
+    self.mox.StubOutWithMock(manifests.common, 'GetComputerManifest')
+
+    self.MockDoAnyAuth(and_return=mock_session)
+    self.request.headers.get('X-munki-client-id', '').AndReturn(
+        client_id_quoted)
+    manifests.common.ParseClientId(
+        client_id, uuid=mock_session.uuid).AndReturn(client_id_dict)
+    manifests.common.GetComputerManifest(
+        client_id=client_id_dict, packagemap=False).AndRaise(
+            manifests.common.ManifestNotFoundError)
+    self.response.set_status(404).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.get()
+    self.mox.VerifyAll()
+
+  def testGetSuccessWhenManifestDisabledError(self):
+    """Tests Manifests.get()."""
+    track = 'testing'
+    client_id = 'track=%s|foo=withpipe' % track
+    client_id_quoted = manifests.urllib.quote(client_id)
+    client_id_dict = {'track': track}
+    uuid = 'foouuid'
+    mock_session = self.mox.CreateMockAnything()
+    mock_session.uuid = uuid
+    plist_xml = 'manifest xml'
+
+    self.mox.StubOutWithMock(manifests.common, 'ParseClientId')
+    self.mox.StubOutWithMock(manifests.common, 'GetComputerManifest')
+
+    self.MockDoAnyAuth(and_return=mock_session)
+    self.request.headers.get('X-munki-client-id', '').AndReturn(
+        client_id_quoted)
+    manifests.common.ParseClientId(
+        client_id, uuid=mock_session.uuid).AndReturn(client_id_dict)
+    manifests.common.GetComputerManifest(
+        client_id=client_id_dict, packagemap=False).AndRaise(
+            manifests.common.ManifestDisabledError)
+    self.response.set_status(503).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.get()
+    self.mox.VerifyAll()
+
+  def ZtestGetSuccessNonStable(self):
     """Tests Manifests.get()."""
     track = 'testing'
     client_id = 'track=testing|foo=withpipe'
@@ -44,6 +152,7 @@ class HandlersTest(test.RequestHandlerTest):
     uuid = 'foouuid'
     mock_session = self.mox.CreateMockAnything()
     mock_session.uuid = uuid
+
     self.MockDoAnyAuth(and_return=mock_session)
     self.request.headers.get('X-munki-client-id', '').AndReturn(
         client_id_quoted)
@@ -54,9 +163,9 @@ class HandlersTest(test.RequestHandlerTest):
     manifests.common.IsPanicModeNoPackages().AndReturn(False)
     manifest = self.MockModelStatic('Manifest', 'MemcacheWrappedGet', track)
     manifest.plist = 'fooplist'
-    self.mox.StubOutWithMock(manifests, 'GenerateDynamicManifest')
-    manifests.GenerateDynamicManifest(manifest.plist, client_id_dict).AndReturn(
-        manifest.plist)
+    self.mox.StubOutWithMock(manifests.common, 'GenerateDynamicManifest')
+    manifests.common.GenerateDynamicManifest(
+        manifest.plist, client_id_dict).AndReturn(manifest.plist)
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
     self.response.out.write(manifest.plist).AndReturn(None)
 
@@ -64,7 +173,7 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testGetSuccessNonStableClientIdInUrl(self):
+  def ZtestGetSuccessNonStableClientIdInUrl(self):
     """Tests Manifests.get()."""
     track = 'testing'
     client_id = 'track=testing|foo=withpipe'
@@ -76,10 +185,10 @@ class HandlersTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(manifests.common, 'IsPanicModeNoPackages')
     manifests.common.IsPanicModeNoPackages().AndReturn(False)
     manifest = self.MockModelStatic('Manifest', 'MemcacheWrappedGet', track)
-    self.mox.StubOutWithMock(manifests, 'GenerateDynamicManifest')
+    self.mox.StubOutWithMock(manifests.common, 'GenerateDynamicManifest')
     manifest.plist = 'fooplist'
-    manifests.GenerateDynamicManifest(manifest.plist, client_id_dict).AndReturn(
-        manifest.plist)
+    manifests.common.GenerateDynamicManifest(
+        manifest.plist, client_id_dict).AndReturn(manifest.plist)
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
     self.response.out.write(manifest.plist).AndReturn(None)
 
@@ -87,7 +196,7 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.get(client_id_quoted)
     self.mox.VerifyAll()
 
-  def testGet404(self):
+  def ZtestGet404(self):
     """Tests Manifests.get() where name is not found."""
     track = 'notvalid'
     client_id = 'track=%s' % track
@@ -110,7 +219,7 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testGetDisabled(self):
+  def ZtestGetDisabled(self):
     """Tests Manifests.get() where manifest is disabled."""
     track = 'disabled'
     client_id = 'track=%s' % track
@@ -135,7 +244,7 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testGetPanicModeNoPackages(self):
+  def ZtestGetPanicModeNoPackages(self):
     """Tests Manifests.get() where manifest is in panic mode."""
     track = 'disabled'
     client_id = 'track=%s' % track
@@ -164,74 +273,6 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testModifyList(self):
-    """Tests _ModifyList()."""
-    l = []
-    manifests._ModifyList(l, 'yes')
-    manifests._ModifyList(l, 'no')
-    self.assertEqual(l, ['yes', 'no'])  # test modify add.
-
-    manifests._ModifyList(l, '-no')
-    self.assertEqual(l, ['yes'])  # test modify remove.
-
-    manifests._ModifyList(l, '-This value does not exist')
-    self.assertEqual(l, ['yes'])  # test modify remove of non-existent value.
-
-  def testGenerateDynamicManifest(self):
-    """Tests GenerateDynamicManifest()."""
-    plist_xml = 'fooxml'
-    manifest = 'stable'
-    site = 'foosite'
-    os_version = '10.6.5'
-    client_id = {'track': manifest, 'site': site, 'os_version': os_version}
-
-    install_type_one = 'optional_installs'
-    value_one = 'foopkg'
-    site_mod_one = self.mox.CreateMockAnything()
-    site_mod_one.manifests = [manifest]
-    site_mod_one.enabled = True
-    site_mod_one.install_type = install_type_one
-    site_mod_one.value = value_one
-    site_mod_disabled = self.mox.CreateMockAnything()
-    site_mod_disabled.enabled = False
-    site_mods = [site_mod_one, site_mod_disabled]
-    mock_query = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(manifests.models.SiteManifestModification, 'all')
-    manifests.models.SiteManifestModification.all().AndReturn(mock_query)
-    mock_query.filter('site =', site).AndReturn(site_mods)
-
-    os_version_mod_one = self.mox.CreateMockAnything()
-    os_version_mod_one.manifests = [manifest]
-    os_version_mod_one.enabled = True
-    os_version_mod_one.install_type = 'managed_installs'
-    os_version_mod_one.value = 'foo os version pkg'
-    os_version_mods = [os_version_mod_one]
-    mock_query = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(
-        manifests.models.OSVersionManifestModification, 'all')
-    manifests.models.OSVersionManifestModification.all().AndReturn(mock_query)
-    mock_query.filter('os_version =', os_version).AndReturn(os_version_mods)
-
-    mock_plist = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(manifests.plist_module, 'UpdateIterable')
-    self.mox.StubOutWithMock(manifests.plist_module, 'MunkiManifestPlist')
-    manifests.plist_module.MunkiManifestPlist(plist_xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-
-    manifests.plist_module.UpdateIterable(
-        mock_plist, site_mod_one.install_type, site_mod_one.value, default=[],
-        op=manifests._ModifyList)
-
-    manifests.plist_module.UpdateIterable(
-        mock_plist, os_version_mod_one.install_type,
-        os_version_mod_one.value, default=[], op=manifests._ModifyList)
-
-    mock_plist.GetXml().AndReturn(plist_xml)
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        plist_xml, manifests.GenerateDynamicManifest(plist_xml, client_id))
-    self.mox.VerifyAll()
 
 
 def main(unused_argv):

@@ -20,6 +20,10 @@
 
 
 import sys
+import warnings
+warnings.filterwarnings(
+    'ignore',
+    '.*Python 2\.\d is unsupported; use 2.\d.*', DeprecationWarning, '.*', 0)
 from simian.mac.client import cli as mac_cli
 from simian.client import cli as base_cli
 

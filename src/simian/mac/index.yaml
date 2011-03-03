@@ -32,6 +32,11 @@ indexes:
 - kind: Computer
   properties:
   - name: active
+  - name: postflight_datetime
+
+- kind: Computer
+  properties:
+  - name: active
   - name: site
   - name: preflight_datetime
     direction: desc

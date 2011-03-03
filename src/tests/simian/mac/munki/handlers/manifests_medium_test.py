@@ -90,7 +90,7 @@ class HandlersTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     # Generate the dynamic manifest, then get dict output to compare to the
     # expected output.
-    out_xml = manifests.GenerateDynamicManifest(plist_xml, client_id)
+    out_xml = manifests.common.GenerateDynamicManifest(plist_xml, client_id)
     tmp_plist_out = manifests.plist_module.MunkiManifestPlist(out_xml)
     tmp_plist_out.Parse()
     out_dict = tmp_plist_out.GetContents()

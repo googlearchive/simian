@@ -300,7 +300,7 @@ class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
         cert_name, unused_stderr = self._SudoExec(
             ['/usr/bin/defaults', 'read', info_domain, 'MachineUUID'])
         logging.debug('Certname from machineinfo plist: %s', cert_name)
-        cert_name = cert_name.lower()
+        cert_name = cert_name.lower().strip()
       cert_fname = '%s.pem' % cert_name
     return super(SimianAuthClient, self)._GetPuppetSslDetails(
         cert_fname=cert_fname, interactive_user=interactive_user)

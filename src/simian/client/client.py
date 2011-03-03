@@ -1037,7 +1037,7 @@ class HttpsAuthClient(HttpsClient):
     # pass the rest of args to the called program.
     if not argv[0].startswith('/'):
       raise SudoExecError(
-          'First argument must be fully qualified binary to run')
+          'First argument must have absolute path to run: %s' % argv[0])
 
     _argv = ['/usr/bin/sudo']  # better would be [sudo, '--']
     _argv.extend(argv)
@@ -1053,7 +1053,8 @@ class HttpsAuthClient(HttpsClient):
 
     if expect_rc is not None:
       if rc != expect_rc:
-        raise SudoExecError('rc %d != %d' % (rc, expect_rc))
+        raise SudoExecError(
+            'Sudo exec %s: rc %d != %d' % (_argv, rc, expect_rc))
 
     return (stdout, stderr)
 
@@ -1462,13 +1463,15 @@ class SimianClient(HttpsAuthClient):
     return self._default_hostname
 
   def _SimianRequest(
-      self, method, url, body=None, output_filename=None,
+      self, method, url, body=None, headers=None, output_filename=None,
       full_response=False):
     """Make a request and return the body if successful.
 
     Args:
+      method: str, HTTP method to use, like GET or POST.
       url: str, url to connect to, like '/foo/1'
       body: str or file or dict, optional, body of request
+      headers: optional dict headers to send with the request.
       output_filename: str, optional, filename to write response body to
       full_response: bool, default False, return response object
     Returns:
@@ -1483,7 +1486,8 @@ class SimianClient(HttpsAuthClient):
       SimianServerError: if the Simian server returned an error (status != 200)
     """
     response = self.Do(
-        method, url, body=body, output_filename=output_filename)
+        method, url, body=body, headers=headers,
+        output_filename=output_filename)
 
     if response.IsSuccess():
       if not full_response:
@@ -1494,14 +1498,16 @@ class SimianClient(HttpsAuthClient):
       raise SimianServerError(response.status, response.reason)
 
   def _SimianRequestRetry(
-      self, method, url, retry_on_status, body=None, output_filename=None,
-      full_response=False, attempt_times=3):
+      self, method, url, retry_on_status, body=None, headers=None,
+      output_filename=None, full_response=False, attempt_times=3):
     """Make a request, retry if not successful, return the body if successful.
 
     Args:
+      method: str, HTTP method to use, like GET or POST.
       url: str, url to connect to, like '/foo/1'
-      body: str or file or dict, optional, body of request
       retry_on_status: list, of int status codes to retry upon receiving
+      body: str or file or dict, optional, body of request
+      headers: optional dict of headers to send with the request.
       output_filename: str, optional, filename to write response body to
       full_response: bool, default False, return response object
       retry_times: int, default 3, how many times to retry
@@ -1524,7 +1530,7 @@ class SimianClient(HttpsAuthClient):
         response = None
         last_exc = None
         response = self._SimianRequest(
-            method, url, body=body,
+            method, url, body=body, headers=headers,
             output_filename=output_filename, full_response=True)
         if response.status not in retry_on_status:
           break
@@ -1570,6 +1576,8 @@ class SimianClient(HttpsAuthClient):
     name = str(name.encode('utf-8'))
     new_params = params.copy()
     new_params['name'] = name
+    # TODO(user): the following injects a non-fqdn username, which is
+    # inconsistent with the rest of usernames used.
     new_params['user'] = self._user
     for k, v in new_params.iteritems():
       if type(v) is unicode:
@@ -1601,7 +1609,8 @@ class SimianClient(HttpsAuthClient):
       output_filename: str, optional, filename to write response body to
     """
     return self._SimianRequest(
-        'GET', '/pkgs/%s' % name, output_filename=output_filename)
+        'GET', '/pkgs/%s' % urllib.quote(name), 
+        output_filename=output_filename)
 
   def PutPackage(self, filename, params, input_filename=None, input_file=None):
     """Put a package file contents.
@@ -1670,7 +1679,7 @@ class SimianClient(HttpsAuthClient):
       if not request_hash, str pkginfo XML
       if request_hash, tuple of (str sha256 hash, str pkginfo XML)
     """
-    url = '/pkgsinfo/%s' % filename
+    url = '/pkgsinfo/%s' % urllib.quote(filename)
     if get_hash:
       url = '%s?hash=1' % url
 
@@ -1745,7 +1754,8 @@ class SimianClient(HttpsAuthClient):
       SimianServerError: if the Simian server returned an error (status != 200)
     """
     return self._SimianRequest(
-        'GET', '/pkgs/%s' % filename, output_filename=filename)
+        'GET', '/pkgs/%s' % urllib.quote(filename), 
+        output_filename=filename)
 
   def _IsPackageUploadNecessary(self, filename, upload_pkginfo):
     """Returns True if the package file should be uploaded.

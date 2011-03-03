@@ -211,7 +211,7 @@ class ApplePlistTest(mox.MoxTestBase):
     self.assertEqual(xml, self.apl.GetXml())
     self.assertEqual(self.apl.GetEncoding(), 'utf-8')
     self.assertEqual(
-        '<dict>\n    <key>foo</key>\n    <string>bar</string>\n  </dict>',
+        '<dict>\n  <key>foo</key>\n  <string>bar</string>\n</dict>',
         self.apl.GetXmlContent())
 
   def testBasicData(self):
@@ -219,6 +219,28 @@ class ApplePlistTest(mox.MoxTestBase):
            '<data>aGVsbG8gdGhlcmU=</data>\n  '
            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
     self.PlistTest(xml, {'foo': 'hello there'})
+
+  def testBasicDataEmptyKey(self):
+    xml = ('%s  <dict>\n    <key></key>\n    '
+           '<data>d2hhdCBhIGJ1ZyB0aGlzIHdhcw==</data>\n  '
+           '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+    self.PlistTest(xml, {'': 'what a bug this was'})
+
+  def testBasicNested(self):
+    xml = ('%s  <dict>\n    <key>foo</key>\n    <string>bar</string>\n  '
+           '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+    xml2 = ('%s  <dict>\n    <key>subway</key>\n    <string>BDFM</string>\n  '
+           '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+    nested_xml = ('%s  <dict>\n    <key>foo</key>\n    <dict>\n'
+                  '      <key>subway</key>\n'
+                  '      <string>BDFM</string>\n'
+                  '    </dict>\n'
+                  '  </dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+    plist2 = plist.ApplePlist(xml2)
+    plist2.Parse()
+    self.PlistTest(xml, {'foo': 'bar'})
+    self.apl.GetContents()['foo'] = plist2
+    self.assertEqual(nested_xml, self.apl.GetXml())
 
   def testDictToXml(self):
     """Test DictToXml().
@@ -824,6 +846,60 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     self.assertRaises(plist.PlistError, self.munki.GetPackageName)
     self.mox.VerifyAll()
+
+  def testSetDescription(self):
+    """Test SetDescription()."""
+    self.munki._plist = {}
+    self.munki.SetDescription('foo')
+    self.assertEqual(self.munki._plist['description'], 'foo')
+
+  def testSetDisplayName(self):
+    """Test SetDisplayName()."""
+    self.munki._plist = {}
+    self.munki.SetDisplayName('foo')
+    self.assertEqual(self.munki._plist['display_name'], 'foo')
+
+  def testSetForcedInstall(self):
+    """Test SetForcedInstall()."""
+    self.munki._plist = {}
+    self.munki.SetForcedInstall(True)
+    self.assertTrue(self.munki._plist['forced_install'])
+    self.munki.SetForcedInstall(False)
+    self.assertTrue('forced_install' not in self.munki._plist)
+    self.munki.SetForcedInstall(False)
+    self.assertTrue('forced_install' not in self.munki._plist)
+
+  def testSetCatalogs(self):
+    """Test SetCatalogs()."""
+    self.munki._plist = {}
+    # Note: here we are also testing the changed flag
+    self.assertFalse(self.munki._changed)
+    self.munki.SetCatalogs(['hi'])
+    self.assertEqual(self.munki._plist['catalogs'], ['hi'])
+    self.assertTrue(self.munki._changed)
+
+  def testHasChanged(self):
+    """Test HasChanged()."""
+    self.munki._changed = True
+    self.assertTrue(self.munki.HasChanged())
+    self.assertFalse(self.munki._changed)
+
+  def testSetChanged(self):
+    """Test SetChanged()."""
+    self.munki.SetChanged()
+    self.assertTrue(self.munki._changed)
+
+  def testEq(self):
+    """Test __eq__."""
+    other = plist.MunkiPackageInfoPlist()
+    other._plist = { 'foo': 1 }
+    self.munki._plist = { 'foo': 1 }
+    self.assertFalse(id(other._plist) == id(self.munki._plist))
+    self.assertTrue(self.munki == other)
+    self.assertFalse(self.munki == { 'foo': 1 })
+    self.assertFalse(self.munki == self)
+    other._plist = { 'foo': 2 }
+    self.assertFalse(self.munki == other)
 
 
 def main(unused_argv):

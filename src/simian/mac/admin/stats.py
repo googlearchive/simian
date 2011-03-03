@@ -30,12 +30,15 @@ from google.appengine.ext.webapp import template
 from simian import settings
 from simian.mac import models
 from simian.mac.common import auth
+from simian.mac.common import util
 from simian.mac.munki import plist
-
+from simian.mac.munki import common
 
 COMPUTER_FETCH_LIMIT = 1000
+USER_SETTINGS_FETCH_LIMIT = 500
 INSTALL_LOG_FETCH_LIMIT = 2000
 PREFLIGHT_EXIT_LOG_FETCH_LIMIT = 2000
+SINGLE_HOST_DATA_FETCH_LIMIT = 500
 REPORT_TYPES = ['owner', 'hostname', 'uuid', 'client_version', 'os_version']
 
 
@@ -68,10 +71,16 @@ class Stats(webapp.RequestHandler):
         self._DisplayCachedSummary()
     elif report == 'host':
       self._DisplayHost(uuid=uuid)
+    elif report == 'hostmanifest':
+      self._DisplayHostManifest(uuid=uuid)
     elif report == 'installs':
       pkg = self.request.get('pkg')
+      pending = self.request.get('pending') == '1'
       if pkg:
-        self._DisplayInstallsForPackage(pkg)
+        if pending:
+          self._DisplayHostsPendingPkg(pkg)
+        else:
+          self._DisplayInstallsForPackage(pkg)
       else:
         self._DisplayPackagesList()
     elif report == 'installproblems':
@@ -84,6 +93,10 @@ class Stats(webapp.RequestHandler):
       self._DisplayLongestUptime()
     elif report == 'brokenclients':
       self._DisplayBrokenClients()
+    elif report == 'msulogsummary':
+      self._DisplayMsuLogSummary(since_days=uuid)
+    elif report == 'user_settings':
+      self._DisplayUserSettings()
     else:
       self.response.set_status(404)
 
@@ -265,13 +278,15 @@ class Stats(webapp.RequestHandler):
       computer = models.Computer.get_by_key_name(uuid)
     else:
       uuid = computer.uuid
-    msu_log = models.ComputerMSULog.all().filter('uuid =', uuid).order('-mtime')
-    installs = models.InstallLog.all().filter('uuid =', uuid).order('-mtime')
+    msu_log = models.ComputerMSULog.all().filter('uuid =', uuid).order(
+        '-mtime').fetch(100)
+    installs = models.InstallLog.all().filter('uuid =', uuid).order(
+        '-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
     exits = models.PreflightExitLog.all().filter('uuid =', uuid).order(
-        '-mtime').fetch(PREFLIGHT_EXIT_LOG_FETCH_LIMIT)
+        '-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
     install_problems = models.ClientLog.all().filter(
         'action =', 'install_problem').filter('uuid =', uuid).order(
-            '-mtime').fetch(INSTALL_LOG_FETCH_LIMIT)
+            '-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
     uptime = None
     if computer:
       AddTimezoneToComputerDatetimes(computer)
@@ -293,12 +308,14 @@ class Stats(webapp.RequestHandler):
         'install_problems': install_problems,
         'preflight_exits': exits,
         'uptime': uptime,
-        'host_report': True
+        'host_report': True,
+        'limit': SINGLE_HOST_DATA_FETCH_LIMIT,
     }
     self.response.out.write(RenderTemplate('templates/stats_host.html', values))
 
   def _DisplayPackagesList(self):
     """Displays list of all installs/removals/etc."""
+    install_counts, counts_mtime = models.ReportsCache.GetInstallCounts()
     packages = []
     for p in models.PackageInfo.all().order('name'):
       pl = plist.MunkiPackageInfoPlist(p.plist)
@@ -310,6 +327,7 @@ class Stats(webapp.RequestHandler):
         munki_name = '%s-%s' % (pl_dict['name'], pl_dict['version'])
 
       pkg = {}
+      pkg['count'] = install_counts.get(munki_name, 'N/A')
       pkg['forced'] = pl_dict.get('forced_install', False)
       pkg['munki_install_name'] = munki_name
       pkg['catalogs'] = p.catalogs
@@ -319,17 +337,31 @@ class Stats(webapp.RequestHandler):
       pkg['description'] = pl_dict['description']
       packages.append(pkg)
     self.response.out.write(
-        RenderTemplate('templates/stats_installs.html', {'packages': packages}))
+        RenderTemplate('templates/stats_installs.html',
+        {'packages': packages, 'counts_mtime': counts_mtime}))
 
   def _DisplayInstallsForPackage(self, pkg):
     """Displays a list of installs of a particular package."""
-    query = models.InstallLog.all().filter('package =', pkg).order(
-        '-mtime')
+    if pkg == 'all':
+      query = models.InstallLog.all().order('-mtime')
+    else:
+      query = models.InstallLog.all().filter('package =', pkg).order(
+          '-mtime')
     installs, next_page = self._Paginate(query, INSTALL_LOG_FETCH_LIMIT)
     values = {'installs': installs, 'pkg': pkg, 'next_page': next_page,
               'limit': INSTALL_LOG_FETCH_LIMIT}
     self.response.out.write(
         RenderTemplate('templates/stats_installs.html', values))
+
+  def _DisplayHostsPendingPkg(self, pkg):
+    """Displays a list of hosts where pkg is pending installation."""
+    query = models.Computer.AllActive().filter('pkgs_to_install =', pkg)
+    computers, next_page = self._Paginate(query, COMPUTER_FETCH_LIMIT)
+    values = {'computers': computers, 'pkg': pkg, 'next_page': next_page,
+              'cached': False, 'report_type': 'pkgs_to_install',
+              'limit': COMPUTER_FETCH_LIMIT}
+    self.response.out.write(
+        RenderTemplate('templates/stats_summary.html', values))
 
   def _DisplayInstallProblems(self):
     """Displays all installation problems."""
@@ -372,15 +404,102 @@ class Stats(webapp.RequestHandler):
 
   def _DisplayBrokenClients(self):
     """Displays a report of broken clients."""
-    computers = models.ComputerClientBroken.all().filter('fixed =', False)
-    computers = list(computers)
-    for computer in computers:
+    # client with broken python
+    py_computers = models.ComputerClientBroken.all().filter('fixed =', False)
+    py_computers = list(py_computers)
+    for computer in py_computers:
       computer.details = computer.details.replace("'", "\\'")
       computer.details = computer.details.replace('"', "\\'")
       computer.details = re.sub('\n', '<br/>', computer.details)
       computer.broken_datetimes.reverse()
+    # clients with zero connection
+    zero_conn_computers = models.Computer.AllActive().filter(
+        'connections_on_corp =', 0).filter('connections_off_corp =', 0).fetch(
+        COMPUTER_FETCH_LIMIT)
+    # clients with no recent postflight, but recent preflight
+    # NOTE: this takes ~5s to complete in ~20k fleet where ~1400 clients have
+    #       old postflight_datetime. if far more clients are in this state then
+    #       then the query could cause DeadlineExceededError.
+    pf_computers = []
+    now = datetime.datetime.utcnow()
+    not_recent = now - datetime.timedelta(days=15)
+    q = models.Computer.AllActive().filter('postflight_datetime <', not_recent)
+    for c in q:
+      if not c.connections_on_corp and not c.connections_off_corp:
+        continue  # covered in zero-exec report
+      if (c.preflight_datetime - c.postflight_datetime).days > 7:
+        pf_computers.append(c)
     self.response.out.write(RenderTemplate(
-        'templates/stats_brokenclients.html', {'computers': computers}))
+        'templates/stats_brokenclients.html',
+        {'py_computers': py_computers,
+         'zero_conn_computers': zero_conn_computers,
+         'pf_computers': pf_computers}))
+
+  def _DisplayMsuLogSummary(self, since_days=None):
+    """Displays a summary of MSU logs."""
+    key = 'msu_user_summary'
+    if since_days:
+      key = '%s_since_%sD_' % (key, since_days)
+      human_since = '%s day(s)' % since_days
+    else:
+      human_since = 'forever'
+
+    m = models.ReportsCache.get_by_key_name(key)
+    summary = util.Deserialize(m.blob_value)
+    summary_list = []
+    keys = summary.keys()
+    keys.sort(cmp=lambda x,y: cmp(summary[x], summary[y]))
+    map(
+        lambda x: summary_list.append({'var': x, 'val': summary[x]}),
+        keys)
+
+    self.response.out.write(RenderTemplate(
+        'templates/stats_msulogsummary.html',
+        {
+            'summary': summary_list,
+            'since': human_since,
+            'mtime': m.mtime,
+        }))
+
+  def _DisplayHostManifest(self, uuid):
+    """Display live manifest view for a host.
+
+    Args:
+      uuid: str, computer uuid to display
+    """
+    manifest = common.GetComputerManifest(uuid=uuid, packagemap=True)
+    contents = manifest['plist'].GetContents()
+    for itype in ['managed_installs', 'optional_installs', 'managed_updates']:
+      for n in xrange(0, len(contents[itype])):
+        if contents[itype][n] in manifest['packagemap']:
+          contents[itype][n] = (
+              '(((a href="'
+              '/admin/stats/installs?pkg=%s'
+              '")))%s(((/a)))' % (
+                  manifest['packagemap'][contents[itype][n]], contents[itype][n]
+                  )
+          )
+
+    manifest_str = manifest['plist'].GetXml()
+    manifest_str = manifest_str.replace('<', '&lt;')
+    manifest_str = manifest_str.replace('>', '&gt;')
+    manifest_str = manifest_str.replace('(((', '<')
+    manifest_str = manifest_str.replace(')))', '>')
+
+    self.response.out.write(RenderTemplate(
+        'templates/stats_host_manifest.html',
+        {
+            'uuid': uuid,
+            'manifest': manifest_str,
+        }))
+
+  def _DisplayUserSettings(self):
+    """Displays a list of hosts with user_settings configured."""
+    query = models.Computer.AllActive().filter('user_settings_exist =', True)
+    computers, next_page = self._Paginate(query, USER_SETTINGS_FETCH_LIMIT)
+    self.response.out.write(RenderTemplate(
+        'templates/stats_user_settings.html',
+        {'computers': computers}))
 
 
 def IsWithinPastXHours(datetime_val, hours=24):

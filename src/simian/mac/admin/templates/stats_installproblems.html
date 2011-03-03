@@ -29,6 +29,7 @@
          <th>UUID</th>
        {% endif %}
        <th>Time</th>
+       <th>Time Since</th>
     </tr>
     {% for problem in install_problems %}
       <tr class="{% cycle lbg,dbg %}">
@@ -39,6 +40,7 @@
         </td>
         {% endif %}
         <td>{{ problem.mtime }}</td>
+        <td>{{ problem.mtime|timesince }}</td>
       </tr>
     {% endfor %}
   </table>

@@ -1,22 +1,22 @@
 {% extends "stats_base.html" %}
-
+`
 {% block title %}Broken Clients{% endblock %}
 
 {% block search %}{% endblock %}
 
 {% block page-content %}
-<h3>Broken Clients Reports</h3>
 
 <a href="/admin/stats">Back to stats home</a><br /><br />
 
-{% if computers %}
-
+<h3>Broken Python Clients</h3>
+{% if py_computers %}
+  {{ py_computers|length }} computers found.
   <table class="stats-table">
     <tr>
       <th>Hostname</th><th>Owner</th><th>UUID</th><th>Ticket</th>
       <th>Details</th><th>First Broken Time</th><th>All broken times</th>
     </tr>
-  {% for c in computers %}
+  {% for c in py_computers %}
     <tr class="{% cycle lbg,dbg %}">
       <td>{{ c.hostname }}</td><td>{{ c.owner }}</td>
       <td><a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
@@ -33,7 +33,70 @@
   {% endfor %}
   </table>
 {% else %}
-  <p>Yay!! There are currently no broken clients.</p>
+  <p>Yay!! There are currently no broken Python clients.</p>
 {% endif %}
+
+
+<h3>Clients with zero successful executions</h3>
+<p>Note: clients may appear in this table during their first execution.</p>
+{{ zero_conn_computers|length }} computers found.
+<table class="stats-table">
+  <tr class="multi-header">
+     <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
+     <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
+     <th>Site</th><th>Office</th><th>Last Preflight</th>
+  </tr>
+  {% for c in zero_conn_computers %}
+  <tr class="{% cycle lbg,dbg %}">
+    <td>{{ c.hostname }}</td>
+    <td>
+      <a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a>
+    </td>
+    <td><a href="/admin/stats/?type=owner&filter={{ c.owner }}"
+        >{{ c.owner }}</a></td>
+    <td>{{ c.track }}</td>
+    <td>{{ c.config_track }}</td>
+    <td>{{ c.os_version }}</td>
+    <td>{{ c.client_version }}</td>
+    <td>{{ c.site }}</td>
+    <td>{{ c.office }}</td>
+    <td>{{ c.preflight_datetime|timesince }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+
+<h3>Clients with recent preflight_datetime, but old postflight_datetime</h3>
+{{ pf_computers|length }} computers found.
+<table class="stats-table">
+  <tr class="multi-header">
+     <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
+     <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
+     <th>Site</th><th>Office</th><th>(on/off corp)</th><th>Last MSU Popup</th>
+     <th>Last Preflight</th><th>Last Postflight</th>
+  </tr>
+  {% for c in pf_computers %}
+  <tr class="{% cycle lbg,dbg %}">
+    <td>{{ c.hostname }}</td>
+    <td>
+      <a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a>
+    </td>
+    <td><a href="/admin/stats/?type=owner&filter={{ c.owner }}"
+        >{{ c.owner }}</a></td>
+    <td>{{ c.track }}</td>
+    <td>{{ c.config_track }}</td>
+    <td>{{ c.os_version }}</td>
+    <td>{{ c.client_version }}</td>
+    <td>{{ c.site }}</td>
+    <td>{{ c.office }}</td>
+    <td>{{ c.connections_on_corp }} / {{ c.connections_off_corp }}</td>
+    <td>{{ c.last_notified_datetime|timesince }}</td>
+    <td>{{ c.preflight_datetime|timesince }}</td>
+    <td>{{ c.postflight_datetime|timesince }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+
 
 {% endblock %}

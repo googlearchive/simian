@@ -77,6 +77,7 @@ class SimianCliClient(object):
       'install_types=',
       'edit_pkginfo',
       'forced_install',
+      'noforced_install',
       'list_packages',
   ]
 
@@ -120,16 +121,23 @@ class SimianCliClient(object):
   USAGE = """
     Simian client
 
-    usage: %s [command] [command_options] ...
+    usage: %s [command] [command options] ...
+
+    commands:
 
     --upload
-        upload a software package to Simian.
+        upload a new (or update an existing) software package
     --download
-        download a software package from Simian.
+        download a software package
     --delete
-        delete a software package from Simian.
+        delete a software package
     --edit
-        edit a software package info currently on Simian.
+        edit an already uploaded software package
+    --list_packages
+        lists all packages of given --install_types and --catalogs.
+
+    options:
+
     --package [filename or package name]
         for upload, specify the location.
         for deletion and edit, specify the name.
@@ -138,9 +146,9 @@ class SimianCliClient(object):
     --display_name [str display name]
         for upload, specify the human-readable display name of the upload.
     --edit_pkginfo
-        when uploading a package, run an editor on the generated package info
-        before submitting it to the Simian server.
-    --forced_install
+        when uploading or editing a package, run an editor on the generated
+        package info before submitting it to the Simian server.
+    --[no]forced_install
         when uploading a package, add "forced_install" bool to package info.
     --catalogs [unstable,testing,stable]
         specify the catalog names to target; comma delimited string
@@ -148,8 +156,6 @@ class SimianCliClient(object):
         specify the manifest names to target; comma delimited string
     --install_types [managed_installs,managed_updates,type3]
         specify the install types of upload; comma delimited string
-    --list_packages
-        lists all packages of given --install_types and --catalogs.
     --server [hostname(:port)]
         specify the Simian server location
     --debug
@@ -224,7 +230,10 @@ class SimianCliClient(object):
     """
     # load specified options into the config
     for (optname, optval) in self.opts:
-      self.config[optname[2:]] = optval
+      if optname.startswith('--no') and optname[4:] in self.config:
+        self.config[optname[4:]] = False
+      else:
+        self.config[optname[2:]] = optval
 
     # the help command is an exception -- look for it and run it immediately
     if 'help' in self.config:

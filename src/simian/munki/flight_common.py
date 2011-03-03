@@ -40,6 +40,7 @@ import version
 try:
   from munkilib import FoundationPlist as fpl
   from munkilib import munkicommon
+  from munkilib import updatecheck
   import SystemConfiguration as sys_config
   import Foundation
   import objc
@@ -52,6 +53,8 @@ except ImportError:
 AUTH_BINARY = '/usr/local/bin/simianauth'
 FACTER_CMD = '/usr/local/bin/simianfacter'
 DELIMITER = '|'
+APPLE_SUS_PLIST = '/Library/Preferences/com.apple.SoftwareUpdate.plist'
+APPLE_SUS_CATALOG = '/Library/Managed Installs/applesus.sucatalog'
 DEFAULT_SECURE_MANAGED_INSTALLS_PLIST_PATH = (
     '/private/var/root/Library/Preferences/ManagedInstalls.plist')
 DEFAULT_MANAGED_INSTALLS_PLIST_PATH = (
@@ -359,6 +362,9 @@ def GetClientIdentifier():
   simian_track = (facts.get('simiantrack', None) or
                  _GetMachineInfoPlistValue('SimianTrack'))
 
+  # Apple SUS integration.
+  applesus = facts.get('applesus', 'true').lower() == 'true'
+
   site = facts.get('site', None)
   office = facts.get('location', None)
 
@@ -421,6 +427,7 @@ def GetClientIdentifier():
       'hostname': hostname,
       'config_track': config_track,
       'track': simian_track,
+      'applesus': applesus,
       'site': site,
       'office': office,
       'os_version': os_version,
@@ -451,6 +458,26 @@ def ClientIdDictToStr(client_id):
     else:
       out.append('%s=%s' % (key, value))
   return DELIMITER.join(out)
+
+
+def GetAppleSUSCatalog():
+  """Fetches an Apple Software Update Service catalog from the server.
+
+  Args:
+    client_id: dict client id.
+    token: optional str auth token.
+  """
+  url = GetPlistValue('SoftwareRepoURL', secure=False)
+  try:
+    updatecheck.getHTTPfileIfChangedAtomically(
+        '%s/applesus/' % url, APPLE_SUS_CATALOG)
+    # Update the CatalogURL setting in com.apple.SoftwareUpdate.plist.
+    sus_catalog = fpl.readPlist(APPLE_SUS_PLIST)
+    sus_catalog['CatalogURL'] = (
+        'file://%s' % APPLE_SUS_CATALOG.replace(' ', '%20'))
+    fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
+  except updatecheck.CurlDownloadError, e:
+    print >>sys.stderr, 'CurlDownloadError getting Apple SUS catalog: ', str(e)
 
 
 def PostReportToServer(
@@ -503,7 +530,7 @@ def PostReportToServer(
 
 def PerformServerRequest(
     params=None, token=DEFAULT_SECURE_MANAGED_INSTALLS_PLIST_PATH, login=False,
-    logout=True, raise_exc=False):
+    logout=False, raise_exc=False):
   """Performs a urllib2 request to the passed URL.
 
   Args:
@@ -572,6 +599,40 @@ def Flatten(o):
   return o
 
 
+def GetManagedInstallReport():
+  """Returns the ManagedInstallReport.plist plist object."""
+  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
+  install_report_path = os.path.join(
+      managed_installs_dir, 'ManagedInstallReport.plist')
+  try:
+    install_report = fpl.readPlist(install_report_path)
+  except fpl.NSPropertyListSerializationException, e:
+    print >>sys.stderr, 'Error reading ', install_report_path, ': ', str(e)
+    return {}, install_report_path
+  return install_report, install_report_path
+
+
+def GetRemainingPackagesToInstall():
+  """Returns a list of string packages that are remaining to install."""
+  install_report, unused_path = GetManagedInstallReport()
+  if not install_report:
+    return []
+
+  just_installed = install_report.get('InstallResults', [])
+  pkgs_to_install_dicts = install_report.get('ItemsToInstall', [])
+  pkgs_to_install = []
+
+  for item_dict in pkgs_to_install_dicts:
+    pkg = '%s-%s' % (
+        item_dict.get('display_name', item_dict.get('name')),
+        item_dict.get('version_to_install', ''))
+    pkg_report = 'Install of %s: SUCCESSFUL' % pkg
+    if pkg_report not in just_installed:
+      pkgs_to_install.append(pkg.encode('utf-8'))
+
+  return pkgs_to_install
+
+
 def ReportInstallsToServerAndLogout(on_corp, logout=False):
   """Reports any installs, updates, uninstalls back to Simian server.
 
@@ -582,30 +643,32 @@ def ReportInstallsToServerAndLogout(on_corp, logout=False):
     on_corp: str, on_corp status from GetClientIdentifier.
     logout: bool, default False, whether to logout or not.
   """
-  managed_installs_dir = munkicommon.pref('ManagedInstallDir')
-  install_report_path = os.path.join(
-      managed_installs_dir, 'ManagedInstallReport.plist')
-  try:
-    install_report = fpl.readPlist(install_report_path)
-  except fpl.NSPropertyListSerializationException, e:
-    print >>sys.stderr, 'Error reading ', install_report_path, ': ', str(e)
+  install_report, install_report_path = GetManagedInstallReport()
+  if not install_report:
     return
 
   installs = install_report.get('InstallResults', [])  # includes updates.
   removals = install_report.get('RemovalResults', [])
   problem_installs = install_report.get('ProblemInstalls', [])
-  # convert dict problems to strings.
-  for i in xrange(0, len(problem_installs)):
+
+  # encode all strings to utf-8 for unicode character support.
+  for item_list in [installs, removals]:
+    for i in xrange(len(item_list)):
+      item_list[i] = unicode(item_list[i]).encode('utf-8')
+
+  # convert dict problems to strings, and encode as utf-8.
+  for i in xrange(len(problem_installs)):
     p = problem_installs[i]
     if p.__class__.__name__ == 'NSCFDictionary':
-      problem_installs[i] = '%s: %s' % (p.get('name', ''), p.get('note', ''))
+      p = u'%s: %s' % (p.get('name', ''), p.get('note', ''))
+    problem_installs[i] = p.encode('utf-8')
 
   if installs or removals or problem_installs:
     data = {
         'on_corp': on_corp,
         'installs': installs,
         'removals': removals,
-        'problem_installs': problem_installs
+        'problem_installs': problem_installs,
     }
     try:
       PostReportToServer('install_report', data, logout=logout, raise_exc=True)

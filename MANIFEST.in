@@ -1,0 +1,11 @@
+include src/simian/client/gae_client.zip
+recursive-exclude src/simian/mac/admin *
+recursive-exclude src/simian/mac/common *
+recursive-exclude src/simian/mac/cron *
+recursive-exclude src/simian/mac/munki/handlers *
+exclude src/simian/mac/appengine_config.py
+exclude src/simian/mac/deferred_wrapper.py
+exclude src/simian/mac/main.py
+exclude src/simian/mac/models.py
+exclude src/simian/mac/munki/common.py
+exclude src/simian/mac/urls.py

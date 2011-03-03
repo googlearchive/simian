@@ -13,7 +13,7 @@
 {% else %}
   {% if pkg %}
     <h2>Installs: {{ pkg }}</h2>
-    <a href="/admin/stats/installs">Back to all installs</a>
+    <a href="/admin/stats/installs">Back to installs list</a>
   {% else %}
     <h2>Installs</h2>
     <a href="/admin/stats">Back to stats home</a>
@@ -22,12 +22,16 @@
 
 {% if packages %}
   <table class="stats-table">
-  <tr><th>Install</th><th>Filename</th><th>Pkginfo</th><th>Forced</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+  <tr><th>Install</th><th># *</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Forced</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
   {% for pkg in packages %}
     <tr class="{% cycle lbg,dbg %}">
       <td>
         <a href="/admin/stats/installs?pkg={{ pkg.munki_install_name }}"
             >{{ pkg.munki_install_name }}</a>
+      </td>
+      <td>{{ pkg.count }}</td>
+      <td>
+        <a href="/admin/stats/installs?pkg={{ pkg.munki_install_name }}&pending=1">view</a>
       </td>
       <td>{{ pkg.filename }}</td>
       <td><a href="/pkgsinfo/{{ pkg.filename }}">view</a></td>
@@ -39,6 +43,8 @@
     </tr>
   {% endfor %}
   </table>
+  <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
+  <a href="/admin/stats/installs?pkg=all">View all installs together</a>
 {% else %}
 
   <p>
@@ -55,6 +61,7 @@
        <th>On Corp</th>
        {% if not host_report %}<th>UUID</th>{% endif %}
        <th>Time</th>
+       <th>Time Since</th>
     </tr>
     {% for install in installs %}
       <tr class="{% cycle lbg,dbg %}">
@@ -68,6 +75,7 @@
         </td>
         {% endif %}
         <td>{{ install.mtime }}</td>
+        <td>{{ install.mtime|timesince }}</td>
       </tr>
     {% endfor %}
   </table>

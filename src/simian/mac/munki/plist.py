@@ -221,6 +221,7 @@ class ApplePlist(object):
 
   def Reset(self):
     """Reset all internal properties to empty."""
+    self._changed = False
     self._plist_bin = None
     self._plist_xml = None
     self._plist_xml_encoding = None
@@ -411,8 +412,8 @@ class ApplePlist(object):
     # if looking for values (mode in key,string,integer), then store them
     # from this cdata.
     if self._CurrentMode() == 'key':
-      if value:
-        self._NewKey(value)
+      self._NewValue(value)
+      self._NewMode('value')
     elif self._CurrentMode() == 'string':
       self._NewValue(value)  # put unicode conv logic here if ever needed
       self._NewMode('value')
@@ -457,6 +458,13 @@ class ApplePlist(object):
       self._ReleaseValue()
     else:
       value = None
+
+    # if a key is closing, look for the key value and push it onto
+    # the stack.
+    if name == 'key':
+      if value is None:
+        value = ''
+      self._NewKey(value)
 
     # if we are not closing a <key> element, and we are building a dict, a
     # value of the dict is ending here.  that means the earlier <key> value
@@ -963,6 +971,7 @@ class ApplePlist(object):
 
     self._plist = plist_obj
     self._plist_xml = self.GetXml()
+    self._changed = True
     self.Parse()
 
   def GetEncoding(self):
@@ -978,8 +987,19 @@ class ApplePlist(object):
       return self._plist_xml_encoding.lower()
     return None
 
-  def GetXml(self):
-    """Returns string XML document, or None if the plist is empty."""
+  def GetXml(self, indent_num=0, xml_doc=True):
+    """Returns string XML document, or None if the plist is empty.
+
+    Args:
+      indent_num: int, number of indents to start from
+      xml_doc: bool, True to return a fully fledged xml document including
+        xml header and footer, False to return a xml string starting from
+        the plist node.
+    Returns:
+      str
+    Raises:
+      PlistNotParsedError: if Parse() has not been called
+    """
     if self._plist is None:
       raise PlistNotParsedError
 
@@ -987,22 +1007,48 @@ class ApplePlist(object):
       raise PlistError(
           'Plist contents type is not supported: %s' % type(self._plist))
 
-    str_xml = GetXmlStr(self._plist, indent_num=1)
+    # indent +1 from <plist> node if xml_doc
+    str_xml = GetXmlStr(self._plist, indent_num=indent_num + (xml_doc * 1))
 
     if not str_xml:
       return None
-    return ''.join([PLIST_HEAD, str_xml, PLIST_FOOT])
+    if xml_doc:
+      return ''.join([PLIST_HEAD, str_xml, PLIST_FOOT])
+    else:
+      return str_xml
 
-  def GetXmlContent(self):
-    """Returns only the nodes below the plist node of the XML document."""
-    plist_xml = self.GetXml()
-    if not plist_xml:
-      return
-    m = re.search(r'<plist(\s+version="[\d\.]+")?\s*>', plist_xml)
-    if m:
-      start = m.end(0)
-      stop = plist_xml.rfind('</plist>')
-      return plist_xml[start:stop].strip()
+  def GetXmlContent(self, indent_num=0):
+    """Returns only the nodes below the plist node of the XML document.
+
+    Args:
+      indent_num: int, number of indents to start from
+    Returns:
+      str or None
+    """
+    plist_xml = self.GetXml(indent_num=indent_num, xml_doc=False)
+    return plist_xml
+
+  def HasChanged(self):
+    """Returns true if this plist has been changed since last call.
+
+    Also clears change flag when read.
+
+    Note this change value can be vastly wrong since a simple
+    GetContents()['foo']=True will change the internal dictionary but not
+    set changed The changed flag is best used strictly in combination with
+    Set*() methods in specific uses, or using SetChanged() to set the
+    flag when undetectable changes were made.
+
+    Returns:
+      bool
+    """
+    changed = self._changed
+    self._changed = False
+    return changed
+
+  def SetChanged(self):
+    """Set changed flag."""
+    self._changed = True
 
   def __getitem__(self, k):
     """Standard python __getitem__ method."""
@@ -1011,11 +1057,19 @@ class ApplePlist(object):
   def __setitem__(self, k, v):
     """Standard python __setitem__ method."""
     self._plist[k] = v
+    self._changed = True
 
   def __iter__(self):
     """Standard python __iter__ method."""
     for i in self._plist:
       yield i
+
+  def __eq__(self, other):
+    """Standard python __eq__ method."""
+    # note: issubclass(classA,classA) is True, too.
+    if not issubclass(other.__class__, self.__class__):
+      return False
+    return self._plist == other._plist
 
 
 class MunkiPlist(ApplePlist):
@@ -1058,8 +1112,69 @@ class MunkiPackageInfoPlist(MunkiPlist):
     else:
       raise PlistError('Package name not found in pkginfo plist.')
 
+  def SetDescription(self, description):
+    """Set the package info description.
 
-def DictToXml(xml_dict, indent_num=0):
+    Args:
+      description: str, description
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if self._plist is None:
+      raise PlistNotParsedError
+    self._plist['description'] = description
+    self._changed = True
+
+  def SetDisplayName(self, display_name):
+    """Set the package info display name.
+
+    Args:
+      display_name: str, display name
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if self._plist is None:
+      raise PlistNotParsedError
+    self._plist['display_name'] = display_name
+    self._changed = True
+
+  def SetForcedInstall(self, forced_install):
+    """Set the package info forced install.
+
+    Args:
+      forced_install: bool, forced install?
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if self._plist is None:
+      raise PlistNotParsedError
+    if forced_install:
+      self._plist['forced_install'] = True
+      self._changed = True
+    else:
+      if 'forced_install' in self._plist:
+        del(self._plist['forced_install'])
+        self._changed = True
+
+  def SetCatalogs(self, catalogs):
+    """Set the package info catalogs.
+
+    Args:
+      catalogs: list, catalogs
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if self._plist is None:
+      raise PlistNotParsedError
+    self._plist['catalogs'] = catalogs
+    self._changed = True
+
+
+class AppleSoftwareCatalogPlist(ApplePlist):
+  """Apple software catalog."""
+
+
+def DictToXml(xml_dict, indent_num=None):
   """Returns string XML of all items in a sequence or nested sequences.
 
   Args:
@@ -1068,6 +1183,8 @@ def DictToXml(xml_dict, indent_num=0):
   Returns:
     String XML.
   """
+  if indent_num is None:
+    indent_num = 0
   indent = INDENT_CHAR * indent_num
   child_indent = INDENT_CHAR * (indent_num + 1)
   str_xml = []
@@ -1079,7 +1196,7 @@ def DictToXml(xml_dict, indent_num=0):
   return '\n'.join(str_xml)
 
 
-def SequenceToXml(sequence, indent_num=0):
+def SequenceToXml(sequence, indent_num=None):
   """Returns string XML of all items in a sequence or nested sequences.
 
   Args:
@@ -1088,6 +1205,8 @@ def SequenceToXml(sequence, indent_num=0):
   Returns:
     String XML.
   """
+  if indent_num is None:
+    indent_num = 0
   indent = INDENT_CHAR * indent_num
   str_xml = []
   str_xml.append('%s<array>' % indent)
@@ -1097,7 +1216,7 @@ def SequenceToXml(sequence, indent_num=0):
   return '\n'.join(str_xml)
 
 
-def GetXmlStr(value, indent_num=0):
+def GetXmlStr(value, indent_num=None):
   """Returns XML representation of a variable.
 
   Args:
@@ -1109,6 +1228,8 @@ def GetXmlStr(value, indent_num=0):
     PlistError: a plist type is not supported in output
   """
   # TODO(user): refactor and write unit tests.
+  if indent_num is None:
+    indent_num = 0
   indent = INDENT_CHAR * indent_num
   str_xml = []
   value_type = type(value)
@@ -1141,6 +1262,8 @@ def GetXmlStr(value, indent_num=0):
             indent, value))
   elif value.__class__ is AppleData:
     str_xml.append('%s<data>%s</data>' % (indent, base64.b64encode(value)))
+  elif issubclass(value.__class__, ApplePlist):
+    str_xml.append(value.GetXmlContent(indent_num=indent_num))
   else:
     raise PlistError('Value type %s not supported: %s', value_type, value)
   return '\n'.join(str_xml)

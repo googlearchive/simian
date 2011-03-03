@@ -11,6 +11,27 @@ cron:
   url: /cron/maintenance/verify_packages
   schedule: every 9 hours
 
+- description: Apple SUS Catalog Sync
+  url: /cron/applesus/catalogsync
+  schedule: every 12 hours
+
 - description: Stats Summary Cache
   url: /cron/reports_cache/summary
   schedule: every 30 minutes
+
+- description: Install Counts Cache
+  url: /cron/reports_cache/installcounts
+  schedule: every 30 minutes
+
+- description: MSU User Logs Summary - all
+  url: /cron/reports_cache/msu_user_summary
+  schedule: every 24 hours
+
+- description: MSU User Logs Summary - 1 days
+  url: /cron/reports_cache/msu_user_summary/1
+  schedule: every 2 hours
+
+- description: MSU User Logs Summary - 7 days
+  url: /cron/reports_cache/msu_user_summary/7
+  schedule: every 24 hours
+

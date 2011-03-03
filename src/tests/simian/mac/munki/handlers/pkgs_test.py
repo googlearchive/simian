@@ -67,7 +67,7 @@ class HandlersTest(PackagesTest):
     self.mox.StubOutWithMock(pkgs.blobstore, 'BlobInfo')
     mock_blob_info = self.mox.CreateMockAnything()
     mock_blob_info.creation = pkg_date
-    self.mox.StubOutWithMock(pkgs, 'IsPackageModifiedSince')
+    self.mox.StubOutWithMock(pkgs.handlers, 'IsClientResourceExpired')
     self.mox.StubOutWithMock(pkgs.memcache, 'get')
     self.mox.StubOutWithMock(pkgs.memcache, 'set')
     self.MockSelf('send_blob')
@@ -77,11 +77,11 @@ class HandlersTest(PackagesTest):
     pkgs.blobstore.BlobInfo.get(blobstore_key).AndReturn(mock_blob_info)
     pkgs.memcache.set(blobinfo_memcache_key, mock_blob_info, 300).AndReturn(
         None)
-    pkgs.IsPackageModifiedSince(pkg_date, mod_since_date).AndReturn(
+    pkgs.handlers.IsClientResourceExpired(pkg_date, mod_since_date).AndReturn(
         pkg_modified_since)
     if pkg_modified_since:
       self.response.headers['Last-Modified'] = pkg_date.strftime(
-          pkgs.HEADER_DATE_FORMAT)
+          pkgs.handlers.HEADER_DATE_FORMAT)
       self.c.send_blob(blobstore_key).AndReturn(None)
     else:
       self.response.set_status(304)
@@ -173,26 +173,6 @@ class PkgsModuleTest(PackagesTest):
     self.mox.ReplayAll()
     self.assertFalse(pkgs.PackageExists(filename))
     self.mox.VerifyAll()
-
-  def testIsPackageModifiedSinceWithEmptyDate(self):
-    """Tests IsPackageModifiedSince() with empty header str date."""
-    self.assertTrue(pkgs.IsPackageModifiedSince(None, ''))
-
-  def testPackageModifiedWithInvalidDate(self):
-    """Tests IsPackageModifiedSince() with non-parsable header str date."""
-    self.assertTrue(pkgs.IsPackageModifiedSince(None, 'date will not parse'))
-
-  def testPackageModifiedMatchingDate(self):
-    """Tests IsPackageModifiedSince() with matching header str date."""
-    header_date_str = 'Wed, 06 Oct 2010 03:23:34 GMT'
-    pkg_date = datetime.datetime(2010, 10, 06, 03, 23, 34)  # same date
-    self.assertFalse(pkgs.IsPackageModifiedSince(pkg_date, header_date_str))
-
-  def testPackageModifiedWherePackageDateNewer(self):
-    """Tests IsPackageModifiedSince() with matching header str date."""
-    header_date_str = 'Mon, 01 Jan 1930 01:00:00 GMT'
-    pkg_date = datetime.datetime(2010, 10, 06, 03, 23, 34)  # later date
-    self.assertTrue(pkgs.IsPackageModifiedSince(pkg_date, header_date_str))
 
 
 def main(unused_argv):

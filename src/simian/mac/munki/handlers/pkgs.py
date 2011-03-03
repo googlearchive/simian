@@ -19,7 +19,6 @@
 
 
 
-import datetime
 import logging
 import urllib
 from google.appengine.api import memcache
@@ -33,9 +32,6 @@ from simian.mac.munki import common
 from simian.mac.munki import handlers
 
 
-HEADER_DATE_FORMAT = '%a, %d %b %Y %H:%M:%S GMT'
-
-
 def PackageExists(filename):
   """Check whether a package exists.
 
@@ -45,37 +41,6 @@ def PackageExists(filename):
     True or False
   """
   return models.PackageInfo.get_by_key_name(filename) is not None
-
-
-def IsPackageModifiedSince(pkg_date, header_date):
-  """Compares a If-Modified-Since header date to Blobstore pkg date.
-
-  Args:
-    pkg_date: datetime when the pkg was last modified.
-    header_date: str date value like "Wed, 06 Oct 2010 03:23:34 GMT".
-  Returns:
-    Boolean. True if the pkg was modified after header date, False otherwise.
-  """
-  if not header_date:
-    return True
-
-  try:
-    # NOTE(user): strptime is a py2.5+ feature.
-    header_date = datetime.datetime.strptime(header_date, HEADER_DATE_FORMAT)
-  except ValueError:
-    logging.exception(
-        'Error parsing If-Modified-Since date: %s', header_date)
-    return True
-
-  # if pkg date and header date are the same (disregarding ms) then not modified
-  if pkg_date.replace(microsecond=0) == header_date:
-    return False
-  else:
-    # this should be very rare - pkg changed in between munki runs - so log it.
-    logging.debug(
-      '/pkg/ download date compare: pkg %s != header %s',
-      pkg_date.replace(microsecond=0), header_date)
-    return True
 
 
 class Packages(
@@ -120,10 +85,10 @@ class Packages(
 
     header_date_str = self.request.headers.get('If-Modified-Since', '')
     pkg_date = blob_info.creation
-    if IsPackageModifiedSince(pkg_date, header_date_str):
+    if handlers.IsClientResourceExpired(pkg_date, header_date_str):
       # header date empty or package has changed, send blob with last-mod date.
       self.response.headers['Last-Modified'] = pkg_date.strftime(
-          HEADER_DATE_FORMAT)
+          handlers.HEADER_DATE_FORMAT)
       self.send_blob(pkg.blobstore_key)
     else:
       # If-Modified-Since and Blobstore pkg datetimes match, return 304.

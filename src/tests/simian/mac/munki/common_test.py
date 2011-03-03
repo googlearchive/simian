@@ -30,6 +30,7 @@ from simian.mac.munki import common
 
 logging.basicConfig(filename='/dev/null')
 
+
 class CommonModuleTest(test.RequestHandlerTest):
 
   def GetTestClassInstance(self):
@@ -173,7 +174,6 @@ class CommonModuleTest(test.RequestHandlerTest):
   def testCreateManifestWithNoPkgsinfo(self):
     """Tests CreateManifest() where no coorresponding PackageInfo exist."""
     name = 'badname'
-    catalog = test.GenericContainer()
     self._MockObtainLock('manifest_lock_%s' % name)
     mock_model = self.MockModelStatic('PackageInfo', 'all')
     mock_model.filter('manifests =', name).AndReturn([])
@@ -238,9 +238,14 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     common.CreateCatalog(name)
     self.assertEqual(catalog.name, name)
-    xml = ('<dict>\n    <key>foo</key>\n    <string>bar</string>\n  '
-           '</dict>\n  <dict>\n    <key>foo</key>\n    '
-           '<string>bar</string>\n  </dict>')
+    xml = ('  <dict>\n'
+           '    <key>foo</key>\n'
+           '    <string>bar</string>\n'
+           '  </dict>\n'
+           '  <dict>\n'
+           '    <key>foo</key>\n'
+           '    <string>bar</string>\n'
+           '  </dict>')
     plist = common.CATALOG_PLIST_XML % xml
     self.assertEqual(plist, catalog.plist)
     self.mox.VerifyAll()
@@ -248,7 +253,6 @@ class CommonModuleTest(test.RequestHandlerTest):
   def testCreateCatalogWithNoPkgsinfo(self):
     """Tests CreateCatalog() where no coorresponding PackageInfo exist."""
     name = 'badname'
-    catalog = test.GenericContainer()
     self._MockObtainLock('catalog_lock_%s' % name)
     mock_model = self.MockModelStatic('PackageInfo', 'all')
     mock_model.filter('catalogs =', name).AndReturn([])
@@ -262,7 +266,6 @@ class CommonModuleTest(test.RequestHandlerTest):
   def testCreateCatalogWithPlistParseError(self):
     """Tests CreateCatalog() where plist.GetXmlDocument() raises plist.Error."""
     name = 'goodname'
-    catalog = self.mox.CreateMockAnything()
     plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     pkg1 = test.GenericContainer(plist=plist1)
     self._MockObtainLock('catalog_lock_%s' % name)
@@ -322,23 +325,23 @@ class CommonModuleTest(test.RequestHandlerTest):
     """Tests LogClientConnection() function with an invalid uuid."""
     client_id = {'uuid': ''}
     event = 'custom'
-    user_settings = {}
 
     self.mox.StubOutWithMock(common.logging, 'debug')
     common.logging.debug(
-        'LogClientConnection(%s, %s, user_settings? %s, delay=%s)',
-        event, client_id, user_settings not in [{}, None], 0)
+        ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
+         'delay=%s)'),
+        event, client_id, False, None, 0)
     common.logging.debug(
         'uuid is unknown, skipping log.')
 
     self.mox.ReplayAll()
-    common.LogClientConnection(event, client_id, user_settings)
+    common.LogClientConnection(event, client_id)
     self.mox.VerifyAll()
 
-  def testLogClientConnection(self):
+  def testLogClientConnectionPreflight(self):
     """Tests LogClientConnection() function."""
-    user_settings = {'foo': 1}
-    event = 'postflight'
+    user_settings = {'foo': True}
+    event = 'preflight'
     uuid = 'foo-uuid'
     hostname = 'foohostname'
     owner = 'foouser'
@@ -367,6 +370,69 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     # bypass the db.run_in_transaction step
     self.stubs.Set(
+        common.models.db, 'run_in_transaction',
+        lambda fn, *args: fn(*args))
+
+    mock_computer = self.MockModelStatic('Computer', 'get_by_key_name', uuid)
+    mock_computer.connection_datetimes = connection_datetimes
+    mock_computer.connection_dates = connection_dates
+    mock_computer.connections_on_corp = 2
+    mock_computer.connections_off_corp = 2
+    mock_computer.put().AndReturn(None)
+
+    self.mox.ReplayAll()
+    common.LogClientConnection(
+        event, client_id, user_settings=user_settings)
+    self.assertEquals(uuid, mock_computer.uuid)
+    self.assertEquals(hostname, mock_computer.hostname)
+    self.assertEquals(owner, mock_computer.owner)
+    self.assertEquals(track, mock_computer.track)
+    self.assertEquals(config_track, mock_computer.config_track)
+    self.assertEquals(site, mock_computer.site)
+    self.assertEquals(office, mock_computer.office)
+    self.assertEquals(os_version, mock_computer.os_version)
+    self.assertEquals(client_version, mock_computer.client_version)
+    self.assertEquals(
+        last_notified_datetime, mock_computer.last_notified_datetime)
+    # Verify on_corp/off_corp counts.
+    self.assertEquals(2, mock_computer.connections_on_corp)
+    self.assertEquals(2, mock_computer.connections_off_corp)
+    self.assertEquals(
+        datetime.datetime, type(mock_computer.last_on_corp_preflight_datetime))
+    self.mox.VerifyAll()
+
+  def testLogClientConnectionPostflight(self):
+    """Tests LogClientConnection() function."""
+    event = 'postflight'
+    uuid = 'foo-uuid'
+    hostname = 'foohostname'
+    owner = 'foouser'
+    track = 'footrack'
+    config_track = 'footrack'
+    site = 'NYC'
+    office = 'US-NYC-FOO'
+    os_version = '10.6.3'
+    client_version = '0.6.0.759.0'
+    on_corp = True
+    last_notified_datetime_str = '2010-11-03 15:15:10'
+    last_notified_datetime = datetime.datetime(2010, 11, 03, 15, 15, 10)
+    uptime = 123
+    root_disk_free = 456
+    user_disk_free = 789
+    client_id = {
+        'uuid': uuid, 'hostname': hostname, 'owner': owner,
+        'track': track, 'config_track': config_track, 'os_version': os_version,
+        'client_version': client_version, 'on_corp': on_corp,
+        'last_notified_datetime': last_notified_datetime_str,
+        'site': site, 'office': office, 'uptime': uptime,
+        'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
+    }
+    pkgs_to_install = ['FooApp1', 'FooApp2']
+    connection_datetimes = range(1, common.CONNECTION_DATETIMES_LIMIT + 1)
+    connection_dates = range(1, common.CONNECTION_DATES_LIMIT + 1)
+
+    # bypass the db.run_in_transaction step
+    self.stubs.Set(
       common.models.db, 'run_in_transaction',
       lambda fn, *args: fn(*args))
 
@@ -378,7 +444,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     mock_computer.put().AndReturn(None)
 
     self.mox.ReplayAll()
-    common.LogClientConnection(event, client_id, user_settings)
+    common.LogClientConnection(
+        event, client_id, pkgs_to_install=pkgs_to_install)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(hostname, mock_computer.hostname)
     self.assertEquals(owner, mock_computer.owner)
@@ -403,12 +470,13 @@ class CommonModuleTest(test.RequestHandlerTest):
     # Verify on_corp/off_corp counts.
     self.assertEquals(1, mock_computer.connections_on_corp)
     self.assertEquals(0, mock_computer.connections_off_corp)
+    self.assertEquals(pkgs_to_install, mock_computer.pkgs_to_install)
+    self.assertEquals(False, mock_computer.all_pkgs_installed)
     self.mox.VerifyAll()
 
-  def testLogClientConnectionWhenNew(self):
+  def testLogClientConnectionPreflightAndNew(self):
     """Tests LogClientConnection() function."""
-    user_settings = {'foo': 1}
-    event = 'postflight'
+    event = 'preflight'
     uuid = 'foo-uuid'
     hostname = 'foohostname'
     owner = 'foouser'
@@ -439,23 +507,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.db, 'run_in_transaction',
         lambda fn, *args: fn(*args))
 
-    utc_now = common.datetime.datetime.utcnow()
-    utc_now2 = datetime.datetime.combine(utc_now, datetime.time())
-    self.stubs.Set(
-        common.datetime,
-        'datetime',
-        self.mox.CreateMock(common.datetime.datetime))
-    self.stubs.Set(
-        common.datetime,
-        'time',
-        self.mox.CreateMock(common.datetime.time))
-    common.datetime.datetime.utcnow().AndReturn(utc_now)
-    common.datetime.datetime.strptime(
-        last_notified_datetime_str, '%Y-%m-%d %H:%M:%S').AndReturn(
-            last_notified_datetime)
-    common.datetime.time().AndReturn('timeobj')
-    common.datetime.datetime.combine(utc_now, 'timeobj').AndReturn(utc_now2)
-
     ne_mock_computer = self.MockModelStaticNone(
         'Computer', 'get_by_key_name', uuid)
     mock_computer = self.MockModel('Computer', key_name=uuid)
@@ -472,7 +523,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         _queue='first')
 
     self.mox.ReplayAll()
-    common.LogClientConnection(event, client_id, user_settings)
+    common.LogClientConnection(event, client_id)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(hostname, mock_computer.hostname)
     self.assertEquals(owner, mock_computer.owner)
@@ -484,17 +535,16 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(client_version, mock_computer.client_version)
     self.assertEquals(
         last_notified_datetime, mock_computer.last_notified_datetime)
-    # Verify that the first "datetime" was popped off.
-    self.assertEquals([utc_now], mock_computer.connection_datetimes)
-    self.assertEquals([utc_now2], mock_computer.connection_dates)
+    # New client, so zero connection date/datetimes until after postflight.
+    self.assertEquals([], mock_computer.connection_datetimes)
+    self.assertEquals([], mock_computer.connection_dates)
     # Verify on_corp/off_corp counts.
-    self.assertEquals(1, mock_computer.connections_on_corp)
+    self.assertEquals(None, mock_computer.connections_on_corp)
     self.assertEquals(None, mock_computer.connections_off_corp)
     self.mox.VerifyAll()
 
   def testLogClientConnectionAsync(self):
     """Tests calling LogClientConnection(delay=2)."""
-    user_settings = {}
     event = 'eventname'
     client_id = {'uuid': 'fooo'}
     utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
@@ -504,10 +554,10 @@ class CommonModuleTest(test.RequestHandlerTest):
         client_id['uuid'], '2010-09-02-19-30-21')
     common.datetime.datetime.utcnow().AndReturn(utcnow)
     common.deferred.defer(
-        common.LogClientConnection, event, client_id, user_settings,
-        _name=deferred_name, _countdown=2)
+        common.LogClientConnection, event, client_id, user_settings=None,
+        pkgs_to_install=None, _name=deferred_name, _countdown=2)
     self.mox.ReplayAll()
-    common.LogClientConnection(event, client_id, user_settings, delay=2)
+    common.LogClientConnection(event, client_id, delay=2)
     self.mox.VerifyAll()
 
   def _GetClientIdTestData(self):
@@ -520,19 +570,19 @@ class CommonModuleTest(test.RequestHandlerTest):
         'uptime=123.0|root_disk_free=456|user_disk_free=789'
     )
     client_id_dict = {
-      'uuid': '6c3327e9-6405-4f05-8374-142cbbd260c9',
-      'owner': 'foouser',
-      'hostname': 'foohost',
-      'config_track': 'fooconfigtrack',
-      'site': 'NYC',
-      'office': 'US-NYC-FOO',
-      'os_version': '10.6.3',
-      'client_version': '0.6.0.759.0',
-      'on_corp': False,
-      'last_notified_datetime': '2010-01-01',
-      'uptime': 123.0,
-      'root_disk_free': 456,
-      'user_disk_free': 789,
+        'uuid': '6c3327e9-6405-4f05-8374-142cbbd260c9',
+        'owner': 'foouser',
+        'hostname': 'foohost',
+        'config_track': 'fooconfigtrack',
+        'site': 'NYC',
+        'office': 'US-NYC-FOO',
+        'os_version': '10.6.3',
+        'client_version': '0.6.0.759.0',
+        'on_corp': False,
+        'last_notified_datetime': '2010-01-01',
+        'uptime': 123.0,
+        'root_disk_free': 456,
+        'user_disk_free': 789,
     }
     return client_id_str, client_id_dict
 
@@ -576,7 +626,7 @@ class CommonModuleTest(test.RequestHandlerTest):
       self.assertEqual(client_id_dict, common.ParseClientId(cid))
 
   def testParseClientIdWithoutRequiredFields(self):
-    """Tests ParseClientId() without required fields"""
+    """Tests ParseClientId() without required fields."""
     client_id_dict = {}
     for key in common.CLIENT_ID_FIELDS.keys():
       client_id_dict[key] = None
@@ -723,6 +773,418 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     common.WriteComputerMSULog(uuid, details)
+    self.mox.VerifyAll()
+
+  def testModifyList(self):
+    """Tests _ModifyList()."""
+    l = []
+    common._ModifyList(l, 'yes')
+    common._ModifyList(l, 'no')
+    self.assertEqual(l, ['yes', 'no'])  # test modify add.
+
+    common._ModifyList(l, '-no')
+    self.assertEqual(l, ['yes'])  # test modify remove.
+
+    common._ModifyList(l, '-This value does not exist')
+    self.assertEqual(l, ['yes'])  # test modify remove of non-existent value.
+
+  def testGenerateDynamicManifest(self):
+    """Tests GenerateDynamicManifest()."""
+    plist_xml = 'fooxml'
+    manifest = 'stable'
+    site = 'foosite'
+    os_version = '10.6.5'
+    client_id = {'track': manifest, 'site': site, 'os_version': os_version}
+
+    install_type_one = 'optional_installs'
+    value_one = 'foopkg'
+    site_mod_one = self.mox.CreateMockAnything()
+    site_mod_one.manifests = [manifest]
+    site_mod_one.enabled = True
+    site_mod_one.install_type = install_type_one
+    site_mod_one.value = value_one
+    site_mod_disabled = self.mox.CreateMockAnything()
+    site_mod_disabled.enabled = False
+    site_mods = [site_mod_one, site_mod_disabled]
+    mock_query = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(common.models.SiteManifestModification, 'all')
+    common.models.SiteManifestModification.all().AndReturn(mock_query)
+    mock_query.filter('site =', site).AndReturn(site_mods)
+
+    os_version_mod_one = self.mox.CreateMockAnything()
+    os_version_mod_one.manifests = [manifest]
+    os_version_mod_one.enabled = True
+    os_version_mod_one.install_type = 'managed_installs'
+    os_version_mod_one.value = 'foo os version pkg'
+    os_version_mods = [os_version_mod_one]
+    mock_query = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(
+        common.models.OSVersionManifestModification, 'all')
+    common.models.OSVersionManifestModification.all().AndReturn(mock_query)
+    mock_query.filter('os_version =', os_version).AndReturn(os_version_mods)
+
+    mock_plist = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(common.plist_module, 'UpdateIterable')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
+    common.plist_module.MunkiManifestPlist(plist_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+
+    common.plist_module.UpdateIterable(
+        mock_plist, site_mod_one.install_type, site_mod_one.value, default=[],
+        op=common._ModifyList)
+
+    common.plist_module.UpdateIterable(
+        mock_plist, os_version_mod_one.install_type,
+        os_version_mod_one.value, default=[], op=common._ModifyList)
+
+    mock_plist.GetXml().AndReturn(plist_xml)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        plist_xml, common.GenerateDynamicManifest(plist_xml, client_id))
+    self.mox.VerifyAll()
+
+  def testGetComputerManifest(self):
+    """Test ComputerInstallsPending()."""
+    uuid = 'uuid'
+    last_notified_datetime = self.mox.CreateMockAnything()
+
+    client_id = {
+        'uuid': 'uuid',
+        'owner': 'owner',
+        'hostname': 'hostname',
+        'config_track': 'config_track',
+        'track': 'track',
+        'site': 'site',
+        'office': 'office',
+        'os_version': 'os_version',
+        'client_version': 'client_version',
+        'on_corp': True,
+        'last_notified_datetime': last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+
+    computer = test.GenericContainer(**client_id)
+    computer.connections_on_corp = 2
+    computer.connections_off_corp = 1
+
+    # PackageInfo entities
+    package_infos = [
+        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
+        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+    ]
+
+    packagemap = {}
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+    self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
+    self.mox.StubOutWithMock(common.models, 'Manifest')
+    self.mox.StubOutWithMock(common, 'GenerateDynamicManifest')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
+    self.mox.StubOutWithMock(common.models, 'PackageInfo')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiPackageInfoPlist')
+
+    # mock manifest creation
+    common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
+    common.IsPanicModeNoPackages().AndReturn(False)
+    common.models.Manifest.MemcacheWrappedGet('track').AndReturn(
+        test.GenericContainer(enabled=True, plist='manifest_plist'))
+    common.GenerateDynamicManifest(
+        'manifest_plist', client_id).AndReturn('manifest_plist')
+
+    # mock manifest parsing
+    mock_manifest_plist = self.mox.CreateMockAnything()
+    common.plist_module.MunkiManifestPlist('manifest_plist').AndReturn(
+        mock_manifest_plist)
+    mock_manifest_plist.Parse().AndReturn(None)
+
+    # mock manifest reading and package map creation
+    mock_package_info = self.mox.CreateMockAnything()
+    mock_manifest_plist.GetContents().AndReturn({'catalogs': ['catalog1']})
+    common.models.PackageInfo.all().AndReturn(mock_package_info)
+    iter_return = []
+
+    for package_info in package_infos:
+      iter_return.append(test.GenericContainer(
+          plist=package_info.plist,
+          name=package_info.plist[5:]))
+      mock_package_info_plist = self.mox.CreateMockAnything()
+      common.plist_module.MunkiPackageInfoPlist(
+          package_info.plist).AndReturn(mock_package_info_plist)
+      mock_package_info_plist.Parse().AndReturn(None)
+      contents = {
+          'display_name': package_info.plist[5:],
+          'version': package_info.version,
+      }
+      packagemap[contents['display_name']] = '%s-%s' % (
+          contents['display_name'], contents['version'])
+      mock_package_info_plist.GetContents().AndReturn(contents)
+
+    def __iter_func():
+      for i in iter_return:
+        yield i
+
+    mock_package_info.__iter__().AndReturn(__iter_func())
+
+    manifest_expected = {
+        'plist': mock_manifest_plist,
+        'packagemap': packagemap,
+    }
+
+    self.mox.ReplayAll()
+    manifest = common.GetComputerManifest(uuid=uuid, packagemap=True)
+    self.assertEqual(manifest, manifest_expected)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestWhenEmptyDynamic(self):
+    """Test ComputerInstallsPending()."""
+    uuid = 'uuid'
+    last_notified_datetime = self.mox.CreateMockAnything()
+
+    client_id = {
+        'uuid': 'uuid',
+        'owner': 'owner',
+        'hostname': 'hostname',
+        'config_track': 'config_track',
+        'track': 'track',
+        'site': 'site',
+        'office': 'office',
+        'os_version': 'os_version',
+        'client_version': 'client_version',
+        'on_corp': True,
+        'last_notified_datetime': last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+
+    computer = test.GenericContainer(**client_id)
+    computer.connections_on_corp = 2
+    computer.connections_off_corp = 1
+
+    # PackageInfo entities
+    package_infos = [
+        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
+        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+    ]
+
+    packagemap = {}
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+    self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
+    self.mox.StubOutWithMock(common.models, 'Manifest')
+    self.mox.StubOutWithMock(common, 'GenerateDynamicManifest')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
+    self.mox.StubOutWithMock(common.models, 'PackageInfo')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiPackageInfoPlist')
+
+    # mock manifest creation
+    common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
+    common.IsPanicModeNoPackages().AndReturn(False)
+    common.models.Manifest.MemcacheWrappedGet('track').AndReturn(
+        test.GenericContainer(enabled=True, plist='manifest_plist'))
+    common.GenerateDynamicManifest(
+        'manifest_plist', client_id).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        common.ManifestNotFoundError,
+        common.GetComputerManifest, uuid=uuid)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestWhenManifestNotFound(self):
+    """Test ComputerInstallsPending()."""
+    uuid = 'uuid'
+    last_notified_datetime = self.mox.CreateMockAnything()
+
+    client_id = {
+        'uuid': 'uuid',
+        'owner': 'owner',
+        'hostname': 'hostname',
+        'config_track': 'config_track',
+        'track': 'track',
+        'site': 'site',
+        'office': 'office',
+        'os_version': 'os_version',
+        'client_version': 'client_version',
+        'on_corp': True,
+        'last_notified_datetime': last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+
+    computer = test.GenericContainer(**client_id)
+    computer.connections_on_corp = 2
+    computer.connections_off_corp = 1
+
+    # PackageInfo entities
+    package_infos = [
+        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
+        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+    ]
+
+    packagemap = {}
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+    self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
+    self.mox.StubOutWithMock(common.models, 'Manifest')
+    self.mox.StubOutWithMock(common, 'GenerateDynamicManifest')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
+    self.mox.StubOutWithMock(common.models, 'PackageInfo')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiPackageInfoPlist')
+
+    # mock manifest creation
+    common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
+    common.IsPanicModeNoPackages().AndReturn(False)
+    common.models.Manifest.MemcacheWrappedGet('track').AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        common.ManifestNotFoundError,
+        common.GetComputerManifest, uuid=uuid)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestWhenManifestNotEnabled(self):
+    """Test ComputerInstallsPending()."""
+    uuid = 'uuid'
+    last_notified_datetime = self.mox.CreateMockAnything()
+
+    client_id = {
+        'uuid': 'uuid',
+        'owner': 'owner',
+        'hostname': 'hostname',
+        'config_track': 'config_track',
+        'track': 'track',
+        'site': 'site',
+        'office': 'office',
+        'os_version': 'os_version',
+        'client_version': 'client_version',
+        'on_corp': True,
+        'last_notified_datetime': last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+
+    computer = test.GenericContainer(**client_id)
+    computer.connections_on_corp = 2
+    computer.connections_off_corp = 1
+
+    # PackageInfo entities
+    package_infos = [
+        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
+        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+    ]
+
+    packagemap = {}
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+    self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
+    self.mox.StubOutWithMock(common.models, 'Manifest')
+    self.mox.StubOutWithMock(common, 'GenerateDynamicManifest')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
+    self.mox.StubOutWithMock(common.models, 'PackageInfo')
+    self.mox.StubOutWithMock(common.plist_module, 'MunkiPackageInfoPlist')
+
+    # mock manifest creation
+    common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
+    common.IsPanicModeNoPackages().AndReturn(False)
+    common.models.Manifest.MemcacheWrappedGet('track').AndReturn(
+        test.GenericContainer(enabled=False, plist='manifest_plist'))
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        common.ManifestDisabledError,
+        common.GetComputerManifest, uuid=uuid)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestIsPanicMode(self):
+    """Test ComputerInstallsPending()."""
+    uuid = 'uuid'
+    last_notified_datetime = self.mox.CreateMockAnything()
+
+    client_id = {
+        'uuid': 'uuid',
+        'owner': 'owner',
+        'hostname': 'hostname',
+        'config_track': 'config_track',
+        'track': 'track',
+        'site': 'site',
+        'office': 'office',
+        'os_version': 'os_version',
+        'client_version': 'client_version',
+        'on_corp': True,
+        'last_notified_datetime': last_notified_datetime,
+        'uptime': None,
+        'root_disk_free': None,
+        'user_disk_free': None,
+    }
+
+    computer = test.GenericContainer(**client_id)
+    computer.connections_on_corp = 2
+    computer.connections_off_corp = 1
+
+    # PackageInfo entities
+    package_infos = [
+        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
+        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
+        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+    ]
+
+    packagemap = {}
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+    self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
+
+    common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
+    common.IsPanicModeNoPackages().AndReturn(True)
+
+    manifest_expected = '%s%s' % (
+        common.plist_module.PLIST_HEAD,
+        common.plist_module.PLIST_FOOT)
+
+    self.mox.ReplayAll()
+    manifest = common.GetComputerManifest(uuid=uuid)
+    self.assertEqual(manifest, manifest_expected)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestWhenNoBadArgs(self):
+    """Test GetComputerManifest()."""
+    self.mox.ReplayAll()
+    # missing args
+    self.assertRaises(ValueError, common.GetComputerManifest)
+    # missing args
+    self.assertRaises(ValueError, common.GetComputerManifest, packagemap=True)
+    # client_id should be a dict
+    self.assertRaises(ValueError, common.GetComputerManifest, client_id=1)
+    self.mox.VerifyAll()
+
+  def testGetComputerManifestWhenNoComputer(self):
+    """Test GetComputerManifest()."""
+    uuid = 'uuid'
+
+    self.mox.StubOutWithMock(common.models, 'Computer')
+
+    # mock manifest creation
+    common.models.Computer.get_by_key_name(uuid).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        common.ComputerNotFoundError,
+        common.GetComputerManifest,
+        uuid=uuid)
     self.mox.VerifyAll()
 
 
