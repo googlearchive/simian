@@ -20,6 +20,7 @@
 
 
 import logging
+import sys
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
@@ -160,20 +161,30 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'endheaders')
     self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
 
-    # with a None body supplied, send() is never called.
+    # with a None body supplied, send() is never called.  on >=2.7
+    # endheaders is still called with the body contents, even if they
+    # are None.
     client.httplib.HTTPConnection.putrequest(method, url).AndReturn(None)
     client.httplib.HTTPConnection.putheader(
         'foo', headers['foo']).AndReturn(None)
-    client.httplib.HTTPConnection.endheaders().AndReturn(None)
+    if sys.version_info[0] >= 2 and sys.version_info[1] >= 7:
+      client.httplib.HTTPConnection.endheaders(body1).AndReturn(None)
+    else:
+      client.httplib.HTTPConnection.endheaders().AndReturn(None)
 
-    # with a body supplied, send() is called inside _send_request().
+    # with a body supplied, send() is called inside _send_request() on 
+    # httplib < 2.6. in >=2.7 endheaders() sends the body and headers
+    # all at once.
     client.httplib.HTTPConnection.putrequest(method, url).AndReturn(None)
     client.httplib.HTTPConnection.putheader(
         'Content-Length', str(len(body2)))
     client.httplib.HTTPConnection.putheader(
         'foo', headers['foo']).AndReturn(None)
-    client.httplib.HTTPConnection.endheaders().AndReturn(None)
-    client.httplib.HTTPConnection.send(body2).AndReturn(None)
+    if sys.version_info[0] >= 2 and sys.version_info[1] >= 7:
+      client.httplib.HTTPConnection.endheaders(body2).AndReturn(None)
+    else:
+      client.httplib.HTTPConnection.endheaders().AndReturn(None)
+      client.httplib.HTTPConnection.send(body2).AndReturn(None)
 
     self.mox.ReplayAll()
     c = client.httplib.HTTPConnection(self.hostname)

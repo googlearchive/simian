@@ -41,57 +41,6 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testX509WithSelfSignedCertificate(self):
-    """Use a self-generated cert and load it.
-
-    The cert was generated as follows:
-       openssl genrsa 1024 > host.key
-       openssl req -new -x509 -subj /CN=TestCert1 -nodes -sha1 \
-         -days 365 -key host.key -set_serial 12345 > host.cert
-    """
-    s = """
------BEGIN CERTIFICATE-----
-MIICDTCCAXagAwIBAgICMDkwDQYJKoZIhvcNAQEFBQAwFDESMBAGA1UEAxMJVGVz
-dENlcnQxMB4XDTEwMDkwMzE5NTk1M1oXDTExMDkwMzE5NTk1M1owFDESMBAGA1UE
-AxMJVGVzdENlcnQxMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDdYH6nyJ/4
-bXDHswb6hhRqdNCbBHzQOoL0Da+sIyoOiJAorx6Kz5SQJmbgwWxLtQmwIkhdswN/
-amCWOxH4t/kDz+oBWbTvVE+zZ0+VImQ/IAcZ9CE2m3ZcZKwDLXhO0j4REnniWJ2e
-Gcjk4Ai8j4VPRMVYuJl0zswlYdR8EvI7awIDAQABo24wbDAdBgNVHQ4EFgQUvS28
-XhCKPzRz79stErTkeCGDIDkwPQYDVR0jBDYwNIAUvS28XhCKPzRz79stErTkeCGD
-IDmhGKQWMBQxEjAQBgNVBAMTCVRlc3RDZXJ0MYICMDkwDAYDVR0TBAUwAwEB/zAN
-BgkqhkiG9w0BAQUFAAOBgQB6WcKXJicJi1JdbEib9VIUlfZpA4DPz9LpKJwzluQz
-aLz7W82F6LuYkdua8KWSSpOsBUSEadJWF6zQchX+w8p5Bz5fncnJfbUA0gOPfQHn
-R2VS2jugc+lwvZby3pnlFDIl7pN8R+JIRP722bej00Mswo1Mz2A979zQORxdVk44
-KA==
------END CERTIFICATE-----
-"""
-    x = x509.LoadCertificateFromPEM(s)
-    x.CheckAll()
-    self.assertEqual(12345, x.GetSerialNumber())
-    self.assertEqual('CN=TestCert1', x.GetIssuer())
-    self.assertEqual('CN=TestCert1', x.GetSubject())
-    # note: the default when creating a x509 cert with openssl(1) is True
-    self.assertTrue(x.GetMayActAsCA())
-    self.assertEqual(x.GetKeyUsage(), None)
-    self.assertEqual(
-        _b64(x.GetFieldsData()),
-        ('MIIBdqADAgECAgIwOTANBgkqhkiG9w0BAQUFADAUMRIwEAYDVQQDEwlUZXN0'
-         'Q2VydDEwHhcNMTAwOTAzMTk1OTUzWhcNMTEwOTAzMTk1OTUzWjAUMRIwEAYD'
-         'VQQDEwlUZXN0Q2VydDEwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAN1g'
-         'fqfIn/htcMezBvqGFGp00JsEfNA6gvQNr6wjKg6IkCivHorPlJAmZuDBbEu1'
-         'CbAiSF2zA39qYJY7Efi3+QPP6gFZtO9UT7NnT5UiZD8gBxn0ITabdlxkrAMt'
-         'eE7SPhESeeJYnZ4ZyOTgCLyPhU9ExVi4mXTOzCVh1HwS8jtrAgMBAAGjbjBs'
-         'MB0GA1UdDgQWBBS9LbxeEIo/NHPv2y0StOR4IYMgOTA9BgNVHSMENjA0gBS9'
-         'LbxeEIo/NHPv2y0StOR4IYMgOaEYpBYwFDESMBAGA1UEAxMJVGVzdENlcnQx'
-         'ggIwOTAMBgNVHRMEBTADAQH/')
-         )
-    self.assertEqual(
-        _b64(x.GetSignatureData()),
-        ('elnClyYnCYtSXWxIm/VSFJX2aQOAz8/S6SicM5bkM2i8+1vNhei7mJHbmvCl'
-         'kkqTrAVEhGnSVhes0HIV/sPKeQc+X53JyX21ANIDj30B50dlUto7oHPpcL2W'
-         '8t6Z5RQyJe6TfEfiSET+9tm3o9NDLMKNTM9gPe/c0DkcXVZOOCg=')
-        )
-
 
   def testLoadCertificateFromPEMWhenGarbageInput(self):
     """Test LoadCertificateFromPEM() with garbage input."""

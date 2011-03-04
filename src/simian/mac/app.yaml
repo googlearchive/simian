@@ -76,7 +76,7 @@ handlers:
   script: main.py
   secure: always
 
-### MacPushy specific Apple SUS integration.
+### Apple SUS integration.
 
 - url: /applesus/.*
   script: main.py

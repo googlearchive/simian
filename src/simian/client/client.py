@@ -264,6 +264,8 @@ class MultiBodyConnection:
 
     # don't pass a body here -- let's manage sending it ourselves.
     # the connection is ready for it after this request() completes.
+    # note python >=2.7 httplib now offers this functionality for us,
+    # but we are continuing to do it ourselves.
     httplib.HTTPConnection.request(
         self, method, url, body=None, headers=headers)
 

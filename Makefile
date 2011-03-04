@@ -13,6 +13,7 @@ MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.pkg.dmg
 M2CRYPTO25=M2Crypto-0.21.1-py2.5-macosx-10.5-i386.egg
 M2CRYPTO26=M2Crypto-0.21.1-py2.6-macosx-10.6-universal.egg
+M2CRYPTO27=M2Crypto-0.21.1-py2.7-macosx-10.7-intel.egg
 
 test:
 	python setup.py google_test
@@ -79,17 +80,21 @@ ${M2CRYPTO25}:
 ${M2CRYPTO26}:
 	curl -o $@ http://chandlerproject.org/pub/Projects/MeTooCrypto/$@
 
-${SIMIAN}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${SDIST} clean_contents contents.tar.gz
+${M2CRYPTO27}:
+	curl -o $@ http://chandlerproject.org/pub/Projects/MeTooCrypto/$@
+	
+${SIMIAN}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian \
 	-version ${SIMIAN_VERSION} \
 	-r ${M2CRYPTO25} \
 	-r ${M2CRYPTO26} \
+	-r ${M2CRYPTO27} \
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}.pkg: ${M2CRYPTO25} ${M2CRYPTO26} ${SDIST} clean_contents contents.tar.gz
+${SIMIAN}.pkg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents contents.tar.gz
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
@@ -98,16 +103,18 @@ ${SIMIAN}.pkg: ${M2CRYPTO25} ${M2CRYPTO26} ${SDIST} clean_contents contents.tar.
 	-version ${SIMIAN_VERSION} \
 	-r ${M2CRYPTO25} \
 	-r ${M2CRYPTO26} \
+	-r ${M2CRYPTO27} \
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${SDIST} clean_contents add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents add_munkicontents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian.and.munkitools \
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-r ${M2CRYPTO25} \
 	-r ${M2CRYPTO26} \
+	-r ${M2CRYPTO27} \
 	-r ${SDIST} \
 	-s postflight
 
