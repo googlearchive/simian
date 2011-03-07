@@ -1,0 +1,25 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Host Manifest{% endblock %}
+
+{% block search %}{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block page-content %}
+
+<h2>Host Manifest: {{ uuid }}</h2>
+
+<p>
+<a href="/admin/stats">Back to stats home</a><br/>
+<a href="/admin/stats/host/{{ uuid }}">Back to host stats</a>
+</p>
+
+{% if manifest %}
+<pre>
+{{ manifest }}
+</pre>
+{% else %}
+no manifest available.
+{% endif %}
+{% endblock %}
