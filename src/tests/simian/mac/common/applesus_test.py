@@ -1,0 +1,292 @@
+#!/usr/bin/env python
+# 
+# Copyright 2011 Google Inc. All Rights Reserved.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS-IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# #
+#
+
+"""Apple SUS module tests."""
+
+
+
+import tests.appenginesdk
+import datetime
+from google.apputils import app
+from google.apputils import basetest
+import mox
+import stubout
+from simian.mac.common import applesus
+
+
+class AppleModuleTest(mox.MoxTestBase):
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def _GetTestData(self, filename):
+    f = open('./src/tests/simian/mac/common/testdata/%s' % filename)
+    buf = []
+    while 1:
+      s = f.read()
+      if s == '':
+        break
+      else:
+        buf.append(s)
+    f.close()
+    return ''.join(buf)
+
+  def testParseDist(self):
+    """Test that ParseDist() works."""
+    dist_str = self._GetTestData('041-0120.English.dist')
+    dist = applesus.ParseDist(dist_str)
+    self.assertEqual('iWork Update 5', dist['title'])
+    self.assertEqual('9.0.5', dist['version'])
+    self.assertEqual(
+        'I am the description.\nI have been replaced, though.\n',
+        dist['description'])
+
+  def testGenerateAppleSUSCatalog(self):
+    """Test GenerateAppleSUSCatalog()."""
+    catalog_xml = self._GetTestData('applesus.sucatalog')
+    track = 'testing'
+    os_version = '10.6'
+
+    product_one = self.mox.CreateMockAnything()
+    product_one.product_id = 'ID1'
+    product_two = self.mox.CreateMockAnything()
+    product_two.product_id = 'ID3'
+    products = [product_one, product_two]
+
+    mock_catalog_obj = self.mox.CreateMockAnything()
+    mock_catalog_obj.plist = catalog_xml
+    mock_query = self.mox.CreateMockAnything()
+    mock_plist = self.mox.CreateMockAnything()
+    mock_new_catalog_obj = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'all')
+    self.mox.StubOutWithMock(applesus.models.AppleSUSCatalog, 'get_by_key_name')
+    self.mox.StubOutWithMock(applesus.models, 'AppleSUSCatalog')
+
+    applesus.models.AppleSUSProduct.all().AndReturn(mock_query)
+    mock_query.filter('tracks =', track).AndReturn(products)
+    applesus.models.AppleSUSCatalog.get_by_key_name(
+        '%s_untouched' % os_version).AndReturn(mock_catalog_obj)
+
+    mock_datetime = self.mox.CreateMockAnything()
+    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
+    now_str = '2010-09-02-19-30-21'
+    mock_datetime.utcnow().AndReturn(utcnow)
+    applesus.models.AppleSUSCatalog(
+        key_name='backup_%s_%s_%s' % (os_version, track, now_str)).AndReturn(
+            mock_new_catalog_obj)
+    mock_new_catalog_obj.put().AndReturn(None)
+
+    applesus.models.AppleSUSCatalog(
+        key_name='%s_%s' % (os_version, track)).AndReturn(mock_new_catalog_obj)
+    mock_new_catalog_obj.put().AndReturn(None)
+
+    self.mox.ReplayAll()
+    catalog, new_plist = applesus.GenerateAppleSUSCatalog(
+        os_version, track, mock_datetime)
+    self.assertTrue('ID1' in new_plist['Products'])
+    self.assertTrue('ID2' not in new_plist['Products'])
+    self.assertTrue('ID3' in new_plist['Products'])
+    self.assertTrue('ID4' not in new_plist['Products'])
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateTesting(self):
+    """Test GetAutoPromoteDate() for testing track."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.mtime = datetime.datetime(2011, 7, 22, 00, 00, 00)
+    applesus_product.manual_override = False
+    applesus_product.tracks = [applesus.common.UNSTABLE]
+    auto_promote_date = datetime.date(2011, 7, 26)
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.TESTING, applesus_product)
+    self.assertEqual(d, auto_promote_date)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateTestingSaturday(self):
+    """Test GetAutoPromoteDate() for testing track."""
+    applesus_product = self.mox.CreateMockAnything()
+    # 2011-07-18 + AUTO_PROMOTE_PHASE_DAYS_MAP['testing'] is a Saturday.
+    applesus_product.mtime = datetime.datetime(2011, 7, 19, 00, 00, 00)
+    applesus_product.manual_override = False
+    applesus_product.tracks = [applesus.common.UNSTABLE]
+    # So don't promote on 2011-07-18 + AUTO_PROMOTE_PHASE_DAYS_MAP['testing'],
+    # instead delay until the following Monday.
+    auto_promote_date = datetime.date(2011, 7, 25)
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.TESTING, applesus_product)
+    self.assertEqual(d, auto_promote_date)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateStable(self):
+    """Test GetAutoPromoteDate() for stable track."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.mtime = datetime.datetime(2011, 7, 22, 00, 00, 00)
+    applesus_product.manual_override = False
+    applesus_product.tracks = [
+        applesus.common.UNSTABLE, applesus.common.TESTING]
+    auto_promote_date = datetime.date(2011, 8, 03)
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.STABLE, applesus_product)
+    self.assertEqual(d, auto_promote_date)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateStableButNotYetInTesting(self):
+    """Test GetAutoPromoteDate() for stable where product not yet in testing."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.mtime = datetime.datetime(2011, 7, 22, 00, 00, 00)
+    applesus_product.manual_override = False
+    applesus_product.tracks = [applesus.common.UNSTABLE]
+    auto_promote_date = datetime.date(2011, 8, 03)
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.STABLE, applesus_product)
+    self.assertEqual(d, auto_promote_date)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateStableButNotYetInTestingButTestingDelayed(self):
+    """Test GetAutoPromoteDate() for stable where product not yet in testing."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.mtime = datetime.datetime(2011, 7, 26, 00, 00, 00)
+    applesus_product.manual_override = False
+    applesus_product.tracks = [applesus.common.UNSTABLE]
+    auto_promote_date = datetime.date(2011, 8, 10)
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.STABLE, applesus_product)
+    self.assertEqual(d, auto_promote_date)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateOverride(self):
+    """Test GetAutoPromoteDate() for a product that has manual_override set."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.manual_override = True
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.TESTING, applesus_product)
+    self.assertEqual(d, None)
+    self.mox.VerifyAll()
+
+  def testGetAutoPromoteDateNotInUnstable(self):
+    """Test GetAutoPromoteDate() for a product that's not in unstable."""
+    applesus_product = self.mox.CreateMockAnything()
+    applesus_product.manual_override = False
+    applesus_product.tracks = []
+
+    self.mox.ReplayAll()
+    d = applesus.GetAutoPromoteDate(applesus.common.TESTING, applesus_product)
+    self.assertEqual(d, None)
+    self.mox.VerifyAll()
+
+  def testGetNextWeekdayDate(self):
+    """Tests GetNextWeekdayDate().
+
+    Tested dates are in the past, current day, days and even weeks in future.
+    """
+    current_datetime = datetime.datetime(2011, 07, 22, 12, 30, 00)
+    dates = [
+        (datetime.date(2011, 7, 21), datetime.date(2011, 7, 27)),
+        (datetime.date(2011, 7, 22), datetime.date(2011, 7, 27)),
+        (datetime.date(2011, 7, 26), datetime.date(2011, 7, 27)),
+        (datetime.date(2011, 7, 27), datetime.date(2011, 7, 27)),
+        (datetime.date(2011, 7, 28), datetime.date(2011, 8, 03)),
+        (datetime.date(2011, 8, 04), datetime.date(2011, 8, 10)),
+        (datetime.date(2011, 10, 13), datetime.date(2011, 10, 19)),
+    ]
+
+    self.mox.ReplayAll()
+    for date in dates:
+      self.assertEqual(applesus._GetNextWeekdayDate(min_date=date[0]), date[1])
+    self.mox.VerifyAll()
+
+
+class DistFileDocumentTest(mox.MoxTestBase):
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+    self.dfd = applesus.DistFileDocument()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testReset(self):
+    """Test Reset()."""
+    self.dfd._installer_script = 'erase'
+    self.dfd.Reset()
+    self.assertEqual(self.dfd._installer_script, {})
+
+  def testParseInstallerScriptString(self):
+    """Test _ParseInstallerScriptString()."""
+    t = [
+            ['"K"="V";\n', {'K': 'V'}],
+            ['"K"=\'V\';\n', {'K': 'V'}],
+            ['"K"="V";\n\n\n"K2"="V2";\n', {'K': 'V', 'K2': 'V2'}],
+            ['"K"="V";\n\n\n"K2"="V2\nV3";\n', {'K': 'V', 'K2': 'V2\nV3'}],
+            # an invalid line disrupts the parser
+            ['"K"=;\n"K2"="V2"\n', {}],
+            # nested quotes
+            ['"K"=\'Hello "there"\';', {'K': 'Hello "there"'}],
+        ]
+
+    for i, o in t:
+      self.assertEqual(self.dfd._ParseInstallerScriptString(i), o)
+
+  def testLoadDocument(self):
+    """Test LoadDocument."""
+    doc = self.mox.CreateMockAnything()
+    docstr = 'xmldoc'
+
+    self.mox.StubOutWithMock(applesus.minidom, 'parseString')
+    self.mox.StubOutWithMock(self.dfd, '_ParseInstallerScriptString')
+
+    applesus.minidom.parseString(docstr).AndReturn(doc)
+    doc.getElementsByTagName('localization').AndReturn(doc)
+    doc.__getitem__(0).AndReturn(doc)
+    doc.getElementsByTagName('strings').AndReturn(doc)
+    doc.__getitem__(0).AndReturn(doc)
+    doc.childNodes = [doc]
+    doc.nodeValue = 'hello'
+
+    self.dfd._ParseInstallerScriptString('hello').AndReturn('return')
+
+    self.mox.ReplayAll()
+    self.dfd.LoadDocument(docstr)
+    self.assertEqual(self.dfd._installer_script, 'return')
+    self.mox.VerifyAll()
+
+  def testGetInstallerScript(self):
+    """Test GetInstallerScript()."""
+    self.dfd._installer_script = 'foo'
+    self.assertEqual('foo', self.dfd.GetInstallerScript())
+
+
+def main(unused_argv):
+  basetest.main()
+
+
+if __name__ == '__main__':
+  app.run()

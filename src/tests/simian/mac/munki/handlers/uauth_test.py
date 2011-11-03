@@ -84,12 +84,14 @@ class UserAuthTest(test.RequestHandlerTest):
     user = 'not_%s' % uauth.settings.ADMINS[0]
     self.assertFalse(user in uauth.settings.ADMINS)
     mock_user = self.mox.CreateMockAnything()
-    mock_user.email().AndReturn(user)
-    mock_user.email().AndReturn(user)
 
     self.MockDoMunkiAuth(fail=True)
     self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
     uauth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(user)
+    uauth.auth.IsAdminUser(user).AndReturn(False)
+    mock_user.email().AndReturn(user)
 
     self.mox.ReplayAll()
     self.assertRaises(

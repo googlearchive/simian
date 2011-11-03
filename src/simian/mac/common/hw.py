@@ -39,16 +39,37 @@ class SystemProfilerError(Error):
 
 
 class SystemProfile(object):
-  def __init__(self):
-    """Init."""
+
+  DATA_TYPES = {
+      'network': 'SPNetworkDataType',
+      'system': 'SPSystemDataType',
+      'hardware': 'SPHardwareDataType',
+      'serialata': 'SPSerialATADataType',
+  }
+
+  def __init__(self, include_only=None):
+    """Init.
+
+    Args:
+      include_only: list, optional, items from DATA_TYPES which will
+          be the only data types requested from system profiler.
+    """
     self._profile = {}
+    self._include_only = include_only
 
   def _GetSystemProfilerOutput(self):
+    argv = ['/usr/sbin/system_profiler', '-XML']
+
+    if self._include_only:
+      for data_type in self._include_only:
+        if data_type in self.DATA_TYPES:
+          argv.append(self.DATA_TYPES[data_type])
+
     try:
       s = subprocess.Popen(
-          ['/usr/bin/system_profiler', '-XML'],
-          stdout = subprocess.PIPE,
-          stderr = subprocess.PIPE)
+          argv,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE)
     except OSError, e:
       raise SystemProfilerError(str(e))
     (stdout, stderr) = s.communicate()
@@ -62,14 +83,35 @@ class SystemProfile(object):
   def _GetSystemProfile(self):
     sp_xml = self._GetSystemProfilerOutput()
     p = plist.ApplePlist(sp_xml)
-    p.Parse()
+    try:
+      p.Parse()
+    except plist.Error, e:
+      raise SystemProfilerError('plist Parse() error: %s' % str(e))
     self._system_profile_xml = sp_xml
     self._system_profile = p.GetContents()
+
+  def _FindHDDSerial(self):
+    for d in self._system_profile:
+      if d.get('_dataType') == 'SPSerialATADataType':
+        for item in d['_items']:
+          for item in item['_items']:
+            if 'device_serial' in item:
+              self._profile['hdd_serial'] = item['device_serial'].strip()
+              return
+
+  def _FindPlatformUuid(self):
+    """Find platform UUID."""
+    for d in self._system_profile:
+      if d.get('_dataType', None) == 'SPHardwareDataType':
+        for item in d['_items']:
+          if 'platform_UUID' in item:
+            self._profile['platform_uuid'] = item['platform_UUID']
+            return
 
   def _FindSerialNumber(self):
     """Find system serial number."""
     for d in self._system_profile:
-      if d['_dataType'] == 'SPHardwareDataType':
+      if d.get('_dataType', None) == 'SPHardwareDataType':
         for item in d['_items']:
           if 'serial_number' in item:
             self._profile['serial_number'] = item['serial_number']
@@ -78,34 +120,44 @@ class SystemProfile(object):
   def _FindMacAddresses(self):
     """Find MAC addresses for network adapters."""
     for d in self._system_profile:
-      if d['_dataType'] == 'SPNetworkDataType':
+      if d.get('_dataType', None) == 'SPNetworkDataType':
         for item in d['_items']:
           if 'hardware' in item:
             if 'Ethernet' in item and 'MAC Address' in item['Ethernet']:
+              intf_mac = item['Ethernet']['MAC Address']
+              intf_name = item.get('interface', None)
+
               if item['hardware'] == 'Ethernet':
-                self._profile['ethernet_mac'] = item['Ethernet']['MAC Address']
+                intf_type = 'ethernet'
               elif item['hardware'] == 'AirPort':
-                self._profile['airport_mac'] = item['Ethernet']['MAC Address']
+                intf_type = 'airport'
               elif item['hardware'] == 'FireWire':
-                self._profile['firewire_mac'] = item['Ethernet']['MAC Address']
+                intf_type = 'firewire'
+              else:
+                intf_type = None
+
+              if intf_type is not None:
+                self._profile['%s_mac' % intf_type] = intf_mac
+                if intf_name is not None:
+                  self._profile['interface_%s' % intf_name] = intf_type
 
   def _FindBatteryInfo(self):
     """Find battery info."""
     for d in self._system_profile:
-      if d['_dataType'] == 'SPPowerDataType':
+      if d.get('_dataType', None) == 'SPPowerDataType':
         for item in d['_items']:
           if 'sppower_battery_model_info' in item:
             self._profile['battery_serial_number'] = (
-              item['sppower_battery_model_info']
-              ['sppower_battery_serial_number'])
+                item['sppower_battery_model_info'].get(
+                    'sppower_battery_serial_number', 'unknown'))
 
   def _FindUSBDevices(self):
     """Find all USB devices."""
     for d in self._system_profile:
-      if d['_dataType'] == 'SPUSBDataType':
+      if d.get('_dataType', None) == 'SPUSBDataType':
         for item in d['_items']:
           if 'host_controller' in item:
-            for usb_item in item['_items']:
+            for usb_item in item.get('_items', []):
               if usb_item['_name'].find('iSight') > -1:
                 self._profile['isight_serial_number'] = (
                     usb_item.get('d_serial_num', 'unknown'))
@@ -113,7 +165,9 @@ class SystemProfile(object):
   def _FindAll(self):
     """Find all properties from system profile."""
     self._GetSystemProfile()
+    self._FindHDDSerial()
     self._FindSerialNumber()
+    self._FindPlatformUuid()
     self._FindMacAddresses()
     self._FindBatteryInfo()
     self._FindUSBDevices()
@@ -124,9 +178,14 @@ class SystemProfile(object):
     Returns:
       dict, with some or all these keys = {
         'serial_number': str,
+        'platform_uuid': str,
         'ethernet_mac': str,
         'airport_mac': str,
         'firewire_mac': str,
+        'hdd_serial': '...',
+        'interface_en0': 'ethernet' or 'airport' or 'firewire',
+        'interface_enN': ....,
+        'interface_fwN': ....,
         'battery_serial_number': str,
         'isight_serial_number': str,
       }

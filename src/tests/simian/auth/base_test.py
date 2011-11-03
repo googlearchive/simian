@@ -915,13 +915,16 @@ class Auth1Test(AuthTestingBase):
     token = 't12345'
     uuid = 'uuid'
     session = base.AuthSessionData(state=base.AuthState.OK, uuid=uuid)
+    session_not_ok = base.AuthSessionData(state=base.AuthState.FAIL, uuid=uuid)
     self.mox.StubOutWithMock(self.ba._session, 'GetToken')
 
     self.ba._session.GetToken(token).AndReturn(None)
+    self.ba._session.GetToken(token).AndReturn(session_not_ok)
     self.ba._session.GetToken(token).AndReturn(session)
 
     self.mox.ReplayAll()
-    self.assertEqual(None, self.ba.GetSessionIfAuthOK(token))
+    self.assertRaises(base.AuthSessionError, self.ba.GetSessionIfAuthOK, token)
+    self.assertRaises(base.AuthSessionError, self.ba.GetSessionIfAuthOK, token)
     self.assertEqual(session, self.ba.GetSessionIfAuthOK(token))
     self.mox.VerifyAll()
 
@@ -941,7 +944,9 @@ class Auth1Test(AuthTestingBase):
     self.ba._session.GetToken(token).AndReturn(session_good)
 
     self.mox.ReplayAll()
-    self.assertEqual(None, self.ba.GetSessionIfAuthOK(token, required_level))
+    self.assertRaises(
+        base.AuthSessionError,
+        self.ba.GetSessionIfAuthOK, token, required_level)
     self.assertEqual(
         session_good, self.ba.GetSessionIfAuthOK(token, required_level))
     self.mox.VerifyAll()

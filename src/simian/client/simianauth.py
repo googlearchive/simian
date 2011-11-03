@@ -69,6 +69,8 @@ class SimianAuthCliClient(object):
       'write-root-ca-certs=',
       'server=',
       'token=',
+      'uploadfile=',
+      'uploadfiletype=',
       'logout',
       'print-cookie',
   ]
@@ -92,6 +94,10 @@ class SimianAuthCliClient(object):
       },
       'report': {
           'method': 'Report',
+      },
+      'uploadfile': {
+          'method': 'UploadFile',
+          'require': ['uploadfiletype'],
       },
       'write-root-ca-certs': {
           'method': 'WriteRootCaCerts',
@@ -137,12 +143,21 @@ class SimianAuthCliClient(object):
         Will cause simianauth to exit with status 9 if FORCE_CONTINUE is
         received for this report.
 
+        One occurance of the string __GLOBAL_UUID__ will be replaced with
+        a global UUID unique to this host.  The formatting is URL-safe.
+
     --write-root-ca-certs [filename]
         write the root CA certs that Simian client is using to filename.
         existing file is destroyed.
 
     --token [token string]
         specify token
+
+    --uploadfile [path to file]
+        uploads a file to the server.
+
+    --uploadfiletype [str file type]
+        str file type, like "log".
 
     --server [hostname]
         alternative Simian server to contact
@@ -160,6 +175,8 @@ class SimianAuthCliClient(object):
       'debug': False,
       'server': None,
       'report': [],
+      'uploadfile': [],
+      'uploadfiletype': None,
       'token': None,
       'token_cookie': None,
       'write-root-ca-certs': None,
@@ -222,9 +239,9 @@ class SimianAuthCliClient(object):
 
     commands.sort(cmp=__cmp)
 
-    # if report command, and no token specified, add
+    # if report or uploadfile command, and no token specified, add
     # login and logout commands to obtain a token.
-    if commands == ['report']:
+    if commands == ['report'] or commands == ['uploadfile']:
       if not self.config['token']:
         commands.insert(0, 'login')
         commands.append('logout')
@@ -321,7 +338,7 @@ class SimianAuthCliClient(object):
 
     self._PreprocessRunConfig()
 
-    did_uauth = False
+    did_userauth = False
     did_auth = False
 
     command_idx = 0
@@ -338,15 +355,15 @@ class SimianAuthCliClient(object):
       # set the token into the auth class.
       if self.config['token']:
         did_auth = True
-        did_uauth = True
+        did_userauth = True
         self._SetTokens(self.config['token'])
         self.client.SetAuthToken(self.config['token'])
 
       reqd_auth = self.COMMANDS[command].get('auth', None)
-      if reqd_auth == 'uauth':
-        if not did_uauth:
-          self.client.DoUAuth()
-          did_uauth = True
+      if reqd_auth == 'userauth':
+        if not did_userauth:
+          self.client.DoUserAuth()
+          did_userauth = True
       elif reqd_auth == 'none':
         pass
       else:
@@ -370,7 +387,7 @@ class SimianAuthCliClient(object):
       except (client.Error, Error), e:
         logging.exception(e)
         self.PrintError(e)
-        break
+        raise Error
 
       command_idx += 1
 
@@ -468,6 +485,8 @@ class SimianAuthCliClient(object):
       (unused, params) = arg.split(':', 1)
       if params.find('_report_type=') < 0:
         raise UnknownReportFormatError('report does not contain _report_type')
+      if params.find('__GLOBAL_UUID__') > -1:
+        params = params.replace('__GLOBAL_UUID__', self.client.GetGlobalUuid())
       params = str(params)
       report_type = None
     # dict: defines report_type and N colon-sep key=value pairs
@@ -514,6 +533,16 @@ class SimianAuthCliClient(object):
                 feedback[response], response)
             sys.exit(feedback[response])
 
+  def UploadFile(self):
+    """Upload a log file to Simian."""
+    logging.debug('SimianAuthCliClient.UploadFile %s', self.config['uploadfile'])
+    for file_path in self.config['uploadfile']:
+      file_type = self.config['uploadfiletype']
+      try:
+        self.client.UploadFile(file_path, file_type)
+      except client.SimianServerError, e:
+        logging.exception('Error uploading log: %s', file_path)
+
 
 def main(argv, simian_cli_class=None):
   if simian_cli_class is None:
@@ -532,8 +561,7 @@ def main(argv, simian_cli_class=None):
 
   try:
     c.Run()
-  except client.SimianClientError, e:
-    print >>sys.stderr, 'Error: %s' % str(e)
+  except Error:
     sys.exit(1)
 
   sys.exit(0)

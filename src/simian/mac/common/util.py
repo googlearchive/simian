@@ -19,13 +19,43 @@
 
 
 
+
+import datetime
 import cPickle as pickle
 import re
+import time
 
 
-# For future expansion of serialize/deserialize methods
+USE_JSON = False
+json = None
+
+# GAE
+try:
+  from django.utils import simplejson as json
+  USE_JSON = True
+except ImportError:
+  pass
+
+# python >2.6
+try:
+  import json
+  USE_JSON = True
+except ImportError:
+  pass
+
+# other
+try:
+  if not json:
+    import simplejson as json
+    USE_JSON = True
+except ImportError:
+  pass
+
+# note: enabling pickle is not recommended, it can be insecure on the
+# deserialize side!
+USE_PICKLE = False
 PICKLE_RE = re.compile(
-    r'^(\(dp1|\(lp1|S\'|I\d|ccopy_reg|c.*p1).*\.$',
+    r'^(\(dp[01]|\(lp[01]|S\'|I\d|ccopy_reg|c.*p1).*\.$',
     re.MULTILINE|re.DOTALL)
 
 
@@ -39,6 +69,55 @@ class SerializeError(Error):
 
 class DeserializeError(Error):
   """Error during deserialization."""
+
+
+class EpochValueError(Error):
+  """Error for epoch to datetime conversion problems."""
+
+
+class EpochFutureValueError(EpochValueError):
+  """An epoch time is in the future."""
+
+
+class EpochExtremeFutureValueError(EpochFutureValueError):
+  """An epoch time extremely too far in the future."""
+
+
+class Datetime(object):
+  """Datetime class for extending utcfromtimestamp()."""
+
+  @classmethod
+  def utcfromtimestamp(self, timestamp, allow_future=False):
+    """Converts a str or int epoch time to datetime.
+
+    Note: this method drops ms from timestamps.
+
+    Args:
+      timestamp: str, int, or float epoch timestamp.
+      allow_future: boolean, default False, True to allow future timestamps.
+    Returns:
+      datetime representation of the timestamp.
+    Raises:
+      ValueError: timestamp is invalid.
+      EpochValueError: the timestamp is valid, but unacceptable.
+      EpochFutureValueError: timestamp under an hour in future.
+      EpochExtremeFutureValueError: timestamp over an hour in future.
+    """
+    try:
+      timestamp = int(float(timestamp))
+      dt = datetime.datetime.utcfromtimestamp(timestamp)
+    except (TypeError, ValueError):
+      raise ValueError(
+          'timestamp is None, empty, or otherwise invalid: %s' % timestamp)
+    now = datetime.datetime.utcnow()
+    if not allow_future and dt > now:
+      msg = 'datetime in the future: %s' % dt
+      if dt > (now + datetime.timedelta(minutes=66)):
+        # raise a slightly different exception for > 66mins to allow for more
+        # verbose logging.
+        raise EpochExtremeFutureValueError(msg)
+      raise EpochFutureValueError(msg)
+    return dt
 
 
 def IpToInt(ip):
@@ -88,33 +167,66 @@ def IpMaskMatch(ip, ip_mask):
   return (ip_int & ip_int_mask_bits) == ip_int_mask
 
 
-def Serialize(obj):
+def Serialize(obj, _use_pickle=USE_PICKLE, _use_json=USE_JSON):
   """Return a binary serialized version of object.
+
+  Depending on the serialization method, some complex objects or input
+  formats may not be serializable.
+
+  UTF-8 strings (by themselves or in other structures e.g. lists) are always
+  supported.
 
   Args:
     obj: any object
+    _use_pickle: bool, optional, whether to use pickle
+    _use_json: bool, optional, whether to use json
   Returns:
     str, possibly containing ascii values >127
   Raises:
     SerializeError: if an error occured during serialization
   """
   try:
-    return pickle.dumps(obj)
-  except pickle.PicklingError:
-    raise SerializeError
+    if _use_json:
+      return json.dumps(obj)
+    elif _use_pickle:
+      return pickle.dumps(obj)
+    else:
+      raise SerializeError('No available serialization formats')
+  except (pickle.PicklingError, TypeError), e:
+    raise SerializeError(e)
 
 
-def Deserialize(s):
+def Deserialize(
+    s,
+    parse_float=float,
+    _use_pickle=USE_PICKLE, _use_json=USE_JSON, _pickle_re=PICKLE_RE):
   """Return an object for a binary serialized version.
+
+  Depending on the target platform, precision of float values may be lowered
+  on deserialization.  Use parse_float to provide an alternative
+  floating point translation function, e.g. decimal.Decimal, if retaining
+  high levels of float precision (> ~10 places) is important.
+
 
   Args:
     s: str
+    parse_floats: callable, optional, to translate floating point values
+    _use_pickle: bool, optional, whether to use pickle
+    _use_json: bool, optional, whether to use json
+    _pickle_re: re.RegexObject, optional, pattern to match pickle strs
   Returns:
     any object that was serialized
   Raises:
     DeserializeError: if an error occured during deserialization
   """
   try:
-    return pickle.loads(s)
-  except pickle.UnpicklingError:
-    raise DeserializeError
+    if s is None:
+      raise DeserializeError('Nothing to deserialize: %s' % type(s))
+    elif _use_pickle and _pickle_re.match(s):
+      return pickle.loads(s)
+    elif _use_json:
+      return json.loads(s, parse_float=parse_float)
+    else:
+      raise DeserializeError('Serialization format unknown')
+  except (pickle.UnpicklingError, ValueError), e:
+    raise DeserializeError(e)

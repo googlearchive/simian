@@ -24,20 +24,16 @@ CA_PUBLIC_CERT_PEM = settings.CA_PUBLIC_CERT_PEM
 SERVER_PUBLIC_CERT_PEM = settings.SERVER_PUBLIC_CERT_PEM
 
 
-# Root CA cert chain used to verify the server SSL cert.
-ROOT_CA_CERT_CHAIN_PEM = settings.ROOT_CA_CERT_CHAIN_PEM
-
+# Root CA cert chain used by the client to verify the server SSL cert.
+ROOT_CA_CERT_CHAIN_PEM = getattr(settings, 'ROOT_CA_CERT_CHAIN_PEM', None)
 
 
 # Only accept client certificates issued by this DN (i.e. CN=ca.example.com)
 REQUIRED_ISSUER = settings.REQUIRED_ISSUER
 
-# Path to the directory of client certificates (public cert and private key).
-CLIENT_SSL_PATH = settings.CLIENT_SSL_PATH
 
-#
-# !!! DO NOT EDIT BELOW THIS LINE !!!
-#
+# Path to the directory of client certificates (public cert and private key).
+CLIENT_SSL_PATH = getattr(settings, 'CLIENT_SSL_PATH', None)
 
 
 # Name of the cookie set by server

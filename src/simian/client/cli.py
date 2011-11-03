@@ -69,6 +69,7 @@ class SimianCliClient(object):
       'delete',
       'edit',
       'server=',
+      'user_auth=',
       'package=',
       'description=',
       'display_name=',
@@ -76,8 +77,10 @@ class SimianCliClient(object):
       'manifests=',
       'install_types=',
       'edit_pkginfo',
-      'forced_install',
-      'noforced_install',
+      'unattended_install',
+      'nounattended_install',
+      'unattended_uninstall',
+      'nounattended_uninstall',
       'list_packages',
   ]
 
@@ -89,27 +92,27 @@ class SimianCliClient(object):
       'upload': {
           'require': [ 'package', 'description', 'catalogs', 'install_types' ],
           'method': 'UploadPackage',
-          'auth': 'uauth',
+          'auth': 'userauth',
       },
       'download': {
           'require': [ 'package' ],
           'method': 'DownloadPackage',
-          'auth': 'uauth',
+          'auth': 'userauth',
       },
       'delete': {
           'require': [ 'package' ],
           'method': 'DeletePackage',
-          'auth': 'uauth',
+          'auth': 'userauth',
       },
       'edit': {
           'require': [ 'package' ],
           'method': 'EditPackageInfo',
-          'auth': 'uauth',
+          'auth': 'userauth',
       },
       'list_packages': {
           'require': [],
           'method': 'ListPackages',
-          'auth': 'uauth',
+          'auth': 'userauth',
       },
       'help': {
           'method': 'Usage',
@@ -118,6 +121,8 @@ class SimianCliClient(object):
 
   # usage text
   # TODO: make usage more easily updated from subclasses.
+
+  ADDITIONAL_USAGE = ''
   USAGE = """
     Simian client
 
@@ -148,8 +153,11 @@ class SimianCliClient(object):
     --edit_pkginfo
         when uploading or editing a package, run an editor on the generated
         package info before submitting it to the Simian server.
-    --[no]forced_install
-        when uploading a package, add "forced_install" bool to package info.
+    --[no]unattended_install
+        when uploading a package, add "unattended_install" bool to package info.
+    --[no]unattended_uninstall
+        when uploading a package, add "unattended_uninstall" bool to package
+        info.
     --catalogs [unstable,testing,stable]
         specify the catalog names to target; comma delimited string
     --manifests [unstable,testing,stable]
@@ -158,12 +166,13 @@ class SimianCliClient(object):
         specify the install types of upload; comma delimited string
     --server [hostname(:port)]
         specify the Simian server location
+%s
     --debug
         output debugging information
 
     --help
         this text
-  """ % NAME
+  """ % (NAME, ADDITIONAL_USAGE)
 
   def __init__(self):
     self.opts = []
@@ -182,7 +191,8 @@ class SimianCliClient(object):
       'manifests': None,
       'install_types': None,
       'edit_pkginfo': None,
-      'forced_install': None,
+      'unattended_install': None,
+      'unattended_uninstall': None,
       'list_packages': None,
     }
     self.command = None
@@ -406,8 +416,8 @@ class SimianCliClient(object):
     self.client = self.GetSimianClientInstance(self.config['server'])
     self._SetupProgressCallback()
 
-    if self.COMMANDS[self.command].get('auth', None) == 'uauth':
-      self.client.DoUAuth()
+    if self.COMMANDS[self.command].get('auth', None) == 'userauth':
+      self.client.DoUserAuth()
     else:
       self.client.DoSimianAuth()
 

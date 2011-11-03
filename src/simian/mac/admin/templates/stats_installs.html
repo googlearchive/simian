@@ -2,9 +2,9 @@
 
 {% block title %}Installs{% endblock %}
 
-{% block search %}{% endblock %}
-
-{% block header %}{% endblock %}
+{% if host_report %}
+  {% block header %}{% endblock %}
+{% endif %}
 
 {% block page-content %}
 
@@ -12,76 +12,161 @@
   <h3>Installs</h3>
 {% else %}
   {% if pkg %}
-    <h2>Installs: {{ pkg }}</h2>
-    <a href="/admin/stats/installs">Back to installs list</a>
+    {% if applesus %}
+      <h2>Apple SUS Installs: {{ pkg }}</h2>
+      <a href="/admin/installs?applesus=1">Back to Apple SUS list</a>
+    {% else %}
+      <h2>Installs: {{ pkg }}</h2>
+      <a href="/admin/installs">Back to packages list</a>
+    {% endif %}
   {% else %}
-    <h2>Installs</h2>
-    <a href="/admin/stats">Back to stats home</a>
+    <h2>Packages</h2>
   {% endif %}
 {% endif %}
 
-{% if packages %}
+{% if cached_pkgs_list %}
   <table class="stats-table">
-  <tr><th>Install</th><th># *</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Forced</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+  <tr><th>Package</th><th>Avg Duration Secs</th><th># *</th></tr>
   {% for pkg in packages %}
     <tr class="{% cycle lbg,dbg %}">
       <td>
-        <a href="/admin/stats/installs?pkg={{ pkg.munki_install_name }}"
-            >{{ pkg.munki_install_name }}</a>
+        <a href="/admin/installs?pkg={{ pkg.name }}{% if applesus %}&applesus=1{% endif %}">{{ pkg.name }}</a>
       </td>
+      <td>{{ pkg.duration_seconds_avg }}</td>
       <td>{{ pkg.count }}</td>
-      <td>
-        <a href="/admin/stats/installs?pkg={{ pkg.munki_install_name }}&pending=1">view</a>
-      </td>
-      <td>{{ pkg.filename }}</td>
-      <td><a href="/pkgsinfo/{{ pkg.filename }}">view</a></td>
-      <td>{% if pkg.forced %}True{% else %}False{% endif %}</td>
-      <td>{{ pkg.install_types|join:", " }}</td>
-      <td>{{ pkg.catalogs|join:", " }}</td>
-      <td>{{ pkg.manifests|join:", " }}</td>
-      <td>{{ pkg.description }}</td>
     </tr>
   {% endfor %}
   </table>
   <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
-  <a href="/admin/stats/installs?pkg=all">View all installs together</a>
+  {% if applesus %}
+    <ul><li><a href="/admin/installs?pkg=all&applesus=1"
+        >View all Apple SUS installs</a></li></ul>
+  {% endif %}
 {% else %}
+  {% if packages %}
+    <a href="javascript:function() { return false; }"
+       onclick="simian.togglePkgDescVisibility(this);">Show Descriptions</a>
+    <table class="stats-table" id="pkg-table">
+    <tr><th>Package</th><th># *</th><th>Avg Duration Secs</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Unattended</th><th>Force Install Datetime</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+    {% for pkg in packages %}
+      <tr class="{% cycle lbg,dbg %}">
+        <td>
+          <a href="/admin/installs?pkg={{ pkg.munki_name }}"
+              >{{ pkg.munki_name }}</a>
+        </td>
+        <td>{{ pkg.count }}</td>
+        <td>{{ pkg.duration_seconds_avg }}</td>
+        <td>
+          <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1">pending</a>
+        </td>
+        <td>{{ pkg.filename }}</td>
+        <td><a href="/pkgsinfo/{{ pkg.filename }}">pkginfo</a></td>
+        <td>{% if pkg.unattended %}unattended{% else %}&nbsp;{% endif %}</td>
+        <td>{{ pkg.force_install_after_date }}</td>
+        <td>{{ pkg.install_types|join:", " }}</td>
+        <td>{{ pkg.catalogs|join:", " }}</td>
+        <td>{{ pkg.manifests|join:", " }}</td>
+        <td>
+          <span style="color: #736F6E;">-hidden-</span>
+          <span class="pkg-description"
+                style="display: none;">{{ pkg.description }}</span>
+        </td>
+      </tr>
+    {% endfor %}
+    </table>
+    <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
+    <ul>
+      <li>
+        <a href="/admin/installs?historical=1"
+            >View all packages (historical)</a>
+      </li>
+      <li>
+        <a href="/admin/installs?pkg=all">View all installs</a>
+      </li>
+    </ul>
+  {% endif %}
+{% endif %}
 
+{% if not packages %}
   <p>
     {{ installs|length }} installs found (limit {{ limit }}).
     {% if next_page %}
-      <a href="/admin/stats/installs?pkg={{ pkg }}&page={{ next_page }}">Next Page &raquo;</a>
+      <a href="/admin/installs?pkg={{ pkg }}{% if applesus %}&applesus=1{% endif %}&page={{ next_page }}">Next Page &raquo;</a>
     {% endif %}
   </p>
-
+  
+  {% if installs %}
   <table class="stats-table">
     <tr class="multi-header">
-       <th>Package</th>
+       {% if host_report or pkg == "all" %}<th>Package</th>{% endif %}
+       {% if not host_report %}
+         <th>UUID</th>
+       {% endif %}
        <th>Status</th>
        <th>On Corp</th>
-       {% if not host_report %}<th>UUID</th>{% endif %}
+       <th>Duration Secs</th>
        <th>Time</th>
        <th>Time Since</th>
     </tr>
     {% for install in installs %}
       <tr class="{% cycle lbg,dbg %}">
-        <td><a href="/admin/stats/installs?pkg={{ install.package }}"
-            >{{ install.package }}</a></td>
-        <td>{{ install.status }}</td>
-        <td>{{ install.on_corp }}</td>
+        {% if host_report or pkg == "all" %}
+          <td><a href="/admin/installs?pkg={{ install.package }}"
+              >{{ install.package }}</a></td>
+        {% endif %}
         {% if not host_report %}
         <td>
-          <a href="/admin/stats/host/{{  install.uuid }}">{{ install.uuid }}</a>
+          <a href="/admin/host/{{  install.uuid }}">{{ install.uuid }}</a>
         </td>
         {% endif %}
+        <td>{{ install.status }}</td>
+        <td>{{ install.on_corp }}</td>
+        <td>{{ install.duration_seconds }}</td>
         <td>{{ install.mtime }}</td>
         <td>{{ install.mtime|timesince }}</td>
       </tr>
     {% endfor %}
   </table>
+  {% else %}
+    <p>No installs found.</p>
+  {% endif %}
+
+
+  {% if host_report %}
+    <h3>Apple SUS Installs</h3>
+    <p>
+    {{ applesus_installs|length }} Apple SUS installs found (limit {{ limit }}).
+    </p>
+
+   {% if applesus_installs %}
+      <table class="stats-table">
+        <tr class="multi-header">
+           <th>Package</th>
+           <th>Status</th>
+           <th>On Corp</th>
+           <th>Duration Secs</th>
+           <th>Time</th>
+           <th>Time Since</th>
+        </tr>
+        {% for install in applesus_installs %}
+          <tr class="{% cycle lbg,dbg %}">
+            <td><a href="/admin/installs?pkg={{ install.package }}"
+                >{{ install.package }}</a></td>
+            <td>{{ install.status }}</td>
+            <td>{{ install.on_corp }}</td>
+            <td>{{ install.duration_seconds }}</td>
+            <td>{{ install.mtime }}</td>
+            <td>{{ install.mtime|timesince }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p>No Apple SUS installs found for this host.</p>
+    {% endif %}
+  {% endif %}
 
   {% if next_page %}
-    <a href="/admin/stats/installs?pkg={{ pkg }}&page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin/installs?pkg={{ pkg }}&applesus={{ applesus }}&page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
 {% endif %}

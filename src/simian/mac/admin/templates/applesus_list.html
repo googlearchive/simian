@@ -1,0 +1,101 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Apple SUS Admin{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  <h2>Apple SUS Admin</h2>
+
+  {% if is_admin %}
+  <p>
+    Note: if other admins are changing tracks of below products, select box
+    state may be inaccurate until you refresh the page.
+  </p>
+  <h3>Regenerate Catalogs</h3>
+  {% if regenerated_catalogs %}
+    <p>Catalog regeneration in process!</p>
+  {% endif %}
+  <form method="POST">
+    <input type="hidden" name="regenerate-catalogs" value="1" />
+    {% for track in tracks reversed %}
+      {{ track }}<input type="checkbox" name="tracks" value="{{ track }}" />
+    {% endfor %}
+    <input type="submit" value="Regenerate Catalogs" />
+  </form>
+  <h3>Product List</h3>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       <th>Name</th><th>Version</th><th>Product ID</th><th>Apple Release</th>
+       <th>Testing Auto Promote Date</th><th>Stable Auto Promote Date</th>
+       <th>Manual Override</th>
+       {% for track in tracks reversed %}
+         <th>{{ track }}</th>
+       {% endfor %}
+       {% if is_admin %}
+         <th>Change Status</th>
+       {% endif %}
+    </tr>
+    {% for p in products %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.version }}</td>
+        <td><a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');">{{ p.product_id }}</a></td>
+        <td>{{ p.apple_mtime }}</td>
+        <td><span id="{{ p.product_id }}-testing-promote-date">
+          {{ p.testing_promote_date }}</span>
+        </td>
+        <td><span id="{{ p.product_id }}-stable-promote-date">
+          {{ p.stable_promote_date }}</span>
+        </td>
+        {% if is_admin %}
+          <td>
+            {% if p.manual_override %}
+              <input type="checkbox" class="manual-override-checkbox"
+                name="{{ p.product_id }}" checked="checked" />
+            {% else %}
+              <input type="checkbox" class="manual-override-checkbox"
+                name="{{ p.product_id }}" />
+            {% endif %}
+          </td>
+        {% else %}
+          <td>{{ p.manual_override }}</td>
+        {% endif %}
+
+        {% if is_admin %}
+          {% for track in tracks reversed %}
+            <td>
+            {% if track in p.tracks %}
+              <input type="checkbox" class="track-checkbox"
+                     name="{{ p.product_id }}" value="{{ track }}"
+                     checked="checked" />
+            {% else %}
+              <input type="checkbox" class="track-checkbox"
+                     name="{{ p.product_id }}" value="{{ track }}" />
+            {% endif %}
+            </td>
+          {% endfor %}
+          <td><span id='{{ p.product_id }}-change-status'></span></td>
+        {% else %}
+          {% for track in tracks reversed %}
+            {% if track in p.tracks %}
+              <td>YES</td>
+            {% else %}
+              <td>NO</td>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </tr>
+    {% endfor %}
+  </table>
+
+</div>
+
+{% if is_admin %}
+  <script type="text/javascript">
+    applesus.registerCheckboxes();
+  </script>
+{% endif %}
+
+{% endblock %}

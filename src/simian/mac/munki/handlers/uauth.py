@@ -27,7 +27,7 @@ from simian.auth import base
 from simian.auth import gaeserver
 from simian.auth import settings as auth_settings
 from simian.mac.munki import handlers
-
+from simian.mac.common import auth
 
 class Error(Exception):
   """Base error."""
@@ -46,17 +46,17 @@ class UserAuth(handlers.AuthenticationHandler, webapp.RequestHandler):
     try:
       # already munki authenticated?  return, nothing to do.
       gaeserver.DoMunkiAuth()
-      logging.info('Uauth: session is already authenticated')
+      #logging.info('Uauth: session is already authenticated')
       return
     except gaeserver.NotAuthenticated:
       pass
 
     user = users.get_current_user()
     if not user:
-      logging.error('Uauth: user is not logged in')
+      #logging.error('Uauth: user is not logged in')
       raise NotAuthenticated
-    # TODO(user): replace with Orgstore group lookup
-    if user.email() not in settings.ADMINS:
+
+    if not auth.IsAdminUser(user.email()):
       logging.error('Uauth: user %s is not an admin', user.email())
       raise NotAuthenticated
 
@@ -65,18 +65,19 @@ class UserAuth(handlers.AuthenticationHandler, webapp.RequestHandler):
         user.email(), level=gaeserver.LEVEL_ADMIN)
 
     if output:
-      logging.info('Uauth: success, token = %s', output)
+      #logging.info('Uauth: success, token = %s', output)
       self.response.headers['Set-Cookie'] = '%s=%s; secure; httponly;' % (
           auth_settings.AUTH_TOKEN_COOKIE, output)
       self.response.out.write(auth_settings.AUTH_TOKEN_COOKIE)
     else:
-      logging.info('Uauth: unknown token')
+      #logging.info('Uauth: unknown token')
       raise NotAuthenticated
 
   def post(self):
     """Handle POST.
 
-    Because appengine_rpc, used by simian.client.UAuth uses POST method,
-    define this handler which mirrors the functionaly of GET.
+    Because the appengine_rpc module, used by simian.client.UAuth class, uses
+    the POST http method, define this handler which mirrors the functionaly
+    of the GET method.
     """
     return self.get()

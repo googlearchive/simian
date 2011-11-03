@@ -45,14 +45,15 @@ class DeletePackage(handlers.AuthenticationHandler, webapp.RequestHandler):
     filename = self.request.get('filename')
     pkginfo = models.PackageInfo.get_by_key_name(filename)
     if not pkginfo:
-      self.response.set_status(404, 'Pkginfo does not exist: %s' % filename)
+      self.response.set_status(404)
+      self.response.out.write('Pkginfo does not exist: %s' % filename)
       return
 
     plist = pkginfo.plist
     catalogs = pkginfo.catalogs
     install_types = pkginfo.install_types
 
-    logging.debug('Deleting package: %s', filename)
+    #logging.info('Deleting package: %s', filename)
     blobstore_key = pkginfo.blobstore_key
     # Delete the PackageInfo entity, and then the package Blobstore entity.
     pkginfo.delete()
@@ -68,5 +69,5 @@ class DeletePackage(handlers.AuthenticationHandler, webapp.RequestHandler):
         install_types=install_types, plist=plist)
     admin_log.put()
 
-    logging.debug(
-        'PackageInfo and Package Blob deleted successfully: %s', filename)
+    #logging.info(
+    #    'PackageInfo and Package Blob deleted successfully: %s', filename)

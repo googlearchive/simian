@@ -20,6 +20,7 @@ def main():
   details = 'Facter Return Code: %s\n\nStdOut: %s\n\nStdErr%s' % (
       return_code, stdout, stderr)
 
+
   flight_common.PostReportToServer(
       'broken_client', {'details': details}, login=True)
   print 'Reported broken client to server.'

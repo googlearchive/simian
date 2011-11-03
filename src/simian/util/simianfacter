@@ -6,15 +6,19 @@
 
 
 import subprocess
-import ConfigParser
+from simian import settings
 
 
-CONFIG_FILE = '/etc/simian/simian.cfg'
-SECTION = 'config'
-CONFIG_NAMES = [
-    'certname', 'primary_user', 'hostname', 'configtrack', 'simiantrack',
-    'site', 'location', 'applesus',
-]
+SETTINGS_FACTER = {
+    'certname': settings.CERTNAME,
+    'primary_user': settings.PRIMARY_USER,
+    'sp_local_host_name': settings.HOSTNAME,
+    'configtrack': settings.CONFIGTRACK,
+    'simiantrack': settings.SIMIANTRACK,
+    'site': settings.SITE,
+    'location': settings.LOCATION,
+    'applesus': settings.APPLESUS,
+}
 
 
 def Exec(cmd):
@@ -58,30 +62,15 @@ def GetFacterFacts():
   return facts
 
 
-def GetSimianConfigs():
-  """Return a dictionary of Simian configurations."""
-  c = ConfigParser.ConfigParser()
-  c.read(CONFIG_FILE)
-
-  config_values = {}
-  for name in CONFIG_NAMES:
-    try:
-      config_values[name] = c.get(SECTION, name)
-    except ConfigParser.NoOptionError:
-      config_values[name] = ''
-  return config_values
-
-
 def main():
   facts = GetFacterFacts()
-  configs = GetSimianConfigs()
   # place Simian configs where facter is lacking (may be 100%).
-  for name in CONFIG_NAMES:
+  for name in SETTINGS_FACTER:
     if name not in facts:
-      facts[name] = configs[name]
+      facts[name] = SETTINGS_FACTER[name]
   print """certname => %(certname)s
 primary_user => %(primary_user)s
-sp_local_host_name => %(hostname)s
+sp_local_host_name => %(sp_local_host_name)s
 configtrack => %(configtrack)s
 simiantrack => %(simiantrack)s
 site => %(site)s

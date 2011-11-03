@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion='1'>
+    <script>
+var	KeynotePath			= "/Applications/iWork '09/Keynote.app";
+var KeynoteMinVersion	= "5.0";
+var KeynoteMaxVersion	= "5.0.5";
+
+var	PagesPath			= "/Applications/iWork '09/Pages.app";
+var PagesMinVersion		= "4.0";
+var PagesMaxVersion		= "4.0.5";
+
+var	NumbersPath			= "/Applications/iWork '09/Numbers.app";
+var NumbersMinVersion	= "2.0";
+var NumbersMaxVersion	= "2.0.5";
+</script>
+    <!-- Installer UI-ey stuff -->
+    <title>SU_TITLE</title>
+    <welcome file="Welcome.rtf"/>
+    <license auto='false' file="License.rtf" sla="EA0501"/>
+    <background file="background.tif" scaling="proportional" alignment="upperleft"/>
+    <options customize="never" rootVolumeOnly="true" hostArchitectures='ppc,i386'/>
+    <platforms>
+        <client arch="i386,ppc"/>
+        <server arch="i386,ppc"/>
+    </platforms>
+    <!-- Manual Install package layout -->
+    <choices-outline>
+        <line choice='manual'/>
+    </choices-outline>
+    <choice id='manual'>
+        <pkg-ref auth='Root' id='manual'>.</pkg-ref>
+    </choice>
+    <choice id='manual' title='MANUAL_TITLE' versStr='SU_VERS'/>
+    <!-- Software Update package layout -->
+    <choices-outline ui='SoftwareUpdate'>
+        <line choice='su'/>
+    </choices-outline>
+    <choice id='su' visible='visibleCheck()' start_selected='true' suDisabledGroupID='iWork0905' title='SU_TITLE' versStr='SU_VERS' description='SU_DESCRIPTION' description-mime-type='text/html' secondaryDescription='SU_SERVERCOMMENT'>
+        <pkg-ref auth='Root' id='auto'>iWork_9.0.5_Update.pkg</pkg-ref>
+    </choice>
+    <!-- Installer logic -->
+    <installation-check script="InstallationCheck()"/>
+    <script>
+	function visibleCheck()
+	{
+		return (needsUpdate(KeynotePath,KeynoteMinVersion,KeynoteMaxVersion) &amp;&amp;
+				needsUpdate(NumbersPath,NumbersMinVersion,NumbersMaxVersion) &amp;&amp;
+				needsUpdate(PagesPath,PagesMinVersion,PagesMaxVersion));
+	}
+
+	function InstallationCheck()
+	{
+		return (hasGoodSSW() &amp;&amp; 
+				canHasUpdateWithErrors(KeynotePath,KeynoteMinVersion,KeynoteMaxVersion,'noKeynoteToUpdate','keynoteIsDowngrade') &amp;&amp;
+				canHasUpdateWithErrors(PagesPath,PagesMinVersion,PagesMaxVersion,'noPagesToUpdate','pagesIsDowngrade') &amp;&amp;
+				canHasUpdateWithErrors(NumbersPath,NumbersMinVersion,NumbersMaxVersion,'noNumbersToUpdate','numbersIsDowngrade')
+				);
+	}
+
+	function hasGoodSSW()
+	{
+		var sysVersion = system.version;
+		
+		if (1 == system.compareVersions("10.5.6",sysVersion.ProductVersion))
+		{
+			my.result.message = system.localizedStringWithFormat('systemTooOld');
+			my.result.type = 'Fatal';
+			return false;
+		}
+
+		return true;
+	}
+
+	function canHasUpdateWithErrors(bundlePath, minVersionString, maxVersionString, minErrString, maxErrString)
+	{
+		if( system.files.fileExistsAtPath(bundlePath) )
+		{
+			if (system.compareVersions(PathGetShortVersion(bundlePath),minVersionString) == -1)
+			{
+				my.result.message = system.localizedStringWithFormat(minErrString);
+				my.result.type = 'Fatal';
+				return false;
+			}
+			
+			if (system.compareVersions(PathGetShortVersion(bundlePath),maxVersionString) == 1)
+			{
+				my.result.message = system.localizedStringWithFormat(maxErrString);
+				my.result.type = 'Fatal';
+				return false;
+			}
+			
+			return true;
+		}
+
+		my.result.message = system.localizedStringWithFormat(minErrString);
+		my.result.type = 'Fatal';
+		return false;
+	}
+
+	function canHasUpdate(bundlePath, minVersionString, maxVersionString)
+	{
+		return ((system.compareVersions(PathGetShortVersion(bundlePath),minVersionString) >= 0)  &amp;&amp;
+				(system.compareVersions(PathGetShortVersion(bundlePath),maxVersionString) &lt;= 0));
+	}
+
+	function needsUpdate(bundlePath, minVersionString, maxVersionString)
+	{
+		return ((system.compareVersions(PathGetShortVersion(bundlePath),minVersionString) >= 0)  &amp;&amp;
+				(system.compareVersions(PathGetShortVersion(bundlePath),maxVersionString) &lt; 0));
+	}
+	</script>
+    <!-- Common include -->
+    <script>
+	
+	function PathGetShortVersion(path)
+	{
+		var bundle = system.files.bundleAtPath(path);
+		if (bundle == null)
+			return null;
+		var shortVers = bundle.CFBundleShortVersionString;
+		shortVers = _PadVersionString(shortVers, 3);
+		return shortVers;
+	}
+
+	function _PadVersionString(version, tupleCount)
+	{
+		if (version == null)
+			version = "0";
+		var components = version.split(".");
+		if (components.length > tupleCount)
+			components = components.slice(0, tupleCount);
+		else
+			for (; components.length&lt;tupleCount; )
+				components.push("0");
+		return components.join(".");
+	}
+
+	function BundleGetCompositeVersion5(bundle)
+	{
+		if (bundle == null)
+			return null;
+		var shortVers = bundle.CFBundleShortVersionString;
+		shortVers = _PadVersionString(shortVers, 3);
+		var sourceVers = bundle.SourceVersion;
+		sourceVers = _PadVersionString(sourceVers, 1);
+		var buildVers = bundle.BuildVersion;
+		buildVers = _PadVersionString(buildVers, 1);
+		var fiveTupleVers = shortVers + "." + sourceVers + "." + buildVers;
+		return fiveTupleVers;
+	}
+
+	function CheckNameRegistry(path, property, value)
+	{
+		try
+		{
+			var obj = system.ioregistry.fromPath(path);
+			if (obj == null)
+				return false;
+
+			var propObj = obj[property];
+			if (propObj == null)
+				return false;
+
+			if (typeof(propObj) == "string")	// string
+			{
+				return (propObj == value);
+			}
+			else if (typeof(propObj) == "object")	// array contains
+			{
+				for (var i=0; i&lt;propObj.length; i++)
+					if (propObj[i] == value)
+						return true;
+			}
+		}
+		catch (e) {}
+
+		return false;
+	}
+	</script>
+    <localization>
+        <strings language="English"><![CDATA["SU_TITLE" = "iWork Update 5";
+"SU_VERS" = "9.0.5";
+"SU_SERVERCOMMENT" = "For Desktop and Server systems.";
+
+"SU_DESCRIPTION"='I am the description.
+I have been replaced, though.
+';
+]]></strings>
+    </localization>
+</installer-gui-script>

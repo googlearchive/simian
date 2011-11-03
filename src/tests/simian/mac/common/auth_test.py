@@ -42,24 +42,111 @@ class AuthModuleTest(mox.MoxTestBase):
 
   def testDoUserAuth(self):
     self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
 
-    user = 'joe'
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
     auth.users.get_current_user().AndReturn(None)  # 1
-    auth.users.get_current_user().AndReturn(user) # 2
-    auth.users.get_current_user().AndReturn(user) # 3
-    auth.users.is_current_user_admin().AndReturn(True)  # 3
-    auth.users.get_current_user().AndReturn(user)  # 4
-    auth.users.is_current_user_admin().AndReturn(True)  # 4
+    auth.users.get_current_user().AndReturn(mock_user) # 2
+    auth.users.get_current_user().AndReturn(mock_user) # 3
+    mock_user.email().AndReturn(email)
+    auth.IsAdminUser(email).AndReturn(True)
+    auth.users.get_current_user().AndReturn(mock_user)  # 4
+    mock_user.email().AndReturn(email)
+    auth.IsAdminUser(email).AndReturn(False)
 
     self.mox.ReplayAll()
     # 1
     self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
     # 2
-    self.assertEqual(user, auth.DoUserAuth())
+    self.assertEqual(mock_user, auth.DoUserAuth())
     # 3
     auth.DoUserAuth(is_admin=True)
     # 4
-    self.assertRaises(auth.IsAdminMismatch, auth.DoUserAuth, is_admin=False)
+    self.assertRaises(auth.IsAdminMismatch, auth.DoUserAuth, is_admin=True)
+    self.mox.VerifyAll()
+
+  def testDoOAuthAuthSuccessSettings(self):
+    """Test DoOAuthAuth() with success, where user is in settings file."""
+    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+
+    mock_user = self.mox.CreateMockAnything()
+    mock_oauth_users = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.settings.OAUTH_USERS = [email]
+
+    auth.oauth.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+
+    self.mox.ReplayAll()
+    auth.DoOAuthAuth()
+    self.mox.VerifyAll()
+
+  def testDoOAuthAuthSuccess(self):
+    """Test DoOAuthAuth() with success, where user is in KeyValueCache."""
+    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.settings.OAUTH_USERS = []
+    oauth_users = [email]
+
+    auth.oauth.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+    auth.IsAdminUser(email).AndReturn(True)
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'oauth_users', 'text_value').AndReturn(oauth_users)
+    auth.util.Deserialize(oauth_users).AndReturn(oauth_users)
+
+    self.mox.ReplayAll()
+    auth.DoOAuthAuth(is_admin=True)
+    self.mox.VerifyAll()
+
+  def testDoOAuthAuthOAuthNotUsed(self):
+    """Test DoOAuthAuth() where OAuth was not used at all."""
+    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+
+    auth.oauth.get_current_user().AndRaise(auth.oauth.OAuthRequestError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
+    self.mox.VerifyAll()
+
+  def testDoOAuthAuthAdminMismatch(self):
+    """Test DoOAuthAuth(is_admin=True) where user is not admin."""
+    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+
+    auth.oauth.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+    auth.IsAdminUser(email).AndReturn(False)
+
+    self.mox.ReplayAll()
+    self.assertRaises(auth.IsAdminMismatch, auth.DoOAuthAuth, is_admin=True)
+    self.mox.VerifyAll()
+
+  def testDoOAuthAuthWhereNotValidOAuthUser(self):
+    """Test DoOAuthAuth() where oauth user is not authorized."""
+    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.settings.OAUTH_USERS = []
+
+    auth.oauth.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'oauth_users', 'text_value').AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
     self.mox.VerifyAll()
 
   def testDoAnyAuth(self):
@@ -97,6 +184,135 @@ class AuthModuleTest(mox.MoxTestBase):
         auth.NotAuthenticated,
         auth.DoAnyAuth, is_admin=is_admin, require_level=require_level)
 
+    self.mox.VerifyAll()
+
+
+# Unit test for AdminUser
+  def testIsAdminUserWhenSettings(self):
+    """Test IsAdminUser()."""
+    admins_list = ['admin1@example.com', 'admin2@example.com']
+    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser(admins_list[0]))
+    self.mox.VerifyAll()
+
+  def testIsAdminUserWhenSettingsWithNoPassedEmail(self):
+    """Test IsAdminUser()."""
+    email = 'foouser@example.com'
+    admins_list = [email, 'admin2@example.com']
+    mock_user = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser())
+    self.mox.VerifyAll()
+
+  def testIsAdminUserWhenAEAdminUser(self):
+    """Test IsAdminUser()."""
+    admin_user = 'admin3@example.com'
+    admins_list = ['admin1@example.com', 'admin2@example.com']
+
+    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
+    mock_user = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(admin_user)
+    auth.users.is_current_user_admin().AndReturn(True)
+
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser(admin_user))
+    self.mox.VerifyAll()
+
+  def testIsAdminUserWhenLiveConfigAdminUser(self):
+    """Test IsAdminUser()."""
+    admin_user = 'admin4@example.com'
+    admins_list = ['admin1@example.com', 'admin2@example.com']
+
+    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.get_current_user().AndReturn(None)
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'admins', 'text_value').AndReturn('admins serialized')
+    auth.util.Deserialize('admins serialized').AndReturn([admin_user])
+
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser(admin_user))
+    self.mox.VerifyAll()
+
+  def testIsAdminUserWhenNotAdmin(self):
+    """Test IsAdminUser()."""
+    admin_user = 'admin5@example.com'
+    admins_list = ['admin1@example.com', 'admin2@example.com']
+
+    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.get_current_user().AndReturn(None)
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'admins', 'text_value').AndReturn('admins serialized')
+    auth.util.Deserialize('admins serialized').AndReturn(admins_list)
+
+    self.mox.ReplayAll()
+    self.assertFalse(auth.IsAdminUser(admin_user))
+    self.mox.VerifyAll()
+
+# Unit test for SupportStaff
+  def testIsSupportStaffWhenSettings(self):
+    """Test IsSupportStaff()."""
+    support_list = ['support1@example.com', 'support2@example.com']
+    self.stubs.Set(auth.settings, 'SUPPORT_STAFF', support_list)
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsSupportStaff(support_list[0]))
+    self.mox.VerifyAll()
+
+  def testIsSupportStaffWhenSettingsWithNoPassedEmail(self):
+    """Test IsSupportStaff()."""
+    email = 'foouser@example.com'
+    support_list = [email, 'support2@example.com']
+    mock_user = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+    self.stubs.Set(auth.settings, 'SUPPORT_STAFF', support_list)
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsSupportStaff())
+    self.mox.VerifyAll()
+
+  def testIsSupportStaffWhenLiveConfigAdminUser(self):
+    """Test IsSupportStaff()."""
+    support_user = 'support4@example.com'
+    support_list = ['support1@example.com', 'support2@example.com']
+
+    self.mox.StubOutWithMock(auth, 'users')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'support_staff', 'text_value').AndReturn('support staff serialized')
+    auth.util.Deserialize('support staff serialized').AndReturn([support_user])
+
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsSupportStaff(support_user))
+    self.mox.VerifyAll()
+
+  def testIsSupportStaffWhenNotAdmin(self):
+    """Test IsSupportStaff()."""
+    support_user = 'support5@example.com'
+    support_list = ['support1@example.com', 'support2@example.com']
+
+    self.mox.StubOutWithMock(auth, 'users')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'support_staff', 'text_value').AndReturn('support staff serialized')
+    auth.util.Deserialize('support staff serialized').AndReturn(support_list)
+
+    self.mox.ReplayAll()
+    self.assertFalse(auth.IsSupportStaff(support_user))
     self.mox.VerifyAll()
 
 

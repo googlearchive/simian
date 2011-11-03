@@ -2,147 +2,22 @@
 <html lang="en">
   <head>
   <title>Simian Stats: {% block title %}{% endblock %}</title>
-  <!-- TODO: move css to external (compiled) stylesheet and include in build -->
-  <style>
-  body {
-    margin: 0;
-    padding: 0;
-    font-family: Helvetica, Arial, Helvetica, sans-serif;
-    font-size: .8125em;
-    background-color: rgba(0, 0, 0, .1);
-  }
-
-  header {
-    display: block;
-    color: #888;
-    text-shadow: #fff 1px 1px 0;
-    font-weight: bold;
-    background-color: #f1f1f1;
-    background-image: -moz-linear-gradient(top, #f1f1f1, #fcfcfc);
-    background-image: -webkit-gradient(linear,left top,left bottom,color-stop(0, #f1f1f1),color-stop(1, #fcfcfc));
-    background-image: linear-gradient(top, #f1f1f1, #fcfcfc);
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorStr='#f1f1f1', EndColorStr='#fcfcfc');
-    -moz-box-shadow: 0 2px 3px #888;
-    -webkit-box-shadow: 0 2px 3px #888;
-    box-shadow: 0 2px 3px #888;
-    padding: 1em;
-  }
-
-  header h1 {
-    margin: 0;
-    padding: .25em 0;
-  }
-
-  .column {
-    float: left;
-    margin-right: 2em;
-  }
-
-  .wrap {
-    padding: .25em 1em;
-  }
-  .stats-table {
-    border-collapse: collapse;
-    -webkit-border-radius: 4px;
-    -moz-border-radius: 4px;
-    border-radius: 4px;
-    background-color: rgba(255, 255, 255, 1.0);
-    -moz-box-shadow: 0px 0px 5px #888;
-    -webkit-box-shadow: 0px 0px 5px #888;
-    box-shadow: 0px 0px 5px #888;
-    margin: 1em;
-    min-width: 200px;
-  }
-
-  .stats-table th {
-    color: rgb(255, 255, 255);
-    font-weight: bold;
-    line-height: 2.5em;
-    padding: 0 .25em;
-    background-color: #444444;
-    background-image: -moz-linear-gradient(top, #444444, #777777);
-    background-image: -webkit-gradient(linear,left top,left bottom,color-stop(0, #444444),color-stop(1, #777777));
-    background-image: linear-gradient(top, #444444, #777777);
-    filter: progid:DXImageTransform.Microsoft.gradient(startColorStr='#444444', EndColorStr='#777777');
-    text-shadow: rgba(0, 0, 0, .8) 1px 1px 1px;
-    -webkit-border-radius: 4px 4px 0 0;
-    -moz-border-radius: 4px 4px 0 0;
-    border-radius: 4px 4px 0 0;
-  }
-
-  .stats-table th.subhead {
-    -webkit-border-radius: 0;
-    -moz-border-radius: 0;
-    border-radius: 0;
-    background-color: rgba(0, 0, 0, .5);
-    background-image: none;
-    line-height: 2em;
-    text-align: left;
-    padding: 0 .25em;
-  }
-  tr.multi-header th {
-    -webkit-border-radius: 0;
-    -moz-border-radius: 0;
-    border-radius: 0;
-    text-align: left;
-    padding: 0 .5em;
-  }
-  tr.multi-header th:first-child {
-    -webkit-border-radius: 4px 0 0 0 !important;
-    -moz-border-radius: 4px 0 0 0 !important;
-    border-radius: 4px 0 0 0 !important;
-  }
-  tr.multi-header th:last-child {
-    -webkit-border-radius: 0 4px 0 0 !important;
-    -moz-border-radius: 0 4px 0 0 !important;
-    border-radius: 0 4px 0 0 !important;
-  }
-  .stats-table td {
-    margin: .25em;
-    padding: .5em;
-  }
-
-  .last-cached,
-  .realtime {
-    padding: 0;
-    margin: .75em 0 0 0;
-    font-weight: normal;
-    color: rgba(0, 0, 0, .5);
-  }
-  .clients-by-site {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    counter-reset: column;
-  }
-  .clients-by-site li {
-    display: inline-block;
-    width: 90px;
-    line-height: 1.2em;
-  }
-  .lbg {
-    background-color: rgb(255, 255, 255);
-  }
-  .dbg {
-    background-color: rgb(249, 249, 249);
-  }
-  </style>
+  <link href="/admin/static/base.css" rel="stylesheet" type="text/css" />
+  <script type="text/javascript" src="/admin/static/base.js"></script>
+  {% block head-content %}{% endblock %}
   </head>
 <body>
   {% block header %}
     <header>
-      <h1>Simian Statistics Dashboard</h1>
-      {% block search %}
-      <div class="search">
-        <form>
-          <label for="owner">Username:<input type="radio" name="type" value="owner" id="owner" checked="checked" /></label> |
-          <label for="hostname">Hostname:<input type="radio" name="type" value="hostname" id="hostname" /></label> |
-          <label for="uuid">UUID:<input type="radio" name="type" value="uuid" id="uuid" /></label>
-          Value: <input type="text" name="filter" />
-          <input type="submit" value="Search" />
-        </form>
-      </div>
-      {% endblock %}
+      <span class="title"><a href="/admin">Simian Statistics Dashboard</a></span>
+      <form class="search" action="/admin" method="GET">
+        <label for="owner">Username:<input type="radio" name="type" value="owner" id="owner" checked="checked" /></label> |
+        <label for="hostname">Hostname:<input type="radio" name="type" value="hostname" id="hostname" /></label> |
+        <label for="serial">Serial:<input type="radio" name="type" value="serial" id="serial" /></label> |
+        <label for="uuid">UUID:<input type="radio" name="type" value="uuid" id="uuid" /></label>
+        Value: <input type="text" name="filter" id="search-box" />
+        <input type="submit" value="Search" />
+      </form>
     </header>
   {% endblock %}
   {% block page-content %}{% endblock %}

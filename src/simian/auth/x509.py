@@ -40,6 +40,7 @@ import pyasn1
 import pyasn1.error
 from pyasn1.codec.der import decoder as der_decoder
 from pyasn1.codec.der import encoder as der_encoder
+from pyasn1.type import univ
 import pyasn1.type.useful
 import tlslite
 import tlslite.X509
@@ -223,6 +224,17 @@ class X509Certificate(BaseDataObject):
     d = datetime.datetime(*t)
     return d
 
+  def _FindOctetStrings(self, values):
+    """Filters a list to contain only OctetString type values.
+
+    Args:
+      values: A list that should contain OctetString(s).
+    Returns:
+      list of der_encoder.univ.OctetString
+    """
+    return [x for x in values if isinstance(x, univ.OctetString)]
+
+
   def _GetV3ExtensionFieldsFromSequence(self, seq):
     """Get X509 V3 extension fields from a sequence.
 
@@ -277,14 +289,10 @@ class X509Certificate(BaseDataObject):
         #     encapsulated Sequence ( Boolean = True )
         # )
 
-        if len(values) == 1:      # case 1
-          to_decode = values[0]
-        elif len(values) == 2:    # case 2 or 3,
-          to_decode = values[1]   # skip the bogus Boolean
-        else:
+        octet_strings = self._FindOctetStrings(values)
+        if 1 < len(values) > 2:
           raise CertificateParseError('X509V3 Multiple CA/Paths')
-
-        encaps_seq = der_decoder.decode(to_decode)
+        encaps_seq = der_decoder.decode(octet_strings[0])
 
         if len(encaps_seq):  # not case 2?
           if len(encaps_seq[1]):
@@ -298,13 +306,14 @@ class X509Certificate(BaseDataObject):
             output['may_act_as_ca'] = True
 
       elif oid == OID_X509V3_KEY_USAGE:
+        octet_strings = self._FindOctetStrings(values)
         # NOTE(user):
         # unbelievably this is a BitString inside of a OctetString.
         # quick sanity check to look for ASN1 type field:
-        if values[0][0] != '\x03':  # ASN1 type for BitString
+        if octet_strings[0][0] != '\x03':  # ASN1 type for BitString
           raise CertificateParseError('X509V3 Key Usage encoding')
 
-        encaps_bitstr = der_decoder.decode(values[0])[0]
+        encaps_bitstr = der_decoder.decode(octet_strings[0])[0]
         n = 0
         while n < len(encaps_bitstr):
           if encaps_bitstr[n]:
@@ -312,11 +321,14 @@ class X509Certificate(BaseDataObject):
           n += 1
 
       elif oid == OID_X509V3_SUBJECT_ALT_NAME:
+        octet_strings = self._FindOctetStrings(values)
         # NOTE(user): this is a Sequence inside an OctetString
-        if values[0][0] != '\x30':   # ASN1 type for Sequence
+        if octet_strings[0][0] != '\x30':   # ASN1 type for Sequence
           raise CertificateParseError('X509V3 Subject Alt Name encoding')
 
-        encaps_seq = der_decoder.decode(values[0])[0]
+        encaps_seq = der_decoder.decode(octet_strings[0])[0]
+        if not encaps_seq:
+          continue
 
         if encaps_seq[0] == OID_MS_NT_PRINCIPAL_NAME:
           # NOTE(user): the following name X_MS_*= is not a
@@ -679,14 +691,10 @@ def LoadCertificateFromPEM(s):
     s: str, certificate in PEM format, including newlines
   Returns:
     X509Certificate object
+  Raises:
+    CertificatePEMFormatError: When the certificate cannot be loaded.
   """
-  lines = s.split('\n')
-
-  while lines[0] == '':
-    del(lines[0])
-
-  while lines[-1] == '':
-    del(lines[-1])
+  lines = s.strip().split('\n')
 
   if lines[0] != '-----BEGIN CERTIFICATE-----':
     raise CertificatePEMFormatError('Missing begin certificate header')

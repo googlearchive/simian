@@ -71,11 +71,11 @@ class RequestHandlerTest(TestBase):
 
   def GetTestClassInstance(self):
     """Return the test class instance."""
-    raise NotImplemented('Must implement GetTestClassInstance')
+    raise NotImplementedError('Must implement GetTestClassInstance')
 
   def GetTestClassModule(self):
     """Return the module the test class is located in."""
-    raise NotImplemented('Must implement GetTestClassModule')
+    raise NotImplementedError('Must implement GetTestClassModule')
 
   def GetTestClassInstanceVariableName(self):
     """Return the name of the test class instance variable.
@@ -137,7 +137,7 @@ class RequestHandlerTest(TestBase):
     self.MockSelf('redirect')
     self._test.redirect(url).AndReturn(None)
 
-  def MockDoUserAuth(self, user=None, fail=False):
+  def MockDoUserAuth(self, user=None, is_admin=None, fail=False):
     """Mock calling auth.DoUserAuth().
 
     Args:
@@ -148,9 +148,36 @@ class RequestHandlerTest(TestBase):
       self.mox.StubOutWithMock(auth, 'DoUserAuth')
       self._set_mock['authDoUserAuth'] = 1
     if fail:
-      auth.DoUserAuth().AndRaise(auth.NotAuthenticated)
+      if is_admin is None:
+        auth.DoUserAuth().AndRaise(auth.NotAuthenticated)
+      else:
+        auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
     else:
-      auth.DoUserAuth().AndReturn(user)
+      if is_admin is None:
+        auth.DoUserAuth().AndReturn(user)
+      else:
+        auth.DoUserAuth(is_admin=is_admin).AndReturn(user)
+
+  def MockDoOAuthAuth(self, user=None, is_admin=None, fail=False):
+    """Mock calling auth.DoOAuthAuth().
+
+    Args:
+      user: user for DoOAuthAuth to return.
+      fail: bool, whether to fail or not
+    """
+    if not 'authDoOAuthAuth' in self._set_mock:
+      self.mox.StubOutWithMock(auth, 'DoOAuthAuth')
+      self._set_mock['authDoOAuthAuth'] = 1
+    if fail:
+      if is_admin is None:
+        auth.DoOAuthAuth().AndRaise(auth.NotAuthenticated)
+      else:
+        auth.DoOAuthAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
+    else:
+      if is_admin is None:
+        auth.DoOAuthAuth().AndReturn(user)
+      else:
+        auth.DoOAuthAuth(is_admin=is_admin).AndReturn(user)
 
   def MockDoMunkiAuth(self, fail=False, and_return=None, **kwargs):
     """Mock calling gaeserver.DoMunkiAuth().
@@ -162,7 +189,7 @@ class RequestHandlerTest(TestBase):
     """
     munki_auth_module = self.GetTestClassModule().gaeserver
     if not hasattr(munki_auth_module, 'DoMunkiAuth'):
-      raise NotImplemented('MockDoMunkiAuth for non-Munki handler class')
+      raise NotImplementedError('MockDoMunkiAuth for non-Munki handler class')
     if not 'authDoMunkiAuth' in self._set_mock:
       self.mox.StubOutWithMock(munki_auth_module, 'DoMunkiAuth')
       self._set_mock['authDoMunkiAuth'] = 1

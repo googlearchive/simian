@@ -59,7 +59,107 @@ class SimianCliClient(mox.MoxTestBase):
     self.assertEqual(type(self.mpcc.config), dict)
     self.assertEqual(self.mpcc.command, None)
 
-  #TODO(user):  Hopelessly out of date, need to add tests.
+  # TODO(user): This module needs a lot more tests.
+
+  def testEditPackageInfoWhenUpdatingManifests(self):
+    """Test EditPackageInfo() when updating manifests value."""
+    self.mox.StubOutWithMock(self.mpcc, 'ValidatePackageConfig')
+    self.mpcc.client = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(cli.plist, 'MunkiPackageInfoPlist')
+
+    filename = 'file.dmg'
+    filepath = '/path/to/%s' % filename
+    description = 'snark!'
+    display_name = None
+    manifests = ['unstable', 'testing', 'stable']
+    # catalogs this package is already in
+    pkg_catalogs = ['unstable', 'testing', 'stable']
+    catalogs = None
+    install_types = None
+    unattended_install = None
+    unattended_uninstall = None
+    sha256_hash = 'hash'
+    pkginfo_xml = 'xml'
+
+    mock_plist = self.mox.CreateMockAnything()
+
+    self.mpcc.config = {
+        'edit_pkginfo': None,
+    }
+
+    self.mpcc.ValidatePackageConfig(defaults=False).AndReturn((
+        filepath, description, display_name, manifests, catalogs,
+        install_types, unattended_install, unattended_uninstall))
+    self.mpcc.client.GetPackageInfo(filename, get_hash=True).AndReturn((
+        sha256_hash, pkginfo_xml))
+
+    cli.plist.MunkiPackageInfoPlist(pkginfo_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+
+    mock_plist.SetDescription(description).AndReturn(None)
+
+    mock_plist.GetContents().AndReturn({'catalogs': pkg_catalogs})
+
+    mock_plist.GetXml().AndReturn(pkginfo_xml)
+
+    cli.plist.MunkiPackageInfoPlist(pkginfo_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+
+    kwargs = {
+        'got_hash': sha256_hash,
+        'manifests': manifests,
+    }
+
+    self.mpcc.client.PutPackageInfo(filename, pkginfo_xml, **kwargs).AndReturn(
+        None)
+
+    self.mox.ReplayAll()
+    self.mpcc.EditPackageInfo()
+    self.mox.VerifyAll()
+
+  def testEditPackageInfoWhenUpdatingManifestsCatalogMismatch(self):
+    """Test EditPackageInfo() when updating manifests non-sync w catalogs. """
+    self.mox.StubOutWithMock(self.mpcc, 'ValidatePackageConfig')
+    self.mpcc.client = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(cli.plist, 'MunkiPackageInfoPlist')
+
+    filename = 'file.dmg'
+    filepath = '/path/to/%s' % filename
+    description = 'snark!'
+    display_name = None
+    manifests = ['stable']
+    # catalogs this package is already in
+    pkg_catalogs = ['unstable']
+    catalogs = None
+    install_types = None
+    unattended_install = None
+    unattended_uninstall = None
+    sha256_hash = 'hash'
+    pkginfo_xml = 'xml'
+
+    mock_plist = self.mox.CreateMockAnything()
+
+    self.mpcc.config = {
+        'edit_pkginfo': None,
+    }
+
+    self.mpcc.ValidatePackageConfig(defaults=False).AndReturn((
+        filepath, description, display_name, manifests, catalogs,
+        install_types, unattended_install, unattended_uninstall))
+    self.mpcc.client.GetPackageInfo(filename, get_hash=True).AndReturn((
+        sha256_hash, pkginfo_xml))
+
+    cli.plist.MunkiPackageInfoPlist(pkginfo_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+
+    mock_plist.SetDescription(description).AndReturn(None)
+
+    mock_plist.GetContents().AndReturn({'catalogs': pkg_catalogs})
+
+    self.mox.ReplayAll()
+    self.assertRaises(cli.CliError, self.mpcc.EditPackageInfo)
+    self.mox.VerifyAll()
+
 
 def main(unused_argv):
   basetest.main()

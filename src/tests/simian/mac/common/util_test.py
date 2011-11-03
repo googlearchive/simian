@@ -28,6 +28,57 @@ from simian.mac.common import util
 import socket
 import struct
 
+class DatetimeTest(mox.MoxTestBase):
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+    self.dt = util.Datetime
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testUtcFromTimestampInt(self):
+    """Tests utcfromtimestamp()."""
+    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    epoch = 1312818179
+    self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
+
+  def testUtcFromTimestampFloat(self):
+    """Tests utcfromtimestamp()."""
+    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    epoch = 1312818179.1415989
+    self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
+
+  def testUtcFromTimestampString(self):
+    """Tests utcfromtimestamp()."""
+    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    epoch = '1312818179.1415989'
+    self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
+
+  def testUtcFromTimestampNone(self):
+    """Tests utcfromtimestamp() with None as epoch time."""
+    self.assertRaises(ValueError, self.dt.utcfromtimestamp, None)
+
+  def testUtcFromTimestampInvalid(self):
+    """Tests utcfromtimestamp() with None as epoch time."""
+    self.assertRaises(ValueError, self.dt.utcfromtimestamp, 'zz')
+
+  def testUtcFromTimestampUnderOneHourInFuture(self):
+    """Tests utcfromtimestamp() with epoch under one hour in the future."""
+    epoch = util.time.time() + 600.0  # add ten minutes
+    self.assertRaises(
+        util.EpochFutureValueError, self.dt.utcfromtimestamp, epoch)
+
+  def testUtcFromTimestampOverOneHourInFuture(self):
+    """Tests utcfromtimestamp() with epoch over one hour in the future."""
+    epoch = util.time.time() + 4000.0  # add a bit more than 1 hour
+    self.assertRaises(
+        util.EpochExtremeFutureValueError,
+        self.dt.utcfromtimestamp, epoch)
+
+
 class UtilModuleTest(mox.MoxTestBase):
 
   def setUp(self):
@@ -47,7 +98,12 @@ class UtilModuleTest(mox.MoxTestBase):
       int in network byte order
     """
     i = struct.unpack('I', socket.inet_aton(ip_str))[0]
-    return socket.htonl(i)
+    i = socket.htonl(i)
+    # on python 2.5 socket.htonl() returns a signed int, on later versions
+    # python returns a python long type to return the number without sign.
+    if i < 0:
+      i = 4294967296L - (long(i) * -1)
+    return i
 
   def testIpToInt(self):
     """Test IpToInt()."""
@@ -106,29 +162,103 @@ class UtilModuleTest(mox.MoxTestBase):
           expected, util.IpMaskMatch(ip, ip_mask),
           '%s %s expected %s' % (ip, ip_mask, expected))
 
-  def testSerialize(self):
+  def testSerializePickle(self):
     """Test Serialize()."""
     self.mox.StubOutWithMock(util.pickle, 'dumps')
 
-    util.pickle.dumps('object').AndReturn('serial')
-    util.pickle.dumps('object').AndRaise(util.pickle.PicklingError)
+    util.pickle.dumps('object1').AndReturn('serial1')
+    util.pickle.dumps('object2').AndRaise(util.pickle.PicklingError)
 
     self.mox.ReplayAll()
-    self.assertEqual('serial', util.Serialize('object'))
-    self.assertRaises(util.SerializeError, util.Serialize, 'object')
+    self.assertEqual('serial1', util.Serialize(
+        'object1', _use_json=False, _use_pickle=True))
+    self.assertRaises(
+        util.SerializeError,
+        util.Serialize,
+        'object2', _use_json=False, _use_pickle=True)
     self.mox.VerifyAll()
-  
-  def testDeserialize(self):
+
+  def testDeserializePickle(self):
     """Test Deserialize()."""
     self.mox.StubOutWithMock(util.pickle, 'loads')
 
-    util.pickle.loads('serial').AndReturn('object')
-    util.pickle.loads('serial').AndRaise(util.pickle.UnpicklingError)
-    
+    util.pickle.loads('serial1').AndReturn('object1')
+    util.pickle.loads('serial2').AndRaise(util.pickle.UnpicklingError)
+
     self.mox.ReplayAll()
-    self.assertEqual('object', util.Deserialize('serial'))
-    self.assertRaises(util.DeserializeError, util.Deserialize, 'serial')
+    self.assertEqual('object1', util.Deserialize(
+        'serial1', _use_json=False, _use_pickle=True,
+        _pickle_re=util.re.compile('.')))
+    self.assertRaises(
+        util.DeserializeError,
+        util.Deserialize,
+        'serial2', _use_json=False, _use_pickle=True,
+        _pickle_re=util.re.compile('.'))
     self.mox.VerifyAll()
+
+  def testSerializeJson(self):
+    """Test Serialize()."""
+    self.mox.StubOutWithMock(util.json, 'dumps')
+
+    util.json.dumps('object1').AndReturn('serial1')
+    util.json.dumps('object2').AndRaise(TypeError)
+
+    self.mox.ReplayAll()
+    self.assertEqual('serial1', util.Serialize(
+        'object1', _use_json=True, _use_pickle=False))
+    self.assertRaises(
+        util.SerializeError,
+        util.Serialize,
+        'object2', _use_json=True, _use_pickle=False)
+    self.mox.VerifyAll()
+
+  def testDeserializeJson(self):
+    """Test Deserialize()."""
+    self.mox.StubOutWithMock(util.json, 'loads')
+
+    util.json.loads('serial1', parse_float=float).AndReturn('object1')
+    util.json.loads('serial2', parse_float=float).AndRaise(ValueError)
+
+    self.mox.ReplayAll()
+    self.assertEqual('object1', util.Deserialize(
+        'serial1', _use_json=True, _use_pickle=False))
+    self.assertRaises(
+        util.DeserializeError,
+        util.Deserialize,
+        'serial2', _use_json=True, _use_pickle=False)
+    self.mox.VerifyAll()
+
+  def testSerializeNoMethods(self):
+    """Test Serialize()."""
+    self.mox.ReplayAll()
+    self.assertRaises(
+        util.SerializeError,
+        util.Serialize,
+        'object', _use_json=False, _use_pickle=False)
+    self.mox.VerifyAll()
+
+  def testDeserializeUnknownFormat(self):
+    """Test Deserialize()."""
+    self.mox.ReplayAll()
+    self.assertRaises(
+        util.DeserializeError,
+        util.Deserialize,
+        'serial', _use_json=False, _use_pickle=False)
+    self.mox.VerifyAll()
+
+  def testDeserializeWhenNone(self):
+    """Test Deserialize()."""
+    self.mox.ReplayAll()
+    self.assertRaises(
+        util.DeserializeError,
+        util.Deserialize,
+        None, _use_json=True, _use_pickle=True)
+    self.mox.VerifyAll()
+
+  def testPickleDisabled(self):
+    """Test that pickle is disabled, per b/3387382."""
+    self.assertTrue(util.USE_JSON)
+    self.assertFalse(util.USE_PICKLE)
 
 
 def main(unused_argv):

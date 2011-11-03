@@ -31,7 +31,6 @@ from google.appengine.api import mail
 from google.appengine.api import memcache
 from google.appengine.ext import webapp
 from google.appengine.runtime import apiproxy_errors
-from google.appengine.ext.webapp.util import run_wsgi_app
 from simian import settings
 from simian.mac import models
 
@@ -44,6 +43,9 @@ class WelcomeEmail(webapp.RequestHandler):
 
   def get(self):
     """Handle GET"""
+    if not settings.SEND_WELCOME_EMAILS:
+      return
+
     office_launch = {}
     office_query = models.OfficeLaunch.all()
     for office in office_query:
@@ -65,19 +67,23 @@ class WelcomeEmail(webapp.RequestHandler):
         if not regex or not re.search(regex, c.office, re.IGNORECASE):
           continue
         owner_email = '%s@%s' % (c.owner, settings.EMAIL_DOMAIN)
-        logging.debug('Sending welcome email to %s.', owner_email)
+        #logging.debug('Sending welcome email to %s.', owner_email)
         # Email the user.
         m = mail.EmailMessage()
         m.body = settings.WELCOME_EMAIL_BODY % {
             'owner': c.owner, 'hostname': c.hostname}
         m.reply_to = settings.EMAIL_REPLY_TO
         m.sender = settings.EMAIL_SENDER
-        m.subject = settings.WELCOME_EMAIL_SUBJECT % c.hostname
+        try:
+          m.subject = settings.WELCOME_EMAIL_SUBJECT % c.hostname
+        except TypeError:
+          # admin omitted %s in the subject config, so just set static subject.
+          m.subject = settings.WELCOME_EMAIL_SUBJECT
         m.to = owner_email
         try:
           m.send()
         except apiproxy_errors.DeadlineExceededError:
-          logging.info('Email failed to send; skipping.')
+          #logging.info('Email failed to send; skipping.')
           continue
         # Update the WelcomeEmail entity so no further emails are sent.
         c.emailed = datetime.datetime.utcnow()
@@ -92,18 +98,3 @@ class WelcomeEmail(webapp.RequestHandler):
       memcache.set('welcome_email_cursor', query.cursor())
     else:
       memcache.delete('welcome_email_cursor')
-
-
-application = webapp.WSGIApplication([
-    (r'/cron/welcome_email$', WelcomeEmail),
-])
-
-
-def main():
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
-    logging.getLogger().setLevel(logging.DEBUG)
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()

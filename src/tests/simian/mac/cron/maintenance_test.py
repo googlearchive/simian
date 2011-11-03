@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""maintenance module tests."""
+"""maint module tests."""
 
 
 
@@ -23,72 +23,178 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
-from google.apputils import basetest
-import mox
-import stubout
-from simian.mac.cron import maintenance
+from simian.mac.common import test
+from simian.mac.cron import maintenance as maint
 
 
-class MaintenanceModuleTest(mox.MoxTestBase):
+class AuthSessionCleanupTest(test.RequestHandlerTest):
 
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
+  def GetTestClassInstance(self):
+    return maint.AuthSessionCleanup()
 
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
-
-class AuthSessionCleanupTest(mox.MoxTestBase):
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
+  def GetTestClassModule(self):
+    return maint
 
   def testGet(self):
     """Test get()."""
-    self.mox.StubOutWithMock(maintenance.gaeserver, 'AuthSessionSimianServer')
+    self.mox.StubOutWithMock(maint.gaeserver, 'AuthSessionSimianServer')
     mock_ps = self.mox.CreateMockAnything()
-    maintenance.gaeserver.AuthSessionSimianServer().AndReturn(mock_ps)
+    maint.gaeserver.AuthSessionSimianServer().AndReturn(mock_ps)
 
     mock_ps.ExpireAll().AndReturn(2)
 
-    asc = maintenance.AuthSessionCleanup()
     self.mox.ReplayAll()
-    asc.get()
+    self.c.get()
     self.mox.VerifyAll()
 
 
-class VerifyPackagesCleanupTest(mox.MoxTestBase):
+class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
 
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
+  def GetTestClassInstance(self):
+    return maint.UpdateAverageInstallDurations()
 
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
+  def GetTestClassModule(self):
+    return maint
+
+  def testGetUpdatedDescriptionExistingDescWithAvgDuration(self):
+    """Test _GetUpdatedDescription() with desc and avg duration text."""
+    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    old_desc = 'Foo Bar\n\n%s' % avg_duration_text % (5490, 120)
+    duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
+    expected_desc = 'Foo Bar\n\n%s' % avg_duration_text % (6523, 117)
+
+    new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
+    self.assertEqual(new_desc, expected_desc)
+
+  def testGetUpdatedDescriptionExistingDescWithoutAvgDuration(self):
+    """Test _GetUpdatedDescription() with desc lacking avg durations text."""
+    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    old_desc = 'Foo Bar'
+    duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
+    expected_desc = 'Foo Bar\n\n%s' % avg_duration_text % (6523, 117)
+
+    new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
+    self.assertEqual(new_desc, expected_desc)
+
+  def testGetUpdatedDescriptionEmpty(self):
+    """Test _GetUpdatedDescription() with an empty desc."""
+    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    old_desc = ''
+    duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
+    expected_desc = avg_duration_text % (6523, 117)
+
+    new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
+    self.assertEqual(new_desc, expected_desc)
+
+  def testParsePackageInfoPlist(self):
+    """Test _ParsePackageInfoPlist()."""
+    plist_xml = 'fooxml'
+    self.mox.StubOutWithMock(maint.plist, 'MunkiPackageInfoPlist')
+    mock_plist = self.mox.CreateMockAnything()
+    maint.plist.MunkiPackageInfoPlist(plist_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+
+    self.mox.ReplayAll()
+    ret = self.c._ParsePackageInfoPlist(plist_xml)
+    self.assertEqual(ret, mock_plist)
+    self.mox.VerifyAll()
+
+  def testParsePackageInfoPlistError(self):
+    """Test _ParsePackageInfoPlist()."""
+    plist_xml = 'plist'
+    self.mox.StubOutWithMock(maint.plist, 'MunkiPackageInfoPlist')
+    mock_plist = self.mox.CreateMockAnything()
+    maint.plist.MunkiPackageInfoPlist(plist_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndRaise(maint.plist.Error)
+
+    self.mox.ReplayAll()
+    ret = self.c._ParsePackageInfoPlist(plist_xml)
+    self.assertEqual(ret, None)
+    self.mox.VerifyAll()
+
+  def testGet(self):
+    """Test get()."""
+    pkginfo1 = self.mox.CreateMockAnything()
+    pkginfo1.name = 'name1'
+    pkginfo1.filename = 'filename1'
+    pkginfo1.plist = 'plist1'
+    pkginfo1.version = '1.2.3'
+    pkg1_munki_name = '%s-%s' % (pkginfo1.name, pkginfo1.version)
+    pkginfo1.munki_name = pkg1_munki_name
+    pkg1_desc = 'This pkg is cool!'
+    pkg1_desc_updated = 'This pkg is cool!\n\nAvg foo!'
+    pkg1_lock = 'pkgsinfo_%s' % pkginfo1.filename
+    mock_pl1 = self.mox.CreateMockAnything()
+
+    pkginfos = [pkginfo1]
+
+    catalog1 = self.mox.CreateMockAnything()
+    catalog1.name = 'cat1'
+    catalogs = [catalog1]
+
+    install_counts = {
+        pkg1_munki_name: {
+            'install_count': 3,
+            'applesus': True,
+            'duration_count': 2,
+            'duration_total_seconds': 50,
+            'duration_seconds_avg': int((50)/2),
+         },
+    }
+
+    self.mox.StubOutWithMock(maint.models.ReportsCache, 'GetInstallCounts')
+    self.mox.StubOutWithMock(maint.models.PackageInfo, 'all')
+    self.mox.StubOutWithMock(maint.gae_util, 'ObtainLock')
+    self.mox.StubOutWithMock(maint.gae_util, 'ReleaseLock')
+    self.mox.StubOutWithMock(self.c, '_ParsePackageInfoPlist')
+    self.mox.StubOutWithMock(self.c, '_GetUpdatedDescription')
+    self.mox.StubOutWithMock(maint.models.Catalog, 'all')
+    self.mox.StubOutWithMock(maint.common, 'CreateCatalog')
+
+    maint.models.ReportsCache.GetInstallCounts().AndReturn(
+        (install_counts, None))
+    maint.models.PackageInfo.all().AndReturn(pkginfos)
+    self.c._ParsePackageInfoPlist(pkginfo1.plist).AndReturn(mock_pl1)
+    maint.gae_util.ObtainLock(pkg1_lock, timeout=5.0).AndReturn(True)
+    mock_pl1.get('description', '').AndReturn(pkg1_desc)
+    self.c._GetUpdatedDescription(
+        install_counts[pkg1_munki_name], pkg1_desc).AndReturn(pkg1_desc_updated)
+    mock_pl1.__setitem__('description', pkg1_desc_updated).AndReturn(None)
+    mock_pl1.GetXml().AndReturn('pkg1_xml')
+    pkginfo1.put().AndReturn(None)
+    maint.gae_util.ReleaseLock(pkg1_lock).AndReturn(None)
+
+    maint.models.Catalog.all().AndReturn(catalogs)
+    maint.common.CreateCatalog(catalog1.name, delay=5)
+
+    self.mox.ReplayAll()
+    self.c.get()
+    self.mox.VerifyAll()
+
+
+class VerifyPackagesCleanupTest(test.RequestHandlerTest):
+
+  def GetTestClassInstance(self):
+    return maint.VerifyPackages()
+
+  def GetTestClassModule(self):
+    return maint
 
   def MockPackageInfoQuery(self, blobstore_key, return_value=None, sleep=0):
     """Mocks a PackageInfo query filtering with a given mock blob and key."""
     mock_query = self.mox.CreateMockAnything()
-    maintenance.models.PackageInfo.all().AndReturn(mock_query)
+    maint.models.PackageInfo.all().AndReturn(mock_query)
     mock_query.filter('blobstore_key =', blobstore_key).AndReturn(mock_query)
     mock_query.get().AndReturn(return_value)
     if sleep:
-      maintenance.time.sleep(sleep).AndReturn(None)
+      maint.time.sleep(sleep).AndReturn(None)
 
   def testGet(self):
     """Test get()."""
-    self.mox.StubOutWithMock(maintenance.models, 'PackageInfo')
-    self.mox.StubOutWithMock(maintenance.blobstore, 'BlobInfo')
-    self.mox.StubOutWithMock(maintenance.logging, 'critical')
-    self.mox.StubOutWithMock(maintenance.time, 'sleep')
+    self.mox.StubOutWithMock(maint.models, 'PackageInfo')
+    self.mox.StubOutWithMock(maint.blobstore, 'BlobInfo')
+    self.mox.StubOutWithMock(maint.logging, 'critical')
+    self.mox.StubOutWithMock(maint.time, 'sleep')
     blobstore_key_good = 'goodkey'
     blobstore_key_bad = 'badkey'
     filename_bad = 'badfilename'
@@ -100,19 +206,19 @@ class VerifyPackagesCleanupTest(mox.MoxTestBase):
     mock_pkginfo_bad.blobstore_key = blobstore_key_bad
     mock_pkginfo_bad.filename = filename_bad
     pkginfos = [mock_pkginfo_good, mock_pkginfo_bad]
-    maintenance.models.PackageInfo.all().AndReturn(pkginfos)
-    maintenance.blobstore.BlobInfo.get(
+    maint.models.PackageInfo.all().AndReturn(pkginfos)
+    maint.blobstore.BlobInfo.get(
         mock_pkginfo_good.blobstore_key).AndReturn(True)
-    maintenance.blobstore.BlobInfo.get(
+    maint.blobstore.BlobInfo.get(
         mock_pkginfo_bad.blobstore_key).AndReturn(None)
-    maintenance.logging.critical('PackageInfo missing Blob: %s', filename_bad)
+    maint.logging.critical('PackageInfo missing Blob: %s', filename_bad)
 
     # verify Blobstore blobs are not orphaned.
     blob_good = self.mox.CreateMockAnything()
     blob_bad = self.mox.CreateMockAnything()
     blob_bad.filename = filename_bad
     blobs = [blob_good, blob_bad]
-    maintenance.blobstore.BlobInfo.all().AndReturn(blobs)
+    maint.blobstore.BlobInfo.all().AndReturn(blobs)
     # good blob
     blob_good.key().AndReturn(blobstore_key_good)
     self.MockPackageInfoQuery(blobstore_key_good, return_value='non None')
@@ -123,17 +229,16 @@ class VerifyPackagesCleanupTest(mox.MoxTestBase):
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 3
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 4
     self.MockPackageInfoQuery(blobstore_key_bad)  # attempt 5
-    maintenance.logging.critical(
+    maint.logging.critical(
         'Orphaned Blob %s: %s', blob_bad.filename, blobstore_key_bad)
 
-    vp = maintenance.VerifyPackages()
     self.mox.ReplayAll()
-    vp.get()
+    self.c.get()
     self.mox.VerifyAll()
 
 
 def main(unused_argv):
-  basetest.main()
+  test.main(unused_argv)
 
 
 if __name__ == '__main__':

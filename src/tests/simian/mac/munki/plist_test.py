@@ -70,6 +70,15 @@ class PlistModuleTest(mox.MoxTestBase):
         },
     )
 
+  def testEscapeString(self):
+    """Test EscapeString()."""
+    self.mox.StubOutWithMock(plist.xml.sax.saxutils, 'escape')
+    plist.xml.sax.saxutils.escape('notescaped').AndReturn('escaped')
+
+    self.mox.ReplayAll()
+    self.assertEqual('escaped', plist.EscapeString('notescaped'))
+    self.mox.VerifyAll()
+
 
 class ApplePlistTest(mox.MoxTestBase):
 
@@ -135,10 +144,7 @@ class ApplePlistTest(mox.MoxTestBase):
 
   def testValidateInvalidPlists(self):
     """Test Validate() with None and empty plists."""
-    self.apl._plist = None
     self.assertRaises(plist.PlistNotParsedError, self.apl.Validate)
-    self.apl._plist = {}
-    self.assertRaises(plist.InvalidPlistError, self.apl.Validate)
 
   def testValidateSuccessWithAddedHook(self):
     """Test Validate() with a success."""
@@ -166,8 +172,9 @@ class ApplePlistTest(mox.MoxTestBase):
 
   def testGetContents(self):
     """Test GetContents()."""
-    self.apl._plist = None
     self.assertRaises(plist.PlistNotParsedError, self.apl.GetContents)
+    self.apl._plist = None
+    self.assertEqual(None, self.apl.GetContents())
     self.apl._plist = {}
     self.assertEqual({}, self.apl.GetContents())
 
@@ -182,12 +189,12 @@ class ApplePlistTest(mox.MoxTestBase):
     self.apl.LoadDocument(plist_xml)
     if exc is not None:
       self.assertRaises(exc, self.apl.Parse)
-      self.assertEqual(self.apl._plist, None)
+      self.assertFalse(hasattr(self.apl, '_plist'))
     else:
       self.apl.Parse()
       self.assertPlistEquals(plist_dict)
 
-  def _testBasicEmpty(self):
+  def _testBasicEmptyDict(self):
     """Test a basic plist doc."""
     self.apl.LoadDocument('<plist version="1.0">\n\n  </plist>')
     self.assertRaises(plist.InvalidPlistError, self.apl.Parse)
@@ -202,6 +209,23 @@ class ApplePlistTest(mox.MoxTestBase):
         '<key>omg</key>',
         exc=plist.MalformedPlistError
         )
+
+  def testTypicalEmptyPlist(self):
+    """Test an empty plist as it usually appears -- a dict item exists."""
+    xml = '%s<dict/>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.PlistTest(xml, {})
+
+  def testEmptyPlist(self):
+    """Test with a truly empty plist, a plist node with no contents."""
+    xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.PlistTest(xml, None)
+
+  def testBasicCdata(self):
+    """Test with some simple CDATA."""
+    xml = ('%s<dict><key>cdata</key>'
+          '<string>line1\nline2\n</string></dict>%s') % (
+              plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.PlistTest(xml, {'cdata': 'line1\nline2\n'})
 
   def testBasic(self):
     """Test with a plist that should parse OK."""
@@ -247,12 +271,19 @@ class ApplePlistTest(mox.MoxTestBase):
 
     Tests integers, strings, booleans, None, as well as nested dicts/arrays.
     """
-    d = {'foo': [1, 'two', [False]], 'bar': {'foobar': None}, 'outside': True}
-    out = ('<dict>\n  <key>outside</key>\n  <true/>\n  '
+    d = {'foo': [1, 'two', [False]],
+         'bar': {'foobar': None},
+         'outside': True,
+         'floattest': 12.3456,
+    }
+    out = ('<dict>\n  '
+           '<key>outside</key>\n  <true/>\n  '
            '<key>foo</key>\n  <array>\n    <integer>1</integer>\n    '
            '<string>two</string>\n    <array>\n      <false/>\n    </array>\n  '
            '</array>\n  <key>bar</key>\n  <dict>\n    <key>foobar</key>\n    '
-           '<string></string>\n  </dict>\n</dict>')
+           '<string></string>\n  </dict>\n  '
+           '<key>floattest</key>\n  <real>12.345600</real>\n'
+           '</dict>')
     self.assertEquals(out, plist.DictToXml(d, indent_num=0))
 
   def testSequenceToXml(self):
@@ -392,6 +423,19 @@ AAAAAAAAfA==""")
     self.apl.Parse()
     self.assertEqual(plist_xml, self.apl.GetXml())
 
+  def testGetXmlWithTypicalEmptyPlist(self):
+    """Test GetXml() with a typical empty plist."""
+    plist_xml = '%s  <dict>\n  </dict>%s' % (
+        plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.apl._plist = {}
+    self.assertEqual(plist_xml, self.apl.GetXml())
+
+  def testGetXmlWithEmptyPlist(self):
+    """Test GetXml() with empty plist."""
+    plist_xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.apl._plist = None
+    self.assertEqual(plist_xml, self.apl.GetXml())
+
   def testLessBasic(self):
     """Test with a more complex plist that should parse OK."""
     plist_xml = """
@@ -406,6 +450,8 @@ AAAAAAAAfA==""")
             <dict>
               <key>zoo</key>
               <string>omg</string>
+              <key>floattest</key>
+              <real>123.456</real>
             </dict>
             <dict>
               <key>hoo</key>
@@ -419,7 +465,7 @@ AAAAAAAAfA==""")
     plist_dict = {
         'receipts': [
             {'foo': 'bar'},
-            {'zoo': 'omg'},
+            {'zoo': 'omg', 'floattest': 123.456},
             {'hoo': plist.datetime.datetime(2010, 10, 21, 16, 30, 32)},
         ]
     }
@@ -743,6 +789,48 @@ AAAAAAAAfA==""")
 
     self.PlistTest(plist_xml, plist_dict)
 
+  def testSetContentsBasic(self):
+    """Test SetContents() with basic input."""
+    d = {'foo': 'bar'}
+    self.apl.SetContents(d)
+    self.assertEqual(self.apl._plist, d)
+
+  def testSetContentsNestedXml(self):
+    """Test SetContents() with evil nested XML."""
+    d = {'foo': '<xml>up up up and away</xml>'}
+    self.apl.SetContents(d)
+    self.assertEqual(self.apl._plist, d, str(self.apl._plist))
+
+  def testEqual(self):
+    """Tests Equal()."""
+    pl = plist.ApplePlist()
+    pl._plist = {'foo': 1, 'bar': True}
+
+    other = plist.ApplePlist()
+    other._plist = {'foo': 1, 'bar': True}
+
+    self.assertTrue(pl.Equal(other))
+
+  def testEqualWithIgnoreKeysReturningTrue(self):
+    """Tests Equal() with ignore_keys, returning True."""
+    pl = plist.ApplePlist()
+    pl._plist = {'foo': 1, 'bar': True}
+
+    other = plist.ApplePlist()
+    other._plist = {'foo': 1, 'bar': False}
+
+    self.assertTrue(pl.Equal(other, ignore_keys=['bar']))
+
+  def testEqualWithIgnoreKeysReturningFalse(self):
+    """Tests Equal() false."""
+    pl = plist.ApplePlist()
+    pl._plist = {'foo': 1, 'bar': True}
+
+    other = plist.ApplePlist()
+    other._plist = {'foo': 2, 'bar': True}
+
+    self.assertFalse(pl.Equal(other, ignore_keys=['bar']))
+
 
 class MunkiPlistTest(mox.MoxTestBase):
   """Test MunkiPlist class."""
@@ -755,6 +843,15 @@ class MunkiPlistTest(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
+
+  def testEmpty(self):
+    """Test various forms of empty plists."""
+    xml = '%s<dict/>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.munki.LoadPlist(xml)
+    self.munki.Parse()
+    xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.munki.LoadPlist(xml)
+    self.assertRaises(plist.InvalidPlistError, self.munki.Parse)
 
 
 class MunkiManifestPlistTest(mox.MoxTestBase):
@@ -811,15 +908,39 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     """Test Parse() with valid Package Info plist."""
     self.munki.LoadDocument(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
+        '<key>installer_item_hash</key><string>foo hash</string>'
         '<key>installer_item_location</key><string>good location</string>'
+        '<key>name</key><string>fooname</string>'
         '</dict></plist>')
     self.munki.Parse()
+
+  def testParseMissingName(self):
+    """Test Parse() with missing name."""
+    self.munki.LoadDocument(
+        '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
+        '<key>installer_item_hash</key><string>foo hash</string>'
+        '<key>installer_item_location</key><string>foo hash</string>'
+        '</dict></plist>')
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki.Parse)
+
+  def testParseInstallerItemHash(self):
+    """Test Parse() with missing name."""
+    self.munki.LoadDocument(
+        '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
+        '<key>name</key><string>fooname</string>'
+        '<key>installer_item_location</key><string>foo hash</string>'
+        '</dict></plist>')
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki.Parse)
 
   def testParseMissingInstallerItemLocation(self):
     """Test Parse() with missing installer_item_location."""
     self.munki.LoadDocument(
-        '<plist><dict><key>catalogs</key>'
-        '<array><string>hello</string></array></dict></plist>')
+        '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
+        '<key>installer_item_hash</key><string>foo hash</string>'
+        '<key>name</key><string>fooname</string>'
+        '</dict></plist>')
     self.assertRaises(
         plist.InvalidPlistError, self.munki.Parse)
 
@@ -827,10 +948,56 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     """Test Parse() with an invalid catalogs list."""
     self.munki.LoadDocument(
         '<plist><dict><key>catalogs</key><string>hello</string>'
+        '<key>name</key><string>fooname</string>'
+        '<key>installer_item_hash</key><string>foo hash</string>'
         '<key>installer_item_location</key><string>good location</string>'
         '</dict></plist>')
     self.assertRaises(
         plist.InvalidPlistError, self.munki.Parse)
+
+  def testValidateInstallsFilePath(self):
+    """Tests _ValidateInstallsFilePath() with valid file path."""
+    self.munki._plist = {
+        'installs': [
+            {'type': 'file', 'path': '/path/to/file'},
+        ],
+        }
+
+    self.munki._ValidateInstallsFilePath()
+
+  def testValidateInstallsFilePathWhenNotFileType(self):
+    """Tests _ValidateInstallsFilePath() with no file type install."""
+    self.munki._plist = {
+        'installs': [
+            {'type': 'not_file', 'something': 'else'},
+        ],
+        }
+    self.munki._ValidateInstallsFilePath()
+
+  def testValidateInstallsFilePathWhenNoInstalls(self):
+    """Tests _ValidateInstallsFilePath() with no file type install."""
+    self.munki._plist = {}
+    self.munki._ValidateInstallsFilePath()
+
+  def testValidateInstallsFilePathWhenInvalidPath(self):
+    """Tests _ValidateInstallsFilePath() with invalid path."""
+    self.munki._plist = {
+        'installs': [
+            {'type': 'file', 'path': '\nzomg'},
+        ],
+        }
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki._ValidateInstallsFilePath)
+
+  def testValidateInstallsFilePathWhenMissingPath(self):
+    """Tests _ValidateInstallsFilePath() with missing path."""
+    self.munki._plist = {
+        'installs': [
+            {'type': 'file'}, # 'path': missing!
+        ],
+        }
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki._ValidateInstallsFilePath)
 
   def testGetPackageName(self):
     """Tests the _GetPackageName()."""
@@ -847,6 +1014,40 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.assertRaises(plist.PlistError, self.munki.GetPackageName)
     self.mox.VerifyAll()
 
+  def testGetMunkiNameWithDisplayName(self):
+    """Tests the _GetMunkiName() with display_name."""
+    display_name = 'FooPackage'
+    version = '1.2.3'
+    munki_name = '%s-%s' % (display_name, version)
+    self.munki._plist = {'display_name': display_name, 'version': version}
+    self.mox.ReplayAll()
+    self.assertEqual(munki_name, self.munki.GetMunkiName())
+    self.mox.VerifyAll()
+
+  def testGetMunkiNameWithoutDisplayName(self):
+    """Tests the _GetMunkiName() without display_name."""
+    name = 'FooPackage'
+    version = '1.2.3'
+    munki_name = '%s-%s' % (name, version)
+    self.munki._plist = {'name': name, 'version': version}
+    self.mox.ReplayAll()
+    self.assertEqual(munki_name, self.munki.GetMunkiName())
+    self.mox.VerifyAll()
+
+  def testGetMunkiNameWithoutVersion(self):
+    """Tests the _GetMunkiName() without version."""
+    self.munki._plist = {'name': 'foo'}
+    self.mox.ReplayAll()
+    self.assertRaises(plist.InvalidPlistError, self.munki.GetMunkiName)
+    self.mox.VerifyAll()
+
+  def testGetMunkiNameWithoutNameOrDisplayName(self):
+    """Tests the _GetMunkiName() without name or display_name."""
+    self.munki._plist = {'version': 'fooversion'}
+    self.mox.ReplayAll()
+    self.assertRaises(plist.InvalidPlistError, self.munki.GetMunkiName)
+    self.mox.VerifyAll()
+
   def testSetDescription(self):
     """Test SetDescription()."""
     self.munki._plist = {}
@@ -859,15 +1060,31 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.munki.SetDisplayName('foo')
     self.assertEqual(self.munki._plist['display_name'], 'foo')
 
-  def testSetForcedInstall(self):
-    """Test SetForcedInstall()."""
+  def testSetUnattendedInstall(self):
+    """Test SetUnattendedInstall()."""
     self.munki._plist = {}
-    self.munki.SetForcedInstall(True)
+    self.munki.SetUnattendedInstall(True)
+    self.assertTrue(self.munki._plist['unattended_install'])
     self.assertTrue(self.munki._plist['forced_install'])
-    self.munki.SetForcedInstall(False)
+    self.munki.SetUnattendedInstall(False)
+    self.assertTrue('unattended_install' not in self.munki._plist)
     self.assertTrue('forced_install' not in self.munki._plist)
-    self.munki.SetForcedInstall(False)
+    self.munki.SetUnattendedInstall(False)
+    self.assertTrue('unattended_install' not in self.munki._plist)
     self.assertTrue('forced_install' not in self.munki._plist)
+
+  def testSetUnattendedUninstall(self):
+    """Test SetUnattendedUninstall()."""
+    self.munki._plist = {}
+    self.munki.SetUnattendedUninstall(True)
+    self.assertTrue(self.munki._plist['unattended_uninstall'])
+    self.assertTrue(self.munki._plist['forced_uninstall'])
+    self.munki.SetUnattendedUninstall(False)
+    self.assertTrue('unattended_uninstall' not in self.munki._plist)
+    self.assertTrue('forced_uninstall' not in self.munki._plist)
+    self.munki.SetUnattendedUninstall(False)
+    self.assertTrue('unattended_uninstall' not in self.munki._plist)
+    self.assertTrue('forced_uninstall' not in self.munki._plist)
 
   def testSetCatalogs(self):
     """Test SetCatalogs()."""
@@ -889,6 +1106,15 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.munki.SetChanged()
     self.assertTrue(self.munki._changed)
 
+  def testSetChangedFalse(self):
+    """Test SetChanged(False)."""
+    self.munki.SetChanged(False)
+    self.assertFalse(self.munki._changed)
+
+  def testSetChangedInvalid(self):
+    """Test SetChanged(not bool)."""
+    self.assertRaises(ValueError, self.munki.SetChanged, 'zomg')
+
   def testEq(self):
     """Test __eq__."""
     other = plist.MunkiPackageInfoPlist()
@@ -900,6 +1126,55 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.assertFalse(self.munki == self)
     other._plist = { 'foo': 2 }
     self.assertFalse(self.munki == other)
+
+  def testContains(self):
+    """Test __contains__."""
+    self.munki._plist = {'foo': None}
+    self.assertTrue('foo' in self.munki)
+    self.assertFalse('bar' in self.munki)
+
+  def testGet(self):
+    """Test get()."""
+    self.munki._plist = {'foo': 123}
+    self.assertEqual(123, self.munki.get('foo'))
+    self.assertEqual(None, self.munki.get('bar'))
+    self.assertEqual(456, self.munki.get('bar', 456))
+
+  def testSet(self):
+    """Test set()."""
+    self.munki._plist = {'foo': 123}
+    self.munki.set('foo', 456)
+    self.assertEqual(self.munki._plist['foo'], 456)
+
+  def testEqualIgnoringManifestsAndCatalogs(self):
+    """Tests EqualIgnoringManifestsAndCatalogs()."""
+    pkginfo = plist.MunkiPackageInfoPlist()
+    pkginfo._plist = {
+        'manifests': ['stable', 'testing'],
+        'catalogs': ['stable', 'testing'],
+        'foo': True,
+    }
+
+    other = plist.MunkiPackageInfoPlist()
+    other._plist = {
+        'manifests': ['unstable'], 'catalogs': ['unstable'], 'foo': True}
+
+    self.assertTrue(pkginfo.EqualIgnoringManifestsAndCatalogs(other))
+
+  def testEqualIgnoringManifestsAndCatalogsFalse(self):
+    """Tests EqualIgnoringManifestsAndCatalogs() false."""
+    pkginfo = plist.MunkiPackageInfoPlist()
+    pkginfo._plist = {
+        'manifests': ['stable', 'testing'],
+        'catalogs': ['stable', 'testing'],
+        'foo': True,
+    }
+
+    other = plist.MunkiPackageInfoPlist()
+    other._plist = {
+        'manifests': ['unstable'], 'catalogs': ['unstable'], 'foo': False}
+
+    self.assertFalse(pkginfo.EqualIgnoringManifestsAndCatalogs(other))
 
 
 def main(unused_argv):

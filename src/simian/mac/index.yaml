@@ -41,6 +41,28 @@ indexes:
   - name: preflight_datetime
     direction: desc
 
+- kind: Computer
+  properties:
+  - name: active
+  - name: last_on_corp_preflight_datetime
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: client_version
+
+- kind: Computer
+  properties:
+  - name: active
+  - name: connections_off_corp
+  - name: connections_on_corp
+
+- kind: ComputerMSULog
+  properties:
+  - name: event
+  - name: mtime
+    direction: desc
+
 - kind: ComputerMSULog
   properties:
   - name: uuid
@@ -55,7 +77,20 @@ indexes:
 
 - kind: InstallLog
   properties:
+  - name: applesus
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: InstallLog
+  properties:
   - name: package
+  - name: mtime
+    direction: desc
+
+- kind: InstallLog
+  properties:
+  - name: applesus
   - name: mtime
     direction: desc
 
@@ -77,3 +112,15 @@ indexes:
   - name: uuid
   - name: mtime
     direction: desc
+
+- kind: ClientLogFile
+  properties:
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: AppleSUSProduct
+  properties:
+  - name: deprecated
+  - name: apple_mtime
+    direction: desc 

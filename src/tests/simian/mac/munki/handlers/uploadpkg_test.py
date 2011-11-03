@@ -56,7 +56,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.MockDoMunkiAuth()
     self.request.get('mode').AndReturn('error')
     self.request.get('msg', None).AndReturn('msg')
-    self.MockSetStatus(400, 'msg')
+    self.response.set_status(400)
+    self.response.out.write('msg')
 
     self.mox.ReplayAll()
     self.c.get()
@@ -139,16 +140,18 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
     self.MockSelf('get_uploads')
     self.mox.StubOutWithMock(uploadpkg.gae_util, 'GetBlobAndDel')
-    blob = self.mox.CreateMockAnything()
-    blob2 = self.mox.CreateMockAnything()
-    upload_files = [blob]
-    pkginfo_files = [blob2]
+    mock_blob1 = self.mox.CreateMockAnything()
+    mock_blob2 = self.mox.CreateMockAnything()
+    blob1_key = 'blobkey'
+    blob2_key = 'pkginfokey'
+    upload_files = [mock_blob1]
+    pkginfo_files = [mock_blob2]
     name = 'good'
     filename = 'good.dmg'
     pkginfo = 'BADBADBAD'
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['unstable']
-    blob2.key().AndReturn('pkginfoblobkey')
+    mock_blob2.key().AndReturn(blob2_key)
     pkginfo_str = 'pkginfo'
 
     self.request.get('user').AndReturn('foouser')
@@ -158,17 +161,20 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('manifests').AndReturn('')
     self.c.get_uploads('file').AndReturn(upload_files)
     self.c.get_uploads('pkginfo').AndReturn(pkginfo_files)
-    uploadpkg.gae_util.GetBlobAndDel('pkginfoblobkey').AndReturn(pkginfo_str)
+    uploadpkg.gae_util.GetBlobAndDel(blob2_key).AndReturn(pkginfo_str)
+
+    mock_blob1.key().AndReturn(blob1_key)
 
     self.mox.StubOutWithMock(uploadpkg.pkgsinfo.plist, 'MunkiPackageInfoPlist')
     mock_plist = self.mox.CreateMockAnything()
     uploadpkg.pkgsinfo.plist.MunkiPackageInfoPlist(pkginfo_str).AndReturn(
         mock_plist)
-
     mock_plist.Parse().AndRaise(uploadpkg.pkgsinfo.plist.PlistError)
     self.mox.StubOutWithMock(uploadpkg.logging, 'exception')
     uploadpkg.logging.exception(
         'Invalid pkginfo plist uploaded:\n%s\n', pkginfo_str).AndReturn(None)
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'SafeBlobDel')
+    uploadpkg.gae_util.SafeBlobDel(blob1_key).AndReturn(None)
     self.MockRedirect(
         '/uploadpkg?mode=error&msg=No%20valid%20pkginfo%20received')
 
@@ -197,7 +203,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['unstable']
     manifests = ['unstable']
-    pkginfo_dict = {'installer_item_location': filename}
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
     blobstore_key = 'fookey'
 
     self.request.get('user').AndReturn(user)
@@ -219,13 +227,15 @@ class UploadPackageTest(test.RequestHandlerTest):
     mock_plist.Parse().AndReturn(None)
     blob.key().AndReturn(blobstore_key)
     mock_plist.GetContents().AndReturn(pkginfo_dict)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
     uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(True)
 
-    self.mox.StubOutWithMock(uploadpkg.common, 'ObtainLock')
-    uploadpkg.common.ObtainLock(
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ObtainLock')
+    uploadpkg.gae_util.ObtainLock(
         'pkgsinfo_%s' % filename, timeout=5.0).AndReturn(True)
 
     pkg = self.MockModelStatic('PackageInfo', 'get_or_insert', filename)
+    pkg.IsSafeToModify().AndReturn(True)
     pkg.blobstore_key = 'old_key'
     mock_plist.GetPackageName().AndReturn(name)
     mock_plist.GetXml().AndReturn(pkginfo_str)
@@ -237,8 +247,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     uploadpkg.common.CreateCatalog(catalogs[0], delay=1)
 
 
-    self.mox.StubOutWithMock(uploadpkg.common, 'ReleaseLock')
-    uploadpkg.common.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ReleaseLock')
+    uploadpkg.gae_util.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
 
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='uploadpkg', filename=filename,
@@ -280,7 +290,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     catalogs = ['unstable']
     manifests = ['unstable']
     pkginfo_str = 'pkginfo'
-    pkginfo_dict = {'installer_item_location': filename}
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
     blobstore_key = 'fookey'
 
     self.request.get('user').AndReturn(user)
@@ -301,13 +313,15 @@ class UploadPackageTest(test.RequestHandlerTest):
     mock_plist.Parse().AndReturn(None)
     blob.key().AndReturn(blobstore_key)
     mock_plist.GetContents().AndReturn(pkginfo_dict)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
     uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(True)
 
-    self.mox.StubOutWithMock(uploadpkg.common, 'ObtainLock')
-    uploadpkg.common.ObtainLock(
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ObtainLock')
+    uploadpkg.gae_util.ObtainLock(
         'pkgsinfo_%s' % filename, timeout=5.0).AndReturn(True)
 
     pkg = self.MockModelStatic('PackageInfo', 'get_or_insert', filename)
+    pkg.IsSafeToModify().AndReturn(True)
     pkg.blobstore_key = None
     mock_plist.GetPackageName().AndReturn(name)
     mock_plist.GetXml().AndReturn(pkginfo_str)
@@ -315,8 +329,8 @@ class UploadPackageTest(test.RequestHandlerTest):
 
     self.mox.StubOutWithMock(uploadpkg.common, 'CreateCatalog')
     uploadpkg.common.CreateCatalog(catalogs[0], delay=1)
-    self.mox.StubOutWithMock(uploadpkg.common, 'ReleaseLock')
-    uploadpkg.common.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ReleaseLock')
+    uploadpkg.gae_util.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
 
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='uploadpkg', filename=filename,
@@ -356,7 +370,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     pkginfo_str = '<plist></plist>'
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['unstable']
-    pkginfo_dict = {'installer_item_location': filename}
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
     blobstore_key = 'fookey'
 
     blob2.key().AndReturn('pkginfoblobkey')
@@ -373,15 +389,73 @@ class UploadPackageTest(test.RequestHandlerTest):
     mock_plist.Parse().AndReturn(None)
     blob.key().AndReturn(blobstore_key)
     mock_plist.GetContents().AndReturn(pkginfo_dict)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
     uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(True)
 
-    self.mox.StubOutWithMock(uploadpkg.common, 'ObtainLock')
-    uploadpkg.common.ObtainLock(
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ObtainLock')
+    uploadpkg.gae_util.ObtainLock(
         'pkgsinfo_%s' % filename, timeout=5.0).AndReturn(False)
 
     self.mox.StubOutWithMock(uploadpkg.gae_util, 'SafeBlobDel')
     uploadpkg.gae_util.SafeBlobDel(blobstore_key)
-    self.response.set_status(403, 'Could not lock pkgsinfo')
+    self.response.set_status(403)
+    self.response.out.write('Could not lock pkgsinfo')
+
+    self.mox.ReplayAll()
+    self.c.post()
+    self.mox.VerifyAll()
+
+  def testPostWithFailureBecausePkginfoNotModifiable(self):
+    """Test uploading where pkginfo is not modifiable."""
+    self.mox.StubOutWithMock(uploadpkg.handlers, 'IsBlobstore')
+    uploadpkg.handlers.IsBlobstore().AndReturn(True)
+    self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
+    self.MockSelf('get_uploads')
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'GetBlobAndDel')
+    self.mox.StubOutWithMock(uploadpkg.pkgsinfo.plist, 'MunkiPackageInfoPlist')
+    self.mox.StubOutWithMock(uploadpkg.blobstore, 'BlobInfo')
+    mock_plist = self.mox.CreateMockAnything()
+    blob = self.mox.CreateMockAnything()
+    blob2 = self.mox.CreateMockAnything()
+    upload_files = [blob]
+    pkginfo_files = [blob2]
+    name = 'fooname'
+    filename = 'filename.dmg'
+    pkginfo_str = '<plist></plist>'
+    install_types = ['managed_installs', 'managed_updates']
+    catalogs = ['unstable']
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
+    blobstore_key = 'fookey'
+
+    blob2.key().AndReturn('pkginfoblobkey')
+    self.request.get('user').AndReturn('foouser')
+    self.request.get('name').AndReturn(filename)
+    self.request.get('install_types').AndReturn(','.join(install_types))
+    self.request.get('catalogs').AndReturn(','.join(catalogs))
+    self.request.get('manifests').AndReturn('')
+    self.c.get_uploads('file').AndReturn(upload_files)
+    self.c.get_uploads('pkginfo').AndReturn(pkginfo_files)
+    uploadpkg.gae_util.GetBlobAndDel('pkginfoblobkey').AndReturn(pkginfo_str)
+    uploadpkg.pkgsinfo.plist.MunkiPackageInfoPlist(pkginfo_str).AndReturn(
+        mock_plist)
+    mock_plist.Parse().AndReturn(None)
+    blob.key().AndReturn(blobstore_key)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
+    uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(True)
+
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ObtainLock')
+    uploadpkg.gae_util.ObtainLock(
+        'pkgsinfo_%s' % filename, timeout=5.0).AndReturn(True)
+
+    pkg = self.MockModelStatic('PackageInfo', 'get_or_insert', filename)
+    pkg.IsSafeToModify().AndReturn(False)
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'SafeBlobDel')
+    uploadpkg.gae_util.SafeBlobDel(blobstore_key).AndReturn(None)
+    self.response.set_status(403)
+    self.response.out.write('Package is not modifiable')
 
     self.mox.ReplayAll()
     self.c.post()
@@ -406,7 +480,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     pkginfo_str = '<plist></plist>'
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['unstable']
-    pkginfo_dict = {'installer_item_location': filename}
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
     blobstore_key = 'fookey'
 
     blob2.key().AndReturn('pkginfoblobkey')
@@ -423,13 +499,15 @@ class UploadPackageTest(test.RequestHandlerTest):
     mock_plist.Parse().AndReturn(None)
     blob.key().AndReturn(blobstore_key)
     mock_plist.GetContents().AndReturn(pkginfo_dict)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
     uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(True)
 
-    self.mox.StubOutWithMock(uploadpkg.common, 'ObtainLock')
-    uploadpkg.common.ObtainLock(
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ObtainLock')
+    uploadpkg.gae_util.ObtainLock(
         'pkgsinfo_%s' % filename, timeout=5.0).AndReturn(True)
 
     pkg = self.MockModelStatic('PackageInfo', 'get_or_insert', filename)
+    pkg.IsSafeToModify().AndReturn(True)
     pkg.blobstore_key = None
     pkg.name = name
     pkg.filename = filename
@@ -443,8 +521,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     uploadpkg.gae_util.SafeBlobDel(blobstore_key).AndReturn(None)
     self.mox.StubOutWithMock(uploadpkg.gae_util, 'SafeEntityDel')
     uploadpkg.gae_util.SafeEntityDel(pkg)
-    self.mox.StubOutWithMock(uploadpkg.common, 'ReleaseLock')
-    uploadpkg.common.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
+    self.mox.StubOutWithMock(uploadpkg.gae_util, 'ReleaseLock')
+    uploadpkg.gae_util.ReleaseLock('pkgsinfo_%s' % filename).AndReturn(True)
     self.MockRedirect('/uploadpkg?mode=error')
 
     self.mox.ReplayAll()
@@ -470,7 +548,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     pkginfo_str = '<plist></plist>'
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['unstable']
-    pkginfo_dict = {'installer_item_location': filename}
+    pkginfo_dict = {
+        'installer_item_location': filename,
+        'installer_item_hash': 'hash'}
     blobstore_key = 'fookey'
 
     blob2.key().AndReturn('pkginfoblobkey')
@@ -486,6 +566,7 @@ class UploadPackageTest(test.RequestHandlerTest):
         mock_plist)
     mock_plist.Parse().AndReturn(None)
     blob.key().AndReturn(blobstore_key)
+    mock_plist.GetContents().AndReturn(pkginfo_dict)
     mock_plist.GetContents().AndReturn(pkginfo_dict)
     uploadpkg.blobstore.BlobInfo.get(blobstore_key).AndReturn(None)
     self.mox.StubOutWithMock(uploadpkg.logging, 'critical')
@@ -510,7 +591,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('install_types').AndReturn('anything')
     self.request.get('catalogs').AndReturn('anything')
     self.request.get('manifests').AndReturn('')
-    self.response.set_status(400, 'uploadpkg POST required parameters missing')
+    self.response.set_status(400)
+    self.response.out.write('uploadpkg POST required parameters missing')
     # missing name
     uploadpkg.handlers.IsBlobstore().AndReturn(True)
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
@@ -519,7 +601,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('install_types').AndReturn('anything')
     self.request.get('catalogs').AndReturn('anything')
     self.request.get('manifests').AndReturn('')
-    self.response.set_status(400, 'uploadpkg POST required parameters missing')
+    self.response.set_status(400)
+    self.response.out.write('uploadpkg POST required parameters missing')
     # missing install_types
     uploadpkg.handlers.IsBlobstore().AndReturn(True)
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
@@ -528,7 +611,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('install_types').AndReturn('')
     self.request.get('catalogs').AndReturn('anything')
     self.request.get('manifests').AndReturn('')
-    self.response.set_status(400, 'uploadpkg POST required parameters missing')
+    self.response.set_status(400)
+    self.response.out.write('uploadpkg POST required parameters missing')
     # missing catalogs
     uploadpkg.handlers.IsBlobstore().AndReturn(True)
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
@@ -537,7 +621,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('install_types').AndReturn('anything')
     self.request.get('catalogs').AndReturn('')
     self.request.get('manifests').AndReturn('')
-    self.response.set_status(400, 'uploadpkg POST required parameters missing')
+    self.response.set_status(400)
+    self.response.out.write('uploadpkg POST required parameters missing')
 
     self.mox.ReplayAll()
     self.c.post()

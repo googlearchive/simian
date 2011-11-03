@@ -2,11 +2,7 @@
 
 {% block title %}Broken Clients{% endblock %}
 
-{% block search %}{% endblock %}
-
 {% block page-content %}
-
-<a href="/admin/stats">Back to stats home</a><br /><br />
 
 <h3>Broken Python Clients</h3>
 {% if py_computers %}
@@ -14,21 +10,29 @@
   <table class="stats-table">
     <tr>
       <th>Hostname</th><th>Owner</th><th>UUID</th><th>Ticket</th>
-      <th>Details</th><th>First Broken Time</th><th>All broken times</th>
+      <th>Details</th><th>First Broken Exec</th><th># Broken Execs</th>
+      <th>Last 10 Broken Exec</th><th>Set Fixed</th>
     </tr>
   {% for c in py_computers %}
     <tr class="{% cycle lbg,dbg %}">
       <td>{{ c.hostname }}</td><td>{{ c.owner }}</td>
-      <td><a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
+      <td><a href="/admin/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
       <td>
         <a href="http://tick/{{ c.ticket_number }}">{{ c.ticket_number }}</a>
       </td>
       <td><a href="javascript:var w = window.open('', 'details', 'width=600, height=800'); w.document.write('{{ c.details|escape }}'); w.focus();">View Details</a></td>
-      <td>{{ c.first_broken_datetime|timesince }}</td>
+      <td>{{ c.first_broken_datetime|timesince }} ago</td>
+      <td>{{ c.broken_datetimes|length }}</td>
       <td style="max-width: 40em;">
-        {% for d in c.broken_datetimes %}
+        {% for d in c.broken_datetimes|slice:":10" %}
           {{ d|timesince }} ...
         {% endfor %}
+      </td>
+      <td>
+        <form method="POST" action="/admin/brokenclients/{{ c.uuid }}">
+          <input type="hidden" name="action" value="set_fixed"/>
+          <input type="submit" value="Set Client As Fixed"/>
+        </form>
       </td>
   {% endfor %}
   </table>
@@ -45,14 +49,16 @@
      <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
      <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
      <th>Site</th><th>Office</th><th>Last Preflight</th>
+     <th>Last On Corp Preflight</th><th>Last IP Address</th>
+     <th>Upload Logs</th>
   </tr>
   {% for c in zero_conn_computers %}
   <tr class="{% cycle lbg,dbg %}">
     <td>{{ c.hostname }}</td>
     <td>
-      <a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a>
+      <a href="/admin/host/{{ c.uuid }}">{{ c.uuid }}</a>
     </td>
-    <td><a href="/admin/stats/?type=owner&filter={{ c.owner }}"
+    <td><a href="/admin?type=owner&filter={{ c.owner }}"
         >{{ c.owner }}</a></td>
     <td>{{ c.track }}</td>
     <td>{{ c.config_track }}</td>
@@ -61,6 +67,18 @@
     <td>{{ c.site }}</td>
     <td>{{ c.office }}</td>
     <td>{{ c.preflight_datetime|timesince }}</td>
+    <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
+    <td>{{ c.ip_address }}</td>
+    <td>
+      {% if c.upload_logs_and_notify %}
+        Email: {{ c.upload_logs_and_notify }}
+      {% else %}
+        <form method="POST" action="/admin/brokenclients/{{ c.uuid }}">
+          <input type="hidden" name="action" value="upload_logs"/>
+          <input type="submit" value="Upload Logs"/>
+        </form>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
@@ -72,16 +90,17 @@
   <tr class="multi-header">
      <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
      <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
-     <th>Site</th><th>Office</th><th>(on/off corp)</th><th>Last MSU Popup</th>
-     <th>Last Preflight</th><th>Last Postflight</th>
+     <th>Site</th><th>Office</th><th>Last Preflight</th><th>Last Postflight</th>
+     <th>Last On Corp Preflight</th><th>Last IP Address</th>
+     <th>Upload Logs</th>
   </tr>
   {% for c in pf_computers %}
   <tr class="{% cycle lbg,dbg %}">
     <td>{{ c.hostname }}</td>
     <td>
-      <a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a>
+      <a href="/admin/host/{{ c.uuid }}">{{ c.uuid }}</a>
     </td>
-    <td><a href="/admin/stats/?type=owner&filter={{ c.owner }}"
+    <td><a href="/admin?type=owner&filter={{ c.owner }}"
         >{{ c.owner }}</a></td>
     <td>{{ c.track }}</td>
     <td>{{ c.config_track }}</td>
@@ -89,10 +108,20 @@
     <td>{{ c.client_version }}</td>
     <td>{{ c.site }}</td>
     <td>{{ c.office }}</td>
-    <td>{{ c.connections_on_corp }} / {{ c.connections_off_corp }}</td>
-    <td>{{ c.last_notified_datetime|timesince }}</td>
     <td>{{ c.preflight_datetime|timesince }}</td>
     <td>{{ c.postflight_datetime|timesince }}</td>
+    <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
+    <td>{{ c.ip_address }}</td>
+    <td>
+      {% if c.upload_logs_and_notify %}
+        Email: {{ c.upload_logs_and_notify }}
+      {% else %}
+        <form method="POST" action="/admin/brokenclients/{{ c.uuid }}">
+          <input type="hidden" name="action" value="upload_logs"/>
+          <input type="submit" value="Upload Logs"/>
+        </form>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>

@@ -2,9 +2,9 @@
 
 {% block title %}Installation Problems{% endblock %}
 
-{% block search %}{% endblock %}
-
-{% block header %}{% endblock %}
+{% if host_report %}
+  {% block header %}{% endblock %}
+{% endif %}
 
 {% block page-content %}
 
@@ -12,13 +12,12 @@
   <h3>Installation Problems</h3>
 {% else %}
   <h2>Installation Problems</h2>
-  <a href="/admin/stats">Back to stats home</a>
 {% endif %}
 
   <p>{{ install_problems|length }} problems found (limit {{ limit }}).</p>
 
   {% if next_page %}
-    <a href="/admin/stats/installproblems?page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin/installproblems?page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
 {% if install_problems %}
@@ -36,7 +35,7 @@
         <td>{{ problem.details }}</td>
         {% if not host_report %}
         <td>
-          <a href="/admin/stats/host/{{ problem.uuid }}">{{ problem.uuid }}</a>
+          <a href="/admin/host/{{ problem.uuid }}">{{ problem.uuid }}</a>
         </td>
         {% endif %}
         <td>{{ problem.mtime }}</td>
@@ -46,7 +45,7 @@
   </table>
 
   {% if next_page %}
-    <a href="/admin/stats/installproblems?page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin/installproblems?page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
 {% endif %}

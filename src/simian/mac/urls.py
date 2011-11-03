@@ -15,14 +15,18 @@
 # limitations under the License.
 # #
 
-"""Main module for Simian including wgsi URL mappings."""
+"""Main module for Simian including wsgi URL mappings."""
 
 
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from simian.mac.admin import stats as admin_stats
+from simian.mac.admin import applesus as applesus_admin
 from simian.mac.admin import panic as admin_panic
+from simian.mac.admin import manifest_modifications
+from simian.mac.admin import package_alias
+from simian.mac.api import urls as api_urls
 from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import uauth
 from simian.mac.munki.handlers import applesus
@@ -32,18 +36,20 @@ from simian.mac.munki.handlers import pkgs
 from simian.mac.munki.handlers import pkgsinfo
 from simian.mac.munki.handlers import reports
 from simian.mac.munki.handlers import deletepkg
+from simian.mac.munki.handlers import uploadfile
 from simian.mac.munki.handlers import uploadpkg
 
 
-class ServeHello(webapp.RequestHandler):
-  """Serve hello page."""
+class RedirectToAdmin(webapp.RequestHandler):
+  """Redirect the request to the Admin page."""
 
   def get(self):
     """Handle GET."""
-    self.response.out.write('<p>Welcome!</p>')
+    self.redirect('/admin')
 
 
-application = webapp.WSGIApplication([
+application = webapp.WSGIApplication(
+    api_urls.URLS + [
     # GET Apple Software Update Service catalog with header client-id.
     (r'/applesus/?$', applesus.AppleSUS),
     # GET/PUT Apple Software Update Service catalogs.
@@ -64,10 +70,20 @@ application = webapp.WSGIApplication([
     (r'/uploadpkg$', uploadpkg.UploadPackage),
     # POST reports from munki.
     (r'/reports$', reports.Reports),
-    # GET stats pages.
-    (r'/admin/stats/?$', admin_stats.Stats),
-    (r'/admin/stats/([\w\-\_\.\=\|\%]+)$', admin_stats.Stats),
-    (r'/admin/stats/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$',
+    # PUT uploadfile from munki.
+    (r'/uploadfile/([\w\-]+)/([\w\-\.]+)$', uploadfile.UploadFile),
+    # GET/POST Apple SUS admin.
+    (r'/admin/applesus/?$', applesus_admin.AppleSUSAdmin),
+    (r'/admin/applesus/([\w\-]+)/([\d\w\-]+)$', applesus_admin.AppleSUSAdmin),
+    # GET/POST Manifest Modifications admin.
+    (r'/admin/manifest_modifications/?$',
+     manifest_modifications.ManifestModifications),
+    # GET/POST Manifest Modifications admin.
+    (r'/admin/package_alias/?$', package_alias.PackageAlias),
+    # GET reports pages.
+    (r'/admin/?$', admin_stats.Stats),
+    (r'/admin/([\w\-\_\.\=\|\%]+)$', admin_stats.Stats),
+    (r'/admin/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$',
      admin_stats.Stats),
     # GET or POST admin panic interface,
     (r'/admin/panic/?$', admin_panic.AdminPanic),
@@ -75,8 +91,10 @@ application = webapp.WSGIApplication([
     (r'/uauth/?$', uauth.UserAuth),
     # GET auth logout, POST munki auth.
     (r'/auth/?$', auth.Auth),
-    (r'/_ah/warmup', ServeHello),
-    (r'/?$', ServeHello),
+    (r'/repair/?$', pkgs.ClientRepair),
+    (r'/repair/([\w\-\_\.\=\|\%]+)$', pkgs.ClientRepair),
+    (r'/_ah/warmup', RedirectToAdmin),
+    (r'/?$', RedirectToAdmin),
     ], debug=True)
 
 

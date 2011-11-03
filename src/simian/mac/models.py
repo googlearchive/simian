@@ -21,10 +21,16 @@
 
 import datetime
 import gc
+import logging
 from google.appengine.ext import db
+from google.appengine.ext import deferred
 from google.appengine.api import memcache
 from simian.mac import zip
+from simian.mac import common
 from simian.mac.common import util
+from simian.mac.common import gae_util
+from simian.mac.munki import plist as plist_lib
+
 
 class Error(Exception):
   """Class for domain exceptions."""
@@ -39,8 +45,85 @@ class InvalidArgumentsError(Error):
 COMPUTER_ACTIVE_DAYS = 30
 
 
+class CompressedUtf8BlobProperty(db.BlobProperty):
+  """BlobProperty class that compresses/decompresses seamlessly on get/set.
+
+  This Property is compressed on every __set__ and decompressed on every __get__
+  operation. This should be taken into consideration when performing certain
+  operations, such as slicing.
+  """
+
+  # pylint: disable-msg=C6409
+  def get_value_for_datastore(self, model_instance):
+    """Compresses the blob value on it's way to Datastore."""
+    value = super(CompressedUtf8BlobProperty, self).get_value_for_datastore(
+        model_instance)
+    if value is None:
+      self.length = 0
+    else:
+      self.length = len(value)
+    return db.Blob(zip.CompressedText(value, encoding='utf-8').Compressed())
+
+  # pylint: disable-msg=C6409
+  def __get__(self, model_instance, model_class):
+    """Decompresses the blob value when the property is accessed."""
+    value = super(CompressedUtf8BlobProperty, self).__get__(
+        model_instance, model_class)
+    if value is self:
+      return self
+    return unicode(zip.CompressedText(value, encoding='utf-8')).encode('utf-8')
+
+  # pylint: disable-msg=C6409
+  def __set__(self, model_instance, value):
+    """Compresses the value when the property is set."""
+    if not value:
+      self.length = 0
+      super(CompressedUtf8BlobProperty, self).__set__(model_instance, value)
+    else:
+      self.length = len(value)
+      value = zip.CompressedText(value, encoding='utf-8').Compressed()
+      super(CompressedUtf8BlobProperty, self).__set__(model_instance, value)
+
+  # pylint: disable-msg=C6409
+  def __len__(self):
+    """Returns the length of the uncompressed blob data."""
+    return self.length
+
+
 class BaseModel(db.Model):
   """Abstract base model with useful generic methods."""
+
+  @classmethod
+  def MemcacheAddAutoUpdateTask(cls, func, *args, **kwargs):
+    """Sets a memcache auto update task.
+
+    Args:
+      func: str, like "MemcacheWrappedSet"
+      args: list, optional, arguments to function
+      kwargs: dict, optional, keyword arguments to function
+    """
+    if not hasattr(cls, func) or not callable(getattr(cls, func)):
+      raise ValueError(func)
+    if not hasattr(cls, '_memcache_auto_update_tasks'):
+      cls._memcache_auto_update_tasks = []
+    cls._memcache_auto_update_tasks.append((func, args, kwargs))
+
+  @classmethod
+  def MemcacheAutoUpdate(cls, _deferred=False):
+    """Run all memcache auto updates.
+
+    Args:
+      _deferred: bool, whether this function has been deferred
+    """
+    if not getattr(cls, '_memcache_auto_update_tasks', None):
+      return
+
+    if not _deferred:
+      deferred.defer(cls.MemcacheAutoUpdate, _deferred=True, _countdown=10)
+      return
+
+    for func, args, kwargs in getattr(cls, '_memcache_auto_update_tasks', []):
+      getattr(cls, func)(*args, **kwargs)
 
   @classmethod
   def ResetMemcacheWrap(cls, key_name, memcache_secs=300):
@@ -73,7 +156,11 @@ class BaseModel(db.Model):
       entity = cls.get_by_key_name(key_name)
       if not entity:
         return
-      memcache.set(memcache_key, entity, memcache_secs)
+      try:
+        memcache.set(memcache_key, entity, memcache_secs)
+      except ValueError, e:
+        logging.warning(
+            'MemcacheWrappedGet failed to set %s: %s', memcache_key, str(e))
 
     if prop_name:
       return getattr(entity, prop_name)
@@ -122,6 +209,109 @@ class BaseModel(db.Model):
     entity.put()
     memcache.set(memcache_key, entity, memcache_secs)
 
+  @classmethod
+  def MemcacheWrappedDelete(cls, key_name=None, entity=None):
+    """Delete an entity by key name and clear Memcache.
+
+    Args:
+      key_name: str, key name of entity to fetch
+      entity: db.Model entity.
+    """
+    if entity:
+      key_name = entity.key().name()
+    elif key_name:
+      entity = cls.get_by_key_name(key_name)
+    else:
+      raise ValueError
+
+    entity.delete()
+    memcache_key = 'mwg_%s_%s' % (cls.kind(), key_name)
+    memcache.delete(memcache_key)
+
+  @classmethod
+  def MemcacheWrappedPropMapGenerate(
+      cls, prop_name, defer_if_locked=False, memcache_secs=300):
+    """Cache model keys in a memcache container where prop_name == value.
+
+    Args:
+      key_name: str, key name of entity
+      prop_name: str, property name to set with value
+      defer_if_locked: bool, default False, if True, defer to a
+        background task if the prop map generation is currently locked.
+        if False and locked, return without doing any work, letting the current
+        generator finish without producing additional work.
+      memcache_secs: int, default 300, seconds to store in memcache.
+    """
+    lock_name = 'mwpm_%s_%s' % (cls.kind(), prop_name)
+    if not gae_util.ObtainLock(lock_name):
+      if defer_if_locked:
+        logging.info(
+            'MemcacheWrappedPropMapGenerate: Could not obtain lock %s',
+            lock_name)
+        deferred.defer(cls.MemcacheWrappedPropMapGenerate,
+          prop_name,
+          defer_if_locked=defer_if_locked,
+          memcache_secs=memcache_secs,
+          _countdown=10)
+      return
+
+    query = cls.all()
+    map_data = {}
+    for entity in query:
+      a = getattr(entity, prop_name, None)
+      if a:
+        map_data.setdefault(a, []).append(entity.key())
+    memcache_key = 'mwpm_%s_%s' % (cls.kind(), prop_name)
+    memcache.set(memcache_key, map_data, memcache_secs)
+    gae_util.ReleaseLock(lock_name)
+
+  @classmethod
+  def MemcacheWrappedPropMapGetAll(cls, prop_name, value):
+    """Memcache wrapped get of all entities where prop_name==value.
+
+    All the entities in the model are cached by prop_name to speed lookups.
+
+    Args:
+      prop_name: str, property name to search.
+      value: str, value of property name to look for.
+    Returns:
+      array, [ list of entities where prop_name == value ]
+    Raises:
+      KeyError: if no prop_name==value entities exist.
+    """
+    memcache_key = 'mwpm_%s_%s' % (cls.kind(), prop_name)
+    map_data = memcache.get(memcache_key)
+    entities = None
+
+    # Explictly check for None, as the map may be empty.
+    if map_data is None:
+      # TODO(user): since this isn't locked before deferral, every 5 mins we
+      #   have tons of deferred calls until the map is regenerated. think about
+      #   locking before calling deferred.
+      deferred.defer(cls.MemcacheWrappedPropMapGenerate, prop_name)
+      entities = cls.MemcacheWrappedGetAllFilter(
+          (('%s =' % prop_name, value),))
+    elif value in map_data:
+      entities = cls.get(map_data[value])
+
+    if entities:
+      return entities
+    else:
+      raise KeyError
+
+  def put(self, *args, **kwargs):
+    """Perform datastore put operation.
+
+    Args:
+      args: list, optional, args to superclass put()
+      kwargs: dict, optional, keyword args to superclass put()
+    Returns:
+      return value from superclass put()
+    """
+    r = super(BaseModel, self).put(*args, **kwargs)
+    self.MemcacheAutoUpdate()
+    return r
+
 
 class BasePlistModel(BaseModel):
   """Base model which can easy store a utf-8 plist."""
@@ -158,7 +348,10 @@ class Computer(db.Model):
   # All datetimes are UTC.
   active = db.BooleanProperty(default=True)  # automatically set property
   hostname = db.StringProperty()  # i.e. user-macbook.
+  serial = db.StringProperty()  # str serial number of the computer.
+  ip_address = db.StringProperty()  # str ip address of last connection
   uuid = db.StringProperty()  # OSX or Puppet UUID; undecided.
+  global_uuid = db.StringProperty()  # global, platform-independent UUID
   preflight_datetime = db.DateTimeProperty()  # last preflight execution.
   postflight_datetime = db.DateTimeProperty()  # last postflight execution.
   last_notified_datetime = db.DateTimeProperty()  # last MSU.app popup.
@@ -183,6 +376,33 @@ class Computer(db.Model):
   uptime = db.FloatProperty()  # float seconds since last reboot.
   root_disk_free = db.IntegerProperty()  # int of bytes free on / partition.
   user_disk_free = db.IntegerProperty()  # int of bytes free in owner User dir.
+  _user_settings = db.BlobProperty()
+  user_settings_exist = db.BooleanProperty(default=False)
+  # request logs to be uploaded, and notify email addresses saved here.
+  # the property should contain a comma delimited list of email addresses.
+  upload_logs_and_notify = db.StringProperty()
+
+  def _GetUserSettings(self):
+    """Returns the user setting dictionary, or None."""
+    if self._user_settings:
+      return util.Deserialize(self._user_settings)
+    else:
+      return None
+
+  def _SetUserSettings(self, data):
+    """Sets the user settings dictionary.
+
+    Args:
+      data: dictionary data to set to the user_settings, or None.
+    """
+    if not data:
+      self.user_settings_exist = False
+      self._user_settings = None
+    else:
+      self._user_settings = util.Serialize(data)
+      self.user_settings_exist = True
+
+  user_settings = property(_GetUserSettings, _SetUserSettings)
 
   @classmethod
   def AllActive(cls, keys_only=False):
@@ -195,7 +415,7 @@ class Computer(db.Model):
     count = 0
     now = datetime.datetime.utcnow()
     earliest_active_date = now - datetime.timedelta(days=COMPUTER_ACTIVE_DAYS)
-    query = cls.all().filter('preflight_datetime <', earliest_active_date)
+    query = cls.AllActive().filter('preflight_datetime <', earliest_active_date)
     gc.collect()
     while True:
       computers = query.fetch(500)
@@ -209,19 +429,21 @@ class Computer(db.Model):
       del(computers)
       del(query)
       gc.collect()
-      query = cls.all().filter('preflight_datetime <', earliest_active_date)
+      query = cls.AllActive().filter(
+          'preflight_datetime <', earliest_active_date)
       query.with_cursor(cursor)
     return count
 
-  def put(self):
+  def put(self, update_active=True):
     """Forcefully set active according to preflight_datetime."""
-    now = datetime.datetime.utcnow()
-    earliest_active_date = now - datetime.timedelta(days=COMPUTER_ACTIVE_DAYS)
-    if self.preflight_datetime:
-      if self.preflight_datetime > earliest_active_date:
-        self.active = True
-      else:
-        self.active = False
+    if update_active:
+      now = datetime.datetime.utcnow()
+      earliest_active_date = now - datetime.timedelta(days=COMPUTER_ACTIVE_DAYS)
+      if self.preflight_datetime:
+        if self.preflight_datetime > earliest_active_date:
+          self.active = True
+        else:
+          self.active = False
     super(Computer, self).put()
 
 
@@ -238,11 +460,64 @@ class ComputerClientBroken(db.Model):
   ticket_number = db.StringProperty()
 
 
+class ComputerLostStolen(db.Model):
+  """Model to store reports about lost/stolen machines."""
+
+  uuid = db.StringProperty()
+  computer = db.ReferenceProperty(Computer)
+  connections = db.StringListProperty()
+  lost_stolen_datetime = db.DateTimeProperty(auto_now_add=True)
+  mtime = db.DateTimeProperty()
+
+  @classmethod
+  def _GetUuids(cls, force_refresh=False):
+    """Gets the lost/stolen UUID dictionary from memcache or Datastore.
+
+    Args:
+      force_refresh: boolean, when True it repopulates memcache from Datastore.
+    """
+    uuids = memcache.get('loststolen_uuids')
+    if not uuids or force_refresh:
+      uuids = {}
+      for key in cls.all(keys_only=True):
+        uuids[key.name()] = True
+      memcache.set('loststolen_uuids', uuids)
+    return uuids
+
+  @classmethod
+  def IsLostStolen(cls, uuid):
+    """Returns True if the given str UUID is lost/stolen, False otherwise."""
+    return uuid in cls._GetUuids()
+
+  @classmethod
+  def SetLostStolen(cls, uuid):
+    """Sets a UUID as lost/stolen, and refreshes the lost/stolen UUID cache."""
+    if cls.get_by_key_name(uuid):
+      logging.warning('UUID already set as lost/stolen: %s', uuid)
+      return  # do nothing; the UUID is already set as lost/stolen.
+    computer = Computer.get_by_key_name(uuid)
+    ls = cls(key_name=computer.uuid, computer=computer, uuid=uuid)
+    ls.put()
+    cls._GetUuids(force_refresh=True)
+
+  @classmethod
+  def LogLostStolenConnection(cls, computer, ip_address):
+    """Logs a connection from a lost/stolen computer."""
+    ls = cls.get_or_insert(computer.uuid)
+    ls.computer = computer
+    ls.uuid = computer.uuid
+    now = datetime.datetime.utcnow()
+    ls.mtime = now
+    ls.connections.append('%s from %s' % (now, ip_address))
+    ls.put()
+
+
 class ComputerMSULog(db.Model):
   """Store MSU logs as state information.
 
   key = uuid_source_event
   """
+
   uuid = db.StringProperty()  # computer uuid
   source = db.StringProperty()  # "MSU", "user", ...
   event = db.StringProperty()  # "launched", "quit", ...
@@ -251,11 +526,33 @@ class ComputerMSULog(db.Model):
   mtime = db.DateTimeProperty()  # time of log
 
 
+class ClientLogFile(db.Model):
+  """Store client log files, like ManagedSoftwareUpdate.log.
+
+  key = uuid + mtime
+  """
+
+  uuid = db.StringProperty()  # computer uuid
+  name = db.StringProperty()  # log name
+  mtime = db.DateTimeProperty(auto_now_add=True)
+  log_file = CompressedUtf8BlobProperty()
+
+
 class Log(db.Model):
   """Base Log class to be extended for Simian logging."""
 
   # UTC datetime when the event occured.
-  mtime = db.DateTimeProperty(auto_now_add=True)
+  mtime = db.DateTimeProperty()
+
+  def put(self):
+    """If a log mtime was not set, automatically set it to now in UTC.
+
+    Note: auto_now_add=True is not ideal as then clients can't report logs that
+          were written in the past.
+    """
+    if not self.mtime:
+      self.mtime = datetime.datetime.utcnow()
+    super(Log, self).put()
 
 
 class ClientLogBase(Log):
@@ -283,8 +580,12 @@ class InstallLog(ClientLogBase):
   """Model for all client installs."""
 
   package = db.StringProperty()  # Firefox, Munkitools, etc.
-  status = db.StringProperty()  # SUCCESSFUL, FAILURE, etc.
+  # TODO(user): convert existing SUCCESSFUL/FAILED status to just ints and
+  #             change status to db.IntegerProperty()
+  status = db.StringProperty()  # return code; 0, 1, 2 etc.
   on_corp = db.BooleanProperty()  # True for install on corp, False otherwise.
+  applesus = db.BooleanProperty(default=False)
+  duration_seconds = db.IntegerProperty()
 
 
 class AdminLogBase(Log):
@@ -301,6 +602,14 @@ class AdminPackageLog(AdminLogBase, BasePlistModel):
   catalogs = db.StringListProperty()
   manifests = db.StringListProperty()
   install_types = db.StringListProperty()
+
+
+class AdminAppleSUSProductLog(AdminLogBase):
+  """Model to log all admin Apple SUS Product changes."""
+
+  product_id = db.StringProperty()
+  action = db.StringProperty()
+  tracks = db.StringListProperty()
 
 
 class KeyValueCache(BaseModel):
@@ -362,7 +671,10 @@ class ReportsCache(KeyValueCache):
   def GetStatsSummary(cls):
     """Returns tuples (stats summary dictionary, datetime) from Datastore."""
     entity = cls.get_by_key_name(cls._SUMMARY_KEY)
-    return util.Deserialize(entity.blob_value), entity.mtime
+    if entity and entity.blob_value:
+      return util.Deserialize(entity.blob_value), entity.mtime
+    else:
+      return {}, None
 
   @classmethod
   def SetStatsSummary(cls, d):
@@ -381,9 +693,10 @@ class ReportsCache(KeyValueCache):
   def GetInstallCounts(cls):
     """Returns tuple (install counts dict, datetime) from Datastore."""
     entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
-    if not entity:
+    if entity and entity.blob_value:
+      return util.Deserialize(entity.blob_value), entity.mtime
+    else:
       return {}, None
-    return util.Deserialize(entity.blob_value), entity.mtime
 
   @classmethod
   def SetInstallCounts(cls, d):
@@ -429,9 +742,10 @@ class ReportsCache(KeyValueCache):
       since = ''
     key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
     entity = cls.get_by_key_name(key)
-    if not entity:
+    if entity and entity.blob_value:
+      return util.Deserialize(entity.blob_value), entity.mtime
+    else:
       return None
-    return util.Deserialize(entity.blob_value), entity.mtime
 
   @classmethod
   def DeleteMsuUserSummary(cls, since, tmp=False):
@@ -475,38 +789,29 @@ class BaseCompressedMunkiModel(BaseModel):
 
   name = db.StringProperty()
   mtime = db.DateTimeProperty(auto_now=True)
-  _plist = db.BlobProperty()  # catalog/manifest/pkginfo plist file.
-
-  def _GetPlist(self):
-    """Returns the _plist property encoded in utf-8."""
-    return unicode(zip.CompressedText(self._plist)).encode('utf-8')
-
-  def _SetPlist(self, plist):
-    """Sets the _plist property.
-
-    if plist is unicode, store as is.
-    if plist is other, store it and attach assumption that encoding is utf-8.
-
-    therefore, the setter only accepts unicode or utf-8 str (or ascii, which
-    would fit inside utf-8)
-
-    Args:
-      plist: str or unicode XML plist.
-    """
-    if type(plist) is unicode:
-      self._plist = db.Blob(
-          zip.CompressedText(plist).Compressed())
-    else:
-      self._plist = db.Blob(
-          zip.CompressedText(plist, encoding='utf-8').Compressed())
-
-  plist = property(_GetPlist, _SetPlist)
+  plist = CompressedUtf8BlobProperty()  # catalog/manifest/pkginfo plist file.
 
 
 class AppleSUSCatalog(BaseCompressedMunkiModel):
   """Apple Software Update Service Catalog."""
 
   last_modified_header = db.StringProperty()
+
+
+class AppleSUSProduct(BaseModel):
+  """Apple Software Update Service products."""
+
+  product_id = db.StringProperty()
+  name = db.StringProperty()
+  version = db.StringProperty()
+  description = db.TextProperty()
+  apple_mtime = db.DateTimeProperty()
+  tracks = db.StringListProperty()
+  mtime = db.DateTimeProperty(auto_now=True)
+  # If manual_override, then auto-promotion will not occur.
+  manual_override = db.BooleanProperty(default=False)
+  # If deprecated, then the product is entirely hidden and unused.
+  deprecated = db.BooleanProperty(default=False)
 
 
 class Catalog(BaseMunkiModel):
@@ -524,10 +829,6 @@ class Manifest(BaseMunkiModel):
 
   These are manually generated and managed on App Engine by admins.
   Name property is something like: stable-leopard, unstable-snowleopard, etc.
-
-  Note: When we start doing single client targeting with Stuff integration,
-    these may be automatically generated with names containing destination
-    hostnames.
   """
 
   enabled = db.BooleanProperty(default=True)
@@ -556,16 +857,61 @@ class PackageInfo(BaseMunkiModel):
   filename = db.StringProperty()
   # key to Blobstore for package data.
   blobstore_key = db.StringProperty()
+  # sha256 hash of package data
+  pkgdata_sha256 = db.StringProperty()
+  # munki name in the form of pkginfo '%s-%s' % (display_name, version)
+  # this property is automatically updated on put()
+  munki_name = db.StringProperty()
+
+  def IsSafeToModify(self):
+    """Returns True if the pkginfo is modifiable, False otherwise."""
+    if common.STABLE in self.manifests:
+      return False
+    elif common.TESTING in self.manifests:
+      return False
+    return True
+
+  def _GetMunkiName(self):
+    """Returns the str Munki name of the PackageInfo entity."""
+    if not self._plist:
+      return None
+    pl = plist_lib.MunkiPackageInfoPlist(self._plist.encode('utf-8'))
+    pl.Parse()
+    return pl.GetMunkiName()
+
+  def put(self, *args, **kwargs):
+    """Perform datastore put operation.
+
+    Args:
+      args: list, optional, args to superclass put()
+      kwargs: dict, optional, keyword args to superclass put()
+    Returns:
+      return value from superclass put()
+    """
+    self.munki_name = self._GetMunkiName()
+    return super(PackageInfo, self).put(*args, **kwargs)
 
 
 class BaseManifestModification(BaseModel):
   """Manifest modifications for dynamic manifest generation."""
 
   enabled = db.BooleanProperty(default=True)
-  install_type = db.StringProperty()  # managed_installs, managed_updates, etc.
-  # value to be added or removed from the install_type above.
+  install_types = db.StringListProperty()  # ['managed_installs']
+  # Value to be added or removed from the install_type above.
   value = db.StringProperty()  # fooinstallname. -fooinstallname to remove it.
   manifests = db.StringListProperty()  # ['unstable', 'testing']
+  # Automatic properties to record who made the mod and when.
+  mtime = db.DateTimeProperty(auto_now_add=True)
+  user = db.UserProperty()
+
+  def Serialize(self):
+    """Returns a serialized string representation of the entity instance."""
+    d = {}
+    for p in self.properties():
+      d[p] = getattr(self, p)
+      if p in ['mtime', 'user']:
+        d[p] = str(d[p])
+    return util.Serialize(d)
 
 
 class SiteManifestModification(BaseManifestModification):
@@ -580,7 +926,49 @@ class OSVersionManifestModification(BaseManifestModification):
   os_version = db.StringProperty()  # 10.6.5
 
 
-# Other models.
+class OwnerManifestModification(BaseManifestModification):
+  """Manifest modifications for dynamic manifest generation by owner."""
+
+  owner = db.StringProperty()  # foouser
+
+OwnerManifestModification.MemcacheAddAutoUpdateTask(
+    'MemcacheWrappedPropMapGenerate', 'owner', defer_if_locked=True)
+
+
+class UuidManifestModification(BaseManifestModification):
+  """Manifest modifications for dynamic manifest generation by computer."""
+
+  uuid = db.StringProperty()  # Computer.uuid format
+
+UuidManifestModification.MemcacheAddAutoUpdateTask(
+    'MemcacheWrappedPropMapGenerate', 'uuid', defer_if_locked=True)
+
+
+class PackageAlias(BaseModel):
+  """Maps an alias to a Munki package name.
+
+  Note: PackageAlias key_name should be the alias name.
+  """
+
+  munki_pkg_name = db.StringProperty()
+  enabled = db.BooleanProperty(default=True)
+
+  @classmethod
+  def ResolvePackageName(cls, pkg_alias):
+    """Returns a package name for a given alias, or None if alias was not found.
+
+    Args:
+      pkg_alias: str package alias.
+    Returns:
+      str package name, or None if the pkg_alias was not found.
+    """
+    entity = cls.MemcacheWrappedGet(pkg_alias)
+    if not entity:
+      # TODO(user): email Simian admins ??
+      logging.error('Unknown pkg_alias requested: %s', pkg_alias)
+    elif entity.enabled and entity.munki_pkg_name:
+      return entity.munki_pkg_name
+    return None
 
 
 class FirstClientConnection(BaseModel):

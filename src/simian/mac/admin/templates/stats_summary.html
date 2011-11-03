@@ -12,7 +12,7 @@
 <div class="wrap">
   {% block cache_info %}
     {% if not cached %}
-      <span class="realtime">Viewing real-time stats.  Save CPU and <a href="/admin/stats/">view cached stats</a></span>
+      <span class="realtime">Viewing real-time report; loading may be slow.</span>
       <h3>Summary</h3>
       {% if next_page %}
         <p>Over {{ limit }} computers found; summary data limited to viewable results.</p>
@@ -49,7 +49,7 @@
       <tr><th colspan="4">Tracks</th></tr>
         {% for track in summary.tracks %}
           <tr class="{% cycle lbg,dbg %}">
-            <td><a href="/admin/stats/?type=track&filter={{ track.0 }}"
+            <td><a href="/admin?type=track&filter={{ track.0 }}"
                 >{{ track.0 }}</a></td>
             <td>{{ track.1 }}</td>
             <td><a href="/manifests/track={{ track.0 }}">manifest</a></td>
@@ -92,7 +92,7 @@
       <tr><th colspan="2">Client Versions</th></tr>
       {% for version in summary.client_versions %}
         <tr class="{% cycle lbg,dbg %}">
-          <td><a href="/admin/stats/?type=client_version&filter={{ version.0 }}"
+          <td><a href="/admin?type=client_version&filter={{ version.0 }}"
                 >{{ version.0 }}</a></td>
           <td>{{ version.1 }}</td>
         </tr>
@@ -105,7 +105,7 @@
       <tr><th colspan="2">OS Versions</th></tr>
       {% for version in summary.os_versions %}
        <tr class="{% cycle lbg,dbg %}">
-         <td><a href="/admin/stats/?type=os_version&filter={{ version.0 }}"
+         <td><a href="/admin?type=os_version&filter={{ version.0 }}"
                 >{{ version.0 }}</a></td>
          <td>{{ version.1 }}</td>
        </tr>
@@ -122,7 +122,7 @@
     {% for site in summary.sites_histogram %}
       <li>
         <b>{{ site.0 }}</b>:
-        <a href="/admin/stats/?type=site&filter={{ site.0 }}"
+        <a href="/admin?type=site&filter={{ site.0 }}"
            >{{ site.1 }}</a>
       </li>
     {% endfor %}
@@ -133,59 +133,72 @@
 
   {% ifequal report_type "diskfree" %}
     <h3>Disk Free Report</h3>
-    <a href="/admin/stats">Back to stats home</a><br />
   {% endifequal %}
 
   {% ifequal report_type "pkgs_to_install" %}
     <h3>Pending: {{ pkg }}</h3>
-    <a href="/admin/stats/installs">Back to installs list</a><br />
+    <a href="/admin/installs">Back to installs list</a><br />
   {% endifequal %}
 
   {% if computers %}
     <h3>Computers</h3>
-    Results limited to {{ limit }} computers.
+    {% if computers|length > limit %}
+      Results limited to {{ limit }} computers.
+    {% else %}
+      {{ computers|length }} computers displayed.
+    {% endif %}
 
   {% if next_page %}
     {% ifequal report_type "pkgs_to_install" %}
-      <a href="/admin/stats/installs?pkg={{ pkg }}&pending=1&page={{ next_page }}">Next Page &raquo;</a>
+      <a href="/admin/installs?pkg={{ pkg }}&pending=1&page={{ next_page }}">Next Page &raquo;</a>
     {% else %}
-      <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+      <a href="/admin?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
     {% endifequal %}
   {% endif %}
 
   <table class="stats-table">
     <tr class="multi-header">
-       {% ifequal report_type "diskfree" %}
+       {% if report_type == "diskfree" %}
          <th>Disk Free</th>
-       {% endifequal %}
-       {% ifequal report_type "uptime" %}
-         <th>Uptime</th>
-       {% endifequal %}
+       {% else %}
+         {% if report_type == "uptime" %}
+           <th>Uptime</th>
+         {% else %}
+           {% if report_type == "offcorp" %}
+             <th>Last Off Corp Preflight</th>
+           {% endif %}
+         {% endif %}
+       {% endif %}
        <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
        <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
        <th>Site</th><th>Office</th>
        <th>(on/off corp)</th>
-       <th>Last MSU Popup</th>
        <th>Last Preflight</th>
        <th>Last Postflight</th>
     </tr>
     {% for computer in computers %}
     <tr class="{% cycle lbg,dbg %}">
-      {% ifequal report_type "diskfree" %}
+      {% if report_type == "diskfree" %}
         <td>{{ computer.root_disk_free|filesizeformat }}</td>
-      {% endifequal %}
-      {% ifequal report_type "uptime" %}
-        <td>{{ computer.uptime }}</td>
-      {% endifequal %}
+      {% else %}
+        {% if report_type == "uptime" %}
+          <td>{{ computer.uptime }}</td>
+        {% else %}
+          {% if report_type == "offcorp" %}
+            <td>{{ computer.last_on_corp_preflight_datetime }}
+                ({{ computer.last_on_corp_preflight_datetime|timesince }})</td>
+          {% endif %}
+        {% endif %}
+      {% endif %}
       <td>{{ computer.hostname }}</td>
       <td>
         {% ifequal report "host" %}
           {{ computer.uuid }}
         {% else %}
-          <a href="/admin/stats/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
+          <a href="/admin/host/{{ computer.uuid }}">{{ computer.uuid }}</a>
         {% endifequal %}
       </td>
-      <td><a href="/admin/stats/?type=owner&filter={{ computer.owner }}"
+      <td><a href="/admin?type=owner&filter={{ computer.owner }}"
           >{{ computer.owner }}</a></td>
       <td>{{ computer.track }}</td>
       <td>{{ computer.config_track }}</td>
@@ -196,7 +209,6 @@
       <td>{{ computer.connections_on_corp }} /
           {{ computer.connections_off_corp }}
       </td>
-      <td>{{ computer.last_notified_datetime|timesince }}</td>
       <td>{{ computer.preflight_datetime|timesince }}</td>
       <td>{{ computer.postflight_datetime|timesince }}</td>
     </tr>
@@ -205,25 +217,48 @@
 
   {% if next_page %}
     Results limited to {{ limit }} computers.
-    <a href="/admin/stats/?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin?type={{ report_type }}&filter={{ report_filter }}&page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
   {% endif %}
 
   <p>
-    <h3>Other Reports</h3>
+    <h3>Client Reports</h3>
     <ul>
-      <li><a href="/admin/stats/installs">View all installs</a></li>
-      <li><a href="/admin/stats/diskfree">View low disk free report</a></li>
-      <li><a href="/admin/stats/uptime">View longest uptime report</a></li>
-      <li><a href="/admin/stats/brokenclients">View broken clients</a></li>
-      <li><a href="/admin/stats/installproblems">View install problems</a></li>
-      <li><a href="/admin/stats/preflightexits">View preflight exits</a></li>
-      <li><a href="/admin/stats/user_settings">View UserSettings report</a></li>
-      <li>View MSU log summaries:
-      		<a href="/admin/stats/msulogsummary">for all time</a> or
-      		<a href="/admin/stats/msulogsummary/1">since 1 day</a> or
-      		<a href="/admin/stats/msulogsummary/7">since 7 days</a></li>
+      <li>Packages:
+        <a href="/admin/installs">List</a> |
+        <a href="/admin/installs?historical=1">Historical List</a> |
+        <a href="/admin/installs?pkg=all">All Installs</a>
+      </li>
+      <li>Apple SUS Updates:
+        <a href="/admin/installs?applesus=1">Historical List</a> |
+        <a href="/admin/installs?pkg=all&applesus=1">All Installs</a> |
+        <a href="/admin/applesus">Admin</a>
+      </li>
+      <li><a href="/admin/installproblems">Install Problems</a></li>
+      <li><a href="/admin/preflightexits">Preflight Exits</a></li>
+      <li><a href="/admin/diskfree">Low Disk Space</a></li>
+      <li><a href="/admin/uptime">Long Uptime</a></li>
+      <li><a href="/admin/offcorp">Longest Off Corp</a></li>
+    </ul>
+
+    <h3>Admin Reports</h3>
+    <ul>
+      <li><a href="/admin/brokenclients">Broken Clients</a></li>
+      <li><a href="/admin/applesus">Apple SUS Admin</a></li>
+      <li><a href="/admin/loststolen">Lost/Stolen Computers</a></li>
+      <li><a href="/admin/adminlogs">Admin Logs</a></li>
+      <li><a href="/admin/user_settings">UserSettings Knobs</a></li>
+      <li>
+        <a href="/admin/manifest_modifications">Manifest Modifications</a>
+      </li>
+      <li><a href="/admin/package_alias">Package Aliases</a></li>
+      <li>
+        MSU log summaries:
+        <a href="/admin/msulogsummary">for all time</a> or
+      	<a href="/admin/msulogsummary/1">since 1 day</a> or
+      	<a href="/admin/msulogsummary/7">since 7 days</a>
+      </li>
     </ul>
   </p>
 </div>

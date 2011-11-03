@@ -26,20 +26,16 @@ from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from simian import settings
+from simian.mac.common import auth
 from simian.mac.munki import common
 
 
 class AdminPanic(webapp.RequestHandler):
   """Handler for /admin/panic."""
 
-  def IsAdmin(self):
-    """Returns True if the user is an admin."""
-    user = users.get_current_user()
-    return user is not None and user.email() in settings.ADMINS
-
   def get(self):
     """GET handler."""
-    if not self.IsAdmin():
+    if not auth.IsAdminUser():
       return
 
     modes = []
@@ -57,7 +53,7 @@ class AdminPanic(webapp.RequestHandler):
 
   def post(self):
     """POST handler."""
-    if not self.IsAdmin():
+    if not auth.IsAdminUser():
       return
 
     mode = self.request.get('mode')

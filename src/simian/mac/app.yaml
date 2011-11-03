@@ -8,7 +8,12 @@ builtins:
 - remote_api: on
 #- appstats: on
 skip_files:
-- ^(.*/)?mac/client/.*
+- ^(.*/)?.*\.so
+
+
+
+
+
 
 default_expiration: '3650d'
 
@@ -31,22 +36,22 @@ handlers:
 ### crons
 
 - url: /cron/applesus/.*
-  script: simian/mac/cron/applesus.py
+  script: simian/mac/cron/main.py
   login: admin
   secure: always
 
 - url: /cron/maintenance/.*
-  script: simian/mac/cron/maintenance.py
+  script: simian/mac/cron/main.py
   login: admin
   secure: always
 
 - url: /cron/reports_cache/.*
-  script: simian/mac/cron/reports_cache.py
+  script: simian/mac/cron/main.py
   login: admin
   secure: always
 
 - url: /cron/welcome_email
-  script: simian/mac/cron/welcome_email.py
+  script: simian/mac/cron/main.py
   login: admin
   secure: always
 
@@ -76,9 +81,17 @@ handlers:
   script: main.py
   secure: always
 
-### Apple SUS integration.
+### Apple SUS integration, client repair, Munki log uploads, etc.
 
 - url: /applesus/.*
+  script: main.py
+  secure: always
+
+- url: /repair
+  script: main.py
+  secure: always
+
+- url: /uploadfile/.*
   script: main.py
   secure: always
 
@@ -95,12 +108,28 @@ handlers:
   login: required
   secure: always
 
+# intentionally omit "login: required" for arriving loginz requests
+- url: /loginz
+  script: main.py
+  secure: always
+
+- url: /api/.*
+  script: main.py
+  secure: always
+
 ### deferred tasks
 
 - url: /_ah/queue/deferred
   script: simian/mac/deferred_wrapper.py
   secure: always
   login: admin
+
+# Static content for admin page.
+
+- url: /admin/static
+  static_dir: simian/mac/admin/static
+  secure: always
+  login: required
 
 ### catchall handler
 

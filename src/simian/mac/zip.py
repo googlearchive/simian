@@ -28,7 +28,7 @@ from google.appengine.api import datastore_types
 MAGIC = '!@#zlib'
 MAGIC_LEN = len(MAGIC)
 INTERNAL_ENCODING = 'utf-8'
-COMPRESSION_THRESHOLD = 921600   # 900K
+COMPRESSION_THRESHOLD = 665600  # 650K
 
 
 class CompressedText(object):

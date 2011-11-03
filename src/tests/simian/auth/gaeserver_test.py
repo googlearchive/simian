@@ -99,7 +99,8 @@ class GaeserverModuleTest(mox.MoxTestBase):
     gaeserver.AuthSimianServer().AndReturn(mock_auth1)
     mock_cookie.__getitem__(
         gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
-    mock_auth1.GetSessionIfAuthOK(token, gaeserver.LEVEL_BASE).AndReturn(None)
+    mock_auth1.GetSessionIfAuthOK(token, gaeserver.LEVEL_BASE).AndRaise(
+        gaeserver.base.AuthSessionError)
 
     # 6: test all success!
     mock_environ.get('HTTP_COOKIE', None).AndReturn(cookie_str)
@@ -144,9 +145,9 @@ class GaeserverModuleTest(mox.MoxTestBase):
         gaeserver.models, 'KeyValueCache',
         self.mox.CreateMock(gaeserver.models.KeyValueCache))
     gaeserver.models.KeyValueCache.MemcacheWrappedGet(
-        'simian_private_key', prop_name='text_value').AndReturn(None)
+        'server_private_cert.pem', prop_name='text_value').AndReturn(None)
     gaeserver.models.KeyValueCache.MemcacheWrappedGet(
-        'simian_private_key', prop_name='text_value').AndReturn('pk')
+        'server_private_cert.pem', prop_name='text_value').AndReturn('pk')
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -386,14 +387,20 @@ class Auth1ServerDatastoreSessionTest(DatastoreModelTest):
 
   def testAll(self):
     """Test All()."""
-    model = self.mox.CreateMockAnything()
+    mock_model = self.mox.CreateMockAnything()
+    mock_query = self.mox.CreateMockAnything()
 
     self._StubGetModelClass()
     ads = self._GetAds()
 
-    ads.model = model
+    ads.model = mock_model
     sessions = [1, 2, 3]
-    model.all().AndReturn(sessions)
+    cursor = 'cursor'
+    mock_model.all().AndReturn(mock_query)
+    mock_query.fetch(500).AndReturn(sessions)
+    mock_query.cursor().AndReturn(cursor)
+    mock_query.with_cursor(cursor).AndReturn(None)
+    mock_query.fetch(500).AndReturn([])
 
     self.mox.ReplayAll()
     output = []
@@ -405,7 +412,7 @@ class Auth1ServerDatastoreSessionTest(DatastoreModelTest):
   def testAllWithMinAgeSeconds(self):
     """Test All(min_age_seconds=<int>)."""
     mock_model = self.mox.CreateMockAnything()
-    mock_model_all = self.mox.CreateMockAnything()
+    mock_query = self.mox.CreateMockAnything()
 
     self._StubDatetime()
     self._StubGetModelClass()
@@ -413,14 +420,20 @@ class Auth1ServerDatastoreSessionTest(DatastoreModelTest):
 
     ads.model = mock_model
     sessions = [1, 2, 3]
+    cursor = 'cursor'
     # stub out datetime.* calls with simple int returns.
     min_seconds = 120
     now_seconds = 220
     date_seconds = 100
     gaeserver.datetime.timedelta(seconds=min_seconds).AndReturn(min_seconds)
     gaeserver.datetime.datetime.utcnow().AndReturn(now_seconds)
-    mock_model.all().AndReturn(mock_model_all)
-    mock_model_all.filter('mtime <', date_seconds).AndReturn(sessions)
+    mock_model.all().AndReturn(mock_query)
+
+    mock_query.filter('mtime <', date_seconds).AndReturn(mock_query)
+    mock_query.fetch(500).AndReturn(sessions)
+    mock_query.cursor().AndReturn(cursor)
+    mock_query.with_cursor(cursor).AndReturn(None)
+    mock_query.fetch(500).AndReturn([])
 
     self.mox.ReplayAll()
     output = []

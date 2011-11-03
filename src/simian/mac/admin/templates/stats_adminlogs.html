@@ -1,0 +1,49 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Admin Logs{% endblock %}
+
+{% block page-content %}
+
+<h2>Admin Logs</h2>
+
+<p>{{ logs|length }} log lines found (limit {{ limit }}).</p>
+{% if next_page %}
+  <a href="/admin/adminlogs?page={{ next_page }}">Next Page &raquo;</a>
+{% endif %}
+
+
+{% if logs %}
+  <table class="stats-table">
+    <tr>
+       <th>Action</th>
+       <th>Filename</th>
+       <th>Install Types</th>
+       <th>Catalogs</th>
+       <th>Manifests</th>
+       <th>User</th>
+       <th>Time</th>
+       <th>Time Since</th>
+    </tr>
+    {% for log in logs %}
+      <tr class="{% cycle lbg,dbg %}">
+        <td>{{ log.action }}</td>
+        <td>{{ log.filename }}</td>
+        <td>{{ log.install_types|join:", " }}</td>
+        <td>{{ log.catalogs|join:", " }}</td>
+        <td>{{ log.manifests|join:", " }}</td>
+        <td>{{ log.user }}</td>
+        <td>{{ log.mtime }}</td>
+        <td>{{ log.mtime|timesince }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  {% if next_page %}
+    <a href="/admin/adminlogs?page={{ next_page }}">Next Page &raquo;</a>
+  {% endif %}
+
+{% endif %}
+
+{% endblock %}
+
+

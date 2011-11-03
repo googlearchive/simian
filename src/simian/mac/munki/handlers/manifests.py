@@ -35,7 +35,7 @@ from simian.mac.munki import plist as plist_module
 class Manifests(handlers.AuthenticationHandler, webapp.RequestHandler):
   """Handler for /manifests/"""
 
-  def get(self, client_id=''):
+  def get(self, client_id_str=''):
     """Manifest get handler.
 
     Args:
@@ -45,27 +45,23 @@ class Manifests(handlers.AuthenticationHandler, webapp.RequestHandler):
       A webapp.Response() response.
     """
     session = auth.DoAnyAuth()
-    if hasattr(session, 'uuid'):  # DoMunkiAuth returned session, override uuid.
-      # webapp's request.headers.get() returns None if the key doesn't exist
-      # which breaks urllib.unquote(), so return empty string default instead.
-      client_id = self.request.headers.get('X-munki-client-id', '')
-      if not client_id:
-        logging.warning('Client ID header missing: %s', session.uuid)
-      client_id = urllib.unquote(client_id)
-      client_id = common.ParseClientId(client_id, uuid=session.uuid)
-    else:  # DoUserAuth was called; setup client id
-      client_id = urllib.unquote(client_id)
-      client_id = common.ParseClientId(client_id)
+    client_id = handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str=client_id_str)
 
     try:
       plist_xml = common.GetComputerManifest(
           client_id=client_id, packagemap=False)
     except common.ManifestNotFoundError, e:
-      logging.debug('Invalid manifest requested: %s', str(e))
+      logging.warning('Invalid manifest requested: %s', str(e))
       self.response.set_status(404)
       return
     except common.ManifestDisabledError, e:
-      logging.debug('Disabled manifest requested: %s', str(e))
+      logging.info('Disabled manifest requested: %s', str(e))
+      self.response.set_status(503)
+      return
+    except common.Error, e:
+      logging.exception(
+          '%s, client_id_str=%s', str(e.__class__.__name__), client_id_str)
       self.response.set_status(503)
       return
 

@@ -9,10 +9,12 @@ Exit codes: see constants below.
 
 
 
+import datetime
 import errno
 import logging
 import os
 import re
+import signal
 import shutil
 import sys
 import time
@@ -25,28 +27,30 @@ from munkilib import munkicommon
 IFCONFIG = '/sbin/ifconfig'
 # Start exit codes
 STATUS_SUCCESS = (0, 'SUCCESS')
-STATUS_FAIL_AUTH = (1, 'failure obtaining auth token')
-STATUS_FAIL_WWAN_ACTIVE = (2, 'WWAN device ppp0 is active')
-STATUS_FAIL_ANDROID_WAP_ACTIVE = (3, 'Android WAP tether is active')
-STATUS_FAIL_CONFIG_SETUP = (4, 'Config setup errors')
+STATUS_FAIL_AUTH = (10, 'failure obtaining auth token')
+STATUS_FAIL_WWAN_ACTIVE = (11, 'WWAN device ppp0 is active')
+STATUS_FAIL_ANDROID_WAP_ACTIVE = (12, 'Android WAP tether is active')
+STATUS_FAIL_CONFIG_SETUP = (13, 'Config setup errors')
+STATUS_SERVER_EXIT_FEEDBACK = (14, 'Server send EXIT command')
 # End exit codes
-PLIST_EMPTY = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-</dict>
-</plist>
-"""
 MUNKI_CLIENT_ID_HEADER_KEY = 'X-munki-client-id'
 MAX_ATTEMPTS = 4
 MSULOGFILE = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.log'
+MSULOGDIR = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.logs'
 
 
-def LoginToServer(plist, client_id, user_settings):
+DEBUG = False
+if DEBUG:
+  logging.getLogger().setLevel(logging.DEBUG)
+else:
+  logging.getLogger().setLevel(logging.INFO)
+
+
+def LoginToServer(config, client_id, user_settings):
   """Sets an auth token cookie header to a plist object.
 
   Args:
-    plist: FoundationPlist.NSCFDictionary object.
+    config: FoundationPlist.NSCFDictionary object.
     client_id: dict client identifier.
     user_settings: dict of user settings.
   Returns:
@@ -55,8 +59,8 @@ def LoginToServer(plist, client_id, user_settings):
   headers = []
 
   # Preserve all non-Cookie and non-ClientID headers that may exist.
-  if munkicommon.ADDITIONAL_HTTP_HEADERS_KEY in plist:
-    for header in plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]:
+  if munkicommon.ADDITIONAL_HTTP_HEADERS_KEY in config:
+    for header in config[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]:
       if (not header.startswith('Cookie:') and
           not header.startswith(MUNKI_CLIENT_ID_HEADER_KEY)):
         headers.append(header)
@@ -70,8 +74,25 @@ def LoginToServer(plist, client_id, user_settings):
   script_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
   script_path = os.path.join(script_dir, flight_common.AUTH_BINARY)
 
-  client_id_str = flight_common.ClientIdDictToStr(client_id)
-  user_settings_str = ''
+  client_id_str = flight_common.DictToStr(client_id)
+  if type(client_id_str) is unicode:
+    client_id_str = client_id_str.encode('utf-8')
+
+  if user_settings:
+    if not HAS_JSON:
+      logging.error('preflight cannot send user_settings, json missing')
+      user_settings_str = ''
+    else:
+      try:
+        user_settings_str = urllib.quote(
+            json.dumps(flight_common.Flatten(user_settings)))
+      except TypeError:
+        logging.error(
+            'preflight cannot flatten user_settings: %s', str(user_settings))
+        user_settings_str = ''
+  else:
+    user_settings_str = ''
+
   client_params = {
       '_report_type': 'preflight',
       'client_id': client_id_str,
@@ -82,19 +103,42 @@ def LoginToServer(plist, client_id, user_settings):
   cmd = [
       script_path, '--login', '--print-cookie',
       '--write-root-ca-certs', cert_file_path,
-      '--report', 'body:%s' % client_params,
+      '--report', 'feedback:OK=0:%s=77:%s=88:%s=99:body:%s' % (
+          flight_common.ReportFeedback.EXIT,
+          flight_common.ReportFeedback.REPAIR,
+          flight_common.ReportFeedback.UPLOAD_LOGS,
+          client_params),
   ]
-  return_code, stdout, stderr = flight_common.Exec(cmd)
+  return_code, stdout, stderr = flight_common.Exec(cmd, timeout=90, waitfor=0.5)
   token = stdout.strip()
-  if return_code != 0 or not stdout:
-    logging.error(
-        'preflight failure obtaining token (%d): %s', return_code, stderr)
-    sys.exit(STATUS_FAIL_AUTH[0])
+
   # Add the Cookie and client id to the headers.
   headers.append('Cookie: %s' % token)
   headers.append('%s: %s' % (MUNKI_CLIENT_ID_HEADER_KEY, client_id_str))
   # Replace AdditionalHttpHeaders with the new headers list.
-  plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
+  config[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
+
+  if return_code == 99:
+    # write new token/client_id headers to secure plist and upload logs.
+    fpl.writePlist(config, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
+    flight_common.UploadClientLogFiles()
+  elif return_code == 88:
+    # write new token/client_id headers to secure plist and repair client.
+    fpl.writePlist(config, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
+    try:
+      logging.info('Reinstalling Munki client....')
+      flight_common.RepairClient()
+      logging.info('Client successfully reinstalled.')
+    except flight_common.RepairClientError, e:
+      logging.exception('RepairClientError: %s', str(e))
+  elif return_code == 77:
+    logging.warning('preflight received EXIT feedback from server; exiting....')
+    sys.exit(STATUS_SERVER_EXIT_FEEDBACK[0])
+  elif return_code != 0 or not stdout:
+    logging.error(
+        'preflight failure obtaining token (%d): %s', return_code, stderr)
+    sys.exit(STATUS_FAIL_AUTH[0])
+
   return token
 
 
@@ -209,12 +253,14 @@ def CreateEmptyDirectory(attempt=0):
   return path
 
 
-def GetManagedSoftwareUpdateLogs():
-  """Get logs from MSU.
+def GetManagedSoftwareUpdateLogFile(logfile=MSULOGFILE):
+  """Get logs from one MSU log file.
 
   This function modifies the existing log file by removing it, thus
   rolling the logs also.
 
+  Args:
+    logfile: str, log file to open
   Returns:
     array of dicts in form = {
       'time': float, Unix timestamp
@@ -224,17 +270,17 @@ def GetManagedSoftwareUpdateLogs():
       'desc': str, like "additional descriptive text"
     }
   """
-  if not os.path.exists(MSULOGFILE):
+  if not os.path.exists(logfile):
     return []
 
-  name = '%s.%d.%d' % (MSULOGFILE, os.getpid(), time.time())
+  name = '%s.%d.%d' % (logfile, os.getpid(), time.time())
   try:
-    os.link(MSULOGFILE, name)
+    os.link(logfile, name)
   except OSError:
     return []
 
   fd = open(name, 'r')
-  os.unlink(MSULOGFILE)
+  os.unlink(logfile)
   logs = []
 
   try:
@@ -275,6 +321,21 @@ def GetManagedSoftwareUpdateLogs():
   return logs
 
 
+def GetManagedSoftwareUpdateLogs():
+  """Get logs from all MSU log files.
+
+  Returns:
+    array of dicts in same form as GetManagedSoftwareUpdateLogFile().
+  """
+  logs = []
+  logs.extend(GetManagedSoftwareUpdateLogFile(MSULOGFILE))
+  if os.path.isdir(MSULOGDIR):
+    for name in os.listdir(MSULOGDIR):
+      logs.extend(
+          GetManagedSoftwareUpdateLogFile(os.path.join(MSULOGDIR, name)))
+  return logs
+
+
 def PostManagedSoftwareUpdateLogs(logs, token):
   """Post Managed Software Update logs to Munki server.
 
@@ -303,26 +364,28 @@ def main(args):
   if runtype == 'logoutinstall':
     sys.exit(0)
 
+  # load the NONSECURE ManagedInstalls.plist
+  regular_config = fpl.readPlist(munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+
+
   config_file_path = munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH
 
-  # create the secure ManagedInstalls.plist file if it doesn't exist.
-  if not os.path.isfile(config_file_path):
-    logging.info('secure config does not exist; attempting to create')
-    f = open(config_file_path, 'w')
-    f.write(PLIST_EMPTY)
-    f.close()
-
   # read secure ManagedInstalls.plist.
-  plist = fpl.readPlist(config_file_path)
+  try:
+    secure_config = fpl.readPlist(config_file_path)
+  except fpl.NSPropertyListSerializationException:
+    logging.warning(
+        'secure config does not exist or is corrupt; resetting to empty.')
+    secure_config = {}
 
   # update the ClientIdentifier key with the custom client id.
   client_id = flight_common.GetClientIdentifier()
-  plist['ClientIdentifier'] = client_id['track']
+  secure_config['ClientIdentifier'] = client_id['track']
 
   user_settings = {}
 
   # get a client auth token/cookie from the server, and post connection data.
-  token = LoginToServer(plist, client_id, user_settings)
+  token = LoginToServer(secure_config, client_id, user_settings)
 
   # post recent MSU logs
   logs = GetManagedSoftwareUpdateLogs()
@@ -353,33 +416,34 @@ def main(args):
         logging.warning('Report status from server: %s', response)
 
   # save secure ManagedInstalls.plist.
-  fpl.writePlist(plist, config_file_path)
+  fpl.writePlist(secure_config, config_file_path)
 
-  # load user settings into the NONSECURE ManagedInstalls.plist
-  plist = fpl.readPlist(munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+  # load user settings
   if user_settings:
-    plist['UserSettings'] = user_settings
+    regular_config['UserSettings'] = user_settings
   else:
-    if 'UserSettings' in plist:
-      del(plist['UserSettings'])  # wipe existing UserSettings.
+    if 'UserSettings' in regular_config:
+      del(regular_config['UserSettings'])  # wipe existing UserSettings.
 
   # setup blank directory for capath setting
   path = CreateEmptyDirectory()
-  plist['SoftwareRepoCAPath'] = path
+  regular_config['SoftwareRepoCAPath'] = path
+
+  # enable MSU logging
+  regular_config['MSULogEnabled'] = True
 
   # If setting is enabled, force Simian Apple SUS integration.
   if client_id.get('applesus'):
-    plist['InstallAppleSoftwareUpdates'] = True
+    regular_config['InstallAppleSoftwareUpdates'] = True
     # Get Apple Software Update Service catalog from server and set locally.
     flight_common.GetAppleSUSCatalog()
 
   # write NONSECURE ManagedInstalls.plist
-  fpl.writePlist(plist, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+  fpl.writePlist(regular_config, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
 
   # Report installs/etc to server.
-  flight_common.ReportInstallsToServerAndLogout(
-      client_id.get('on_corp', 'None'), logout=False)
-  
+  flight_common.UploadAllManagedInstallReports(client_id.get('on_corp', 'None'))
+
   # Delete the temp dir that munkicommon creates on import.
   munkicommon.cleanUpTmpDir()
 

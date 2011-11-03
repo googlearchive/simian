@@ -79,7 +79,8 @@ class DeletePackageTest(test.RequestHandlerTest):
     self.request.get('filename').AndReturn(filename)
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
-    self.response.set_status(404, 'Pkginfo does not exist: %s' % filename)
+    self.response.set_status(404)
+    self.response.out.write('Pkginfo does not exist: %s' % filename)
 
     self.mox.ReplayAll()
     self.c.post()

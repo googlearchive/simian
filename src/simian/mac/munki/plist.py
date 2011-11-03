@@ -38,19 +38,18 @@ Contents:
 
 import base64
 import datetime
-import re
 import struct
 import xml.parsers.expat
+import xml.sax.saxutils
 
+PLIST_HEAD = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" '
+    '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+    '<plist version="1.0">\n'
+    )
 
-PLIST_HEAD = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-"""
-
-PLIST_FOOT = """
-</plist>
-"""
+PLIST_FOOT = '\n</plist>\n'
 
 PLIST_DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -66,13 +65,14 @@ APPLE_PLIST_ELEMENTS = {
     'false': None,
     'true': None,
     'data': None,
+    'real': None,
 }
 
 
 INDENT_CHAR = '  '
 
 
-PLIST_CONTENT_TYPES = [list, dict]
+PLIST_CONTENT_TYPES = [list, dict, type(None)]
 
 
 class Error(Exception):
@@ -169,6 +169,7 @@ class ApplePlist(object):
     Args:
       plist: str, optionally supply the Plist on init
     """
+    self._validation_hooks = []
     self.Reset()
     if plist is not None:
       self.LoadPlist(plist)
@@ -225,12 +226,17 @@ class ApplePlist(object):
     self._plist_bin = None
     self._plist_xml = None
     self._plist_xml_encoding = None
-    self._plist = None
+
+    # no _plist property, no plist loaded
+    # _plist == None, empty <plist> node contents
+    # _plist == other, plist contents
+    if hasattr(self, '_plist'):
+      del(self._plist)
+
     self._plist_version = None
     self._current_mode = []
     self._current_value = []
     self._current_key = []
-    self._validation_hooks = []
     self.__bin = {}
     self._type_lookup = {
         0: self._BinLoadSimple,
@@ -343,13 +349,13 @@ class ApplePlist(object):
     """
     return base64.b64decode(data_str)
 
-  def _XmlDeclHandler(self, version, encoding, standalone):
+  def _XmlDeclHandler(self, unused_version, encoding, unused_standalone):
     """Handle the XML declaration header.
 
     Args:
-      version: str, version of XML
+      unused_version: str, version of XML
       encoding: str, encoding format e.g. 'utf-8'
-      standalone: int in [-1, 0, 1], per pyexpat docs
+      unused_standalone: int in [-1, 0, 1], per pyexpat docs
     """
     self._plist_xml_encoding = encoding
 
@@ -361,6 +367,7 @@ class ApplePlist(object):
       attributes: dict, like {'version': '1.0'}, may be empty
     Raises:
       NotImplementedError: if the element name is not recognized
+      MalformedPlistError: XML error
     """
     # be careful, avoid invalid XML
     if name not in APPLE_PLIST_ELEMENTS:
@@ -389,7 +396,7 @@ class ApplePlist(object):
       self._NewMode(name)
       self._NewValue([])
     # value is about to arrive, look for it.
-    elif name in ['string', 'integer', 'date', 'data']:
+    elif name in ['string', 'integer', 'date', 'data', 'real']:
       self._NewMode(name)
     # these elements describe the value also, put it on the stack now.
     elif name in ['true', 'false']:
@@ -406,17 +413,18 @@ class ApplePlist(object):
       value: str
     """
     # ignore newlines and extra junk in between dict and array nodes.
-    if not value or value == '\n' or self._CurrentMode() in ['dict', 'array']:
-      return
+    if self._CurrentMode() in ['dict', 'array']:
+      if not value or value == '\n':
+        return
 
     # if looking for values (mode in key,string,integer), then store them
     # from this cdata.
     if self._CurrentMode() == 'key':
       self._NewValue(value)
       self._NewMode('value')
-    elif self._CurrentMode() == 'string':
+    elif self._CurrentMode() in ['string', 'mvalue']:
       self._NewValue(value)  # put unicode conv logic here if ever needed
-      self._NewMode('value')
+      self._NewMode('mvalue')
     elif self._CurrentMode() == 'integer':
       self._NewValue(int(value))
       self._NewMode('value')
@@ -425,6 +433,9 @@ class ApplePlist(object):
       self._NewMode('value')
     elif self._CurrentMode() == 'data':
       self._NewValue(self._ParseData(value))
+      self._NewMode('value')
+    elif self._CurrentMode() == 'real':
+      self._NewValue(float(value))
       self._NewMode('value')
 
   def _EndElementHandler(self, name):
@@ -436,13 +447,12 @@ class ApplePlist(object):
     # if this is the end of the plist element, populate our internal
     # plist property and immediately return.  this completes the XML scan.
     if name == 'plist':
-      if len(self._current_value) > 0:
+      if self._current_value:
         self._plist = self._CurrentValue()
         self._ReleaseValue()
       else:
-        # it's an empty plist, but the plist element did exist.  so,
-        # initialize it to an empty dictionary.
-        self._plist = {}
+        # it's an empty plist, but the plist element did exist.
+        self._plist = None
       return
 
     # if the current mode is value, there is value to be popped off
@@ -451,6 +461,15 @@ class ApplePlist(object):
       self._ReleaseMode()
       value = self._CurrentValue()
       self._ReleaseValue()
+    # multiple values to be combined together like strings
+    elif self._CurrentMode() == 'mvalue':
+      value = []
+      while self._CurrentMode() == 'mvalue':
+        self._ReleaseMode()
+        # note: insert at front to reverse order as popped off stack
+        value.insert(0, self._CurrentValue())
+        self._ReleaseValue()
+      value = ''.join(value)
     # if this element ending is an array or dict, we're done building
     # these structures.  pop the value off and keep it to store it.
     elif name in ['array', 'dict']:
@@ -499,7 +518,8 @@ class ApplePlist(object):
       header: str, optional, default internal _plist_bin,
           header to interpret
     Raises:
-      MalformedPlistError: if the header is invalid or not understood
+      BinaryPlistHeaderError: the binary header is malformed
+      BinaryPlistVersionError: the binary version is unsupported/unknown
     """
     # chop to exact length of header (see unpack below) to avoid struct.error
     if header is None:
@@ -510,7 +530,7 @@ class ApplePlist(object):
     try:
       (magic, v) = struct.unpack('6s2s', header)
     except struct.error, e:
-      raise MalformedPlistError('Header: %s' % str(e))
+      raise BinaryPlistHeaderError('Header: %s' % str(e))
 
     if magic != self.BPLIST_MAGIC:
       raise BinaryPlistHeaderError('Not a plist, wrong magic: %s' % magic)
@@ -522,9 +542,9 @@ class ApplePlist(object):
 
   def _BinLoadFooter(self):
     """Load binary footer."""
-    format = '>5xBBBQQQ'
+    fmt = '>5xBBBQQQ'
     try:
-      a = struct.unpack(format, self._plist_bin[-1 * struct.calcsize(format):])
+      a = struct.unpack(fmt, self._plist_bin[-1 * struct.calcsize(fmt):])
     except struct.error, e:
       raise MalformedPlistError('Footer: %s' % str(e))
     self.__bin['sortVersion'] = a[0]
@@ -557,17 +577,17 @@ class ApplePlist(object):
     l = 2 ** l
     c = 0
     pos += 1
-    for i in xrange(l):
+    for unused_i in xrange(l):
       c = (c << 8) + ord(self._plist_bin[pos:pos+1])
       pos += 1
     return (pos-ofs, c)
 
-  def _BinLoadSimple(self, ofs, objtype, objarg):
+  def _BinLoadSimple(self, unused_ofs, unused_objtype, objarg):
     """Load a binary simple object.
 
     Args:
-      ofs: int, offset in binary
-      objtype: int, object type
+      unused_ofs: int, offset in binary
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       boolean or None
@@ -586,12 +606,12 @@ class ApplePlist(object):
       raise MalformedPlistError('Unknown simple %d' % objarg)
     return x
 
-  def _BinLoadDict(self, ofs, objtype, objarg):
+  def _BinLoadDict(self, ofs, unused_objtype, objarg):
     """Load a binary dictionary.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       dict
@@ -635,13 +655,13 @@ class ApplePlist(object):
     """
     pass
 
-  def _BinLoadInt(self, ofs, objtype, objarg):
+  def _BinLoadInt(self, ofs, unused_objtype, unused_objarg):
     """Load an integer.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
-      objarg: int, object arg
+      unused_objtype: int, object type
+      unused_objarg: int, object arg
     Returns:
       integer
     """
@@ -660,12 +680,12 @@ class ApplePlist(object):
     """
     return AppleUid(self._BinLoadInt(ofs, objtype, objarg))
 
-  def _BinLoadFloat(self, ofs, objtype, objarg):
+  def _BinLoadFloat(self, ofs, unused_objtype, objarg):
     """Load a float.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       float
@@ -676,28 +696,28 @@ class ApplePlist(object):
     f = struct.unpack('>%s' % fmt, self._plist_bin[pos:pos+c])[0]
     return f
 
-  def _BinLoadDate(self, ofs, objtype, objarg):
+  def _BinLoadDate(self, ofs, unused_objtype, unused_objarg):
     """Load a date.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
-      objarg: int, object arg
+      unused_objtype: int, object type
+      unused_objarg: int, object arg
     Returns:
       datetime in UTC
     """
     pos = ofs + 1
     f = struct.unpack('>d', self._plist_bin[pos:pos+8])[0]
-    td = datetime.timedelta(seconds = f)
+    td = datetime.timedelta(seconds=f)
     utc_d = self.EPOCH + td
     return utc_d
 
-  def _BinLoadUnicode(self, ofs, objtype, objarg):
+  def _BinLoadUnicode(self, ofs, unused_objtype, objarg):
     """Load a unicode string.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       unicode str
@@ -713,12 +733,12 @@ class ApplePlist(object):
     pos += c
     return s
 
-  def _BinLoadAsciiStr(self, ofs, objtype, objarg):
+  def _BinLoadAsciiStr(self, ofs, unused_objtype, objarg):
     """Load a ascii string.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       str
@@ -733,12 +753,12 @@ class ApplePlist(object):
     pos += c
     return s
 
-  def _BinLoadArray(self, ofs, objtype, objarg):
+  def _BinLoadArray(self, ofs, unused_objtype, objarg):
     """Load an array.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       list of array contents
@@ -755,7 +775,8 @@ class ApplePlist(object):
       siz = 1
     fmt = self.INT_SIZE_FORMAT[siz]
     objref = struct.unpack(
-        '>%d%s' % (c/siz, fmt), self._plist_bin[pos:pos+(siz*c)])
+        '>%d%s' % (c, fmt), self._plist_bin[pos:pos+(siz*c)])
+
     pos += siz*c
 
     a = []
@@ -765,12 +786,12 @@ class ApplePlist(object):
       a.append(x)
     return a
 
-  def _BinLoadSet(self, ofs, objtype, objarg):
+  def _BinLoadSet(self, ofs, unused_objtype, objarg):
     """Load an set.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       set
@@ -787,7 +808,7 @@ class ApplePlist(object):
       siz = 1
     fmt = self.INT_SIZE_FORMAT[siz]
     objref = struct.unpack(
-        '>%d%s' % (c/siz, fmt), self._plist_bin[pos:pos+(siz*c)])
+        '>%d%s' % (c, fmt), self._plist_bin[pos:pos+(siz*c)])
     pos += siz*c
 
     a = set()
@@ -797,12 +818,12 @@ class ApplePlist(object):
       a.add(x)
     return a
 
-  def _BinLoadData(self, ofs, objtype, objarg):
+  def _BinLoadData(self, ofs, unused_objtype, objarg):
     """Load arbitrary data.
 
     Args:
       ofs: int, offset in binary
-      objtype: int, object type
+      unused_objtype: int, object type
       objarg: int, object arg
     Returns:
       str
@@ -860,10 +881,10 @@ class ApplePlist(object):
     ofs = self.__bin['offsetTableOffset']
     int_size = self.__bin['offsetIntSize']
     self._object_offset = {}
-    format = '>%s' % self.INT_SIZE_FORMAT[int_size]
+    fmt = '>%s' % self.INT_SIZE_FORMAT[int_size]
     for offset_no in xrange(0, self.__bin['numObjects']):
       try:
-        oft = struct.unpack(format, self._plist_bin[ofs:ofs+int_size])[0]
+        oft = struct.unpack(fmt, self._plist_bin[ofs:ofs+int_size])[0]
       except struct.error, e:
         raise MalformedPlistError('Offset table: %s' % str(e))
       self._object_offset[offset_no] = oft
@@ -917,16 +938,14 @@ class ApplePlist(object):
       InvalidPlistError: the plist is not valid
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
-    if not self._plist:
-      raise InvalidPlistError('empty')
-
-    if self._VALIDATE_BASIC_CONFIG:
-      self._ValidateBasic(self._VALIDATE_BASIC_CONFIG)
 
     for method in self._validation_hooks:
       method()
+
+    if self._VALIDATE_BASIC_CONFIG:
+      self._ValidateBasic(self._VALIDATE_BASIC_CONFIG)
 
   def EncodeXML(self, encoding=None):
     """Encodes the plist xml to a particular encoding.
@@ -948,12 +967,13 @@ class ApplePlist(object):
     """Return a dictionary or array representing the parsed plist structure.
 
     Returns:
-      dictionary or array.
+      contents of plist, typically dictionary or array, or
+      None if no contents.
     Raises:
       InvalidPlistError: no parsed plist is available
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
     return self._plist
 
@@ -967,7 +987,7 @@ class ApplePlist(object):
     """
     if type(plist_obj) not in PLIST_CONTENT_TYPES:
       raise PlistError(
-          'Plist contents type is not supported: %s' % type(self._plist))
+          'Plist contents type is not supported: %s' % type(plist_obj))
 
     self._plist = plist_obj
     self._plist_xml = self.GetXml()
@@ -999,19 +1019,24 @@ class ApplePlist(object):
       str
     Raises:
       PlistNotParsedError: if Parse() has not been called
+      PlistError: Output of this plist not supported because of its type
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
     if type(self._plist) not in PLIST_CONTENT_TYPES:
       raise PlistError(
           'Plist contents type is not supported: %s' % type(self._plist))
 
-    # indent +1 from <plist> node if xml_doc
-    str_xml = GetXmlStr(self._plist, indent_num=indent_num + (xml_doc * 1))
+    # workaround for empty plists, don't try to decode the None
+    # value because of how GetXmlStr() handles them.  at this GetXml()
+    # level we know None means NO (0) values, not ONE (1) None value.
+    if self._plist is None:
+      str_xml = ''
+    else:
+      # indent +1 from <plist> node if xml_doc
+      str_xml = GetXmlStr(self._plist, indent_num=indent_num + (xml_doc * 1))
 
-    if not str_xml:
-      return None
     if xml_doc:
       return ''.join([PLIST_HEAD, str_xml, PLIST_FOOT])
     else:
@@ -1046,34 +1071,102 @@ class ApplePlist(object):
     self._changed = False
     return changed
 
-  def SetChanged(self):
+  def SetChanged(self, changed=True):
     """Set changed flag."""
-    self._changed = True
+    if type(changed) is bool:
+      self._changed = changed
+    else:
+      raise ValueError('changed must be bool')
+
+  def Equal(self, plist, ignore_keys=None):
+    """Checks if a passed plist is the same, ignoring certain keys.
+
+    Args:
+      plist: ApplePlist object.
+      ignore_keys: optional, sequence, str keys to ignore.
+    Returns:
+      Boolean. True if the plist is the same, False otherwise.
+    """
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    if not ignore_keys:
+      return self == plist
+
+    for key in plist:
+      if key in ignore_keys:
+        continue
+      try:
+        if plist[key] != self._plist[key]:
+          return False
+      except KeyError:
+        return False
+
+    return True
+
+  def __contains__(self, k):
+    """Standard python __contains__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    return k in self._plist
 
   def __getitem__(self, k):
     """Standard python __getitem__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
     return self._plist[k]
 
   def __setitem__(self, k, v):
     """Standard python __setitem__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
     self._plist[k] = v
     self._changed = True
 
   def __iter__(self):
     """Standard python __iter__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
     for i in self._plist:
       yield i
 
   def __eq__(self, other):
     """Standard python __eq__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
     # note: issubclass(classA,classA) is True, too.
     if not issubclass(other.__class__, self.__class__):
       return False
-    return self._plist == other._plist
+    return self._plist == other.GetContents()
+
+  def get(self, k, default=None):  # pylint: disable-msg=C6409
+    """Standard python dict get method."""
+    if k in self:
+      return self[k]
+    else:
+      return default
+
+  def set(self, k, v):  # pylint: disable-msg=C6409
+    """Standard python dict set method."""
+    self[k] = v
 
 
 class MunkiPlist(ApplePlist):
   """Class to read Munki plists and produce a dict."""
+
+  def __init__(self, *args, **kwargs):
+    super(MunkiPlist, self).__init__(*args, **kwargs)
+    self.AddValidationHook(self._IsPlistEmpty)
+
+  def _IsPlistEmpty(self):
+    """Raises InvalidPlistError if plist is empty or non-existent."""
+    if not hasattr(self, '_plist') or self._plist is None:
+      raise InvalidPlistError
 
 
 class MunkiManifestPlist(MunkiPlist):
@@ -1093,7 +1186,34 @@ class MunkiPackageInfoPlist(MunkiPlist):
   _VALIDATE_BASIC_CONFIG = {
       'catalogs': list,
       'installer_item_location': unicode,
+      'installer_item_hash': unicode,
+      'name': unicode,
   }
+
+  def __init__(self, *args, **kwargs):
+    super(MunkiPackageInfoPlist, self).__init__(*args, **kwargs)
+    self.AddValidationHook(self._ValidateInstallsFilePath)
+
+  def _ValidateInstallsFilePath(self):
+    """Validate the path strings of installs node of type=file.
+
+    Raises:
+      InvalidPlistError: the plist is not valid.
+      PlistNotParsedError: the plist was not parsed.
+    """
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    if 'installs' in self._plist:
+      for install in self._plist['installs']:
+        if install.get('type') == 'file':
+          if install.get('path'):
+            if install['path'].find('\n') > -1:
+              raise InvalidPlistError(
+                  'Illegal newlines in install path', install)
+          else:
+            raise InvalidPlistError(
+                'Missing path value for installs type file')
 
   def GetPackageName(self):
     """Returns the name of the package in the pkginfo plist.
@@ -1102,15 +1222,38 @@ class MunkiPackageInfoPlist(MunkiPlist):
       String name of package from plist.
     Raises:
       PlistError: name attribute was not in the plist.
-      PlistNotParsedError: the plist was not parsed
+      PlistNotParsedError: the plist was not parsed.
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
     if 'name' in self._plist:
       return self._plist['name']
     else:
       raise PlistError('Package name not found in pkginfo plist.')
+
+  def GetMunkiName(self):
+    """Construct and return the munki pkg-ver name.
+
+    Returns:
+      str munki name like "FooPkg-1.2.3.
+    Raises:
+      PlistNotParsedError: the plist was not parsed.
+      InvalidPlistError: pkginfo is missing required fields; version is always
+        requires, and either display_name or name are required.
+    """
+    if self._plist is None:
+      raise PlistNotParsedError
+
+    if 'version' not in self._plist:
+      raise InvalidPlistError('pkginfo is missing version key')
+
+    if 'display_name' in self._plist:
+      return '%s-%s' % (self._plist['display_name'], self._plist['version'])
+    else:
+      if 'name' not in self._plist:
+        raise InvalidPlistError('pkginfo is missing name and display_name keys')
+      return '%s-%s' % (self._plist['name'], self._plist['version'])
 
   def SetDescription(self, description):
     """Set the package info description.
@@ -1120,8 +1263,9 @@ class MunkiPackageInfoPlist(MunkiPlist):
     Raises:
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
+
     self._plist['description'] = description
     self._changed = True
 
@@ -1133,27 +1277,60 @@ class MunkiPackageInfoPlist(MunkiPlist):
     Raises:
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
+
     self._plist['display_name'] = display_name
     self._changed = True
 
-  def SetForcedInstall(self, forced_install):
-    """Set the package info forced install.
+  def SetUnattendedInstall(self, unattended_install):
+    """Set the package info unattended install.
 
     Args:
-      forced_install: bool, forced install?
+      unattended_install: bool, unattended install?
     Raises:
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
-    if forced_install:
+
+    if unattended_install:
+      self._plist['unattended_install'] = True
+      # TODO(user): remove backwards compatibility at some point...
       self._plist['forced_install'] = True
       self._changed = True
     else:
+      if 'unattended_install' in self._plist:
+        del(self._plist['unattended_install'])
+        self._changed = True
+      # TODO(user): remove backwards compatibility at some point...
       if 'forced_install' in self._plist:
         del(self._plist['forced_install'])
+        self._changed = True
+
+  def SetUnattendedUninstall(self, unattended_uninstall):
+    """Set the package info unattended uninstall.
+
+    Args:
+      unattended_uninstall: bool, unattended uninstall?
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    if unattended_uninstall:
+      self._plist['unattended_uninstall'] = True
+      # TODO(user): remove backwards compatibility at some point...
+      self._plist['forced_uninstall'] = True
+      self._changed = True
+    else:
+      if 'unattended_uninstall' in self._plist:
+        del(self._plist['unattended_uninstall'])
+        self._changed = True
+      # TODO(user): remove backwards compatibility at some point...
+      if 'forced_uninstall' in self._plist:
+        del(self._plist['forced_uninstall'])
         self._changed = True
 
   def SetCatalogs(self, catalogs):
@@ -1164,14 +1341,44 @@ class MunkiPackageInfoPlist(MunkiPlist):
     Raises:
       PlistNotParsedError: the plist was not parsed
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
+
     self._plist['catalogs'] = catalogs
     self._changed = True
+
+  def EqualIgnoringManifestsAndCatalogs(self, pkginfo):
+    """Returns True if the pkginfo is equal except the manifests."""
+    return self.Equal(pkginfo, ignore_keys=['manifests', 'catalogs'])
 
 
 class AppleSoftwareCatalogPlist(ApplePlist):
   """Apple software catalog."""
+
+  def SetCatalogs(self, catalogs):
+    """Set the package info catalogs.
+
+    Args:
+      catalogs: list, catalogs
+    Raises:
+      PlistNotParsedError: the plist was not parsed
+    """
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    self._plist['catalogs'] = catalogs
+    self._changed = True
+
+
+def EscapeString(s):
+  """Given a string, return a XML-escaped version.
+
+  Args:
+    s: str
+  Returns:
+    str
+  """
+  return xml.sax.saxutils.escape(s)
 
 
 def DictToXml(xml_dict, indent_num=None):
@@ -1190,7 +1397,7 @@ def DictToXml(xml_dict, indent_num=None):
   str_xml = []
   str_xml.append('%s<dict>' % indent)
   for key, value in xml_dict.iteritems():
-    str_xml.append('%s<key>%s</key>' % (child_indent, key))
+    str_xml.append('%s<key>%s</key>' % (child_indent, EscapeString(key)))
     str_xml.append(GetXmlStr(value, indent_num=indent_num + 1))
   str_xml.append('%s</dict>' % indent)
   return '\n'.join(str_xml)
@@ -1238,7 +1445,7 @@ def GetXmlStr(value, indent_num=None):
   elif value_type is dict:
     str_xml.append(DictToXml(value, indent_num=indent_num))
   elif value_type is str or value_type is unicode:
-    str_xml.append('%s<string>%s</string>' % (indent, value))
+    str_xml.append('%s<string>%s</string>' % (indent, EscapeString(value)))
   elif value_type is int:
     str_xml.append('%s<integer>%d</integer>' % (indent, value))
   elif value_type is float:
@@ -1272,25 +1479,25 @@ def GetXmlStr(value, indent_num=None):
 def UpdateIterable(o, ki, value=None, default=None, op=None):
   """Update iteratable object 'o' at [Key or Index].
 
-    Args:
-      o: iterable object like list or dict
-      ki: key/index position to update
-      value: if defined, value to set at key/index
-      default: if defined, value to set if key/index does not yet exist,
-        otherwise no initialization is performed and operations on
-        non-existent keys or indexes raise KeyError/IndexError
-      op: if defined, a function to call with args (o[ki], value).
-        if the function returns a value other than None, that value
-        is used to update o[ki].  if None is returned, it is assumed
-        that the op function did something with the value and no further
-        operation is needed.
-    Returns:
-      None
-    Raises:
-      KeyError: if performing an op on a non-existent key without
-        default parameter used
-      IndexError: if performing an op on a non-existent or non-consecutive
-        index without default parameter used
+  Args:
+    o: iterable object like list or dict
+    ki: key/index position to update
+    value: if defined, value to set at key/index
+    default: if defined, value to set if key/index does not yet exist,
+      otherwise no initialization is performed and operations on
+      non-existent keys or indexes raise KeyError/IndexError
+    op: if defined, a function to call with args (o[ki], value).
+      if the function returns a value other than None, that value
+      is used to update o[ki].  if None is returned, it is assumed
+      that the op function did something with the value and no further
+      operation is needed.
+  Returns:
+    None
+  Raises:
+    KeyError: if performing an op on a non-existent key without
+      default parameter used
+    IndexError: if performing an op on a non-existent or non-consecutive
+      index without default parameter used
   """
   if default is not None and ki not in o:
     o[ki] = default

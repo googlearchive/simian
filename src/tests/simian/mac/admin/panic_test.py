@@ -56,10 +56,10 @@ class AdminPanicTest(test.RequestHandlerTest):
 
   def testGet(self):
     """Test get()."""
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'IsPanicMode')
 
-    self.c.IsAdmin().AndReturn(True)
+    panic.auth.IsAdminUser().AndReturn(True)
     modes = []
 
     for mode in panic.common.PANIC_MODES:
@@ -78,8 +78,8 @@ class AdminPanicTest(test.RequestHandlerTest):
     mode = 'mode'
     enabled = 'enable'
 
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
-    self.c.IsAdmin().AndReturn(True)
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
+    panic.auth.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn('enable')
     self.request.get('verify').AndReturn(None)
@@ -98,10 +98,10 @@ class AdminPanicTest(test.RequestHandlerTest):
     mode = 'mode'
     enabled = 'enable'
 
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
 
-    self.c.IsAdmin().AndReturn(True)
+    panic.auth.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)
@@ -117,10 +117,10 @@ class AdminPanicTest(test.RequestHandlerTest):
     mode = 'mode'
     enabled = 'disable'
 
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
 
-    self.c.IsAdmin().AndReturn(True)
+    panic.auth.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)
@@ -136,10 +136,10 @@ class AdminPanicTest(test.RequestHandlerTest):
     mode = 'modezzz'
     enabled = 'enable'
 
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
 
-    self.c.IsAdmin().AndReturn(True)
+    panic.auth.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)
@@ -155,10 +155,10 @@ class AdminPanicTest(test.RequestHandlerTest):
     mode = 'mode'
     enabled = 'enablzzZZZe'
 
-    self.mox.StubOutWithMock(self.c, 'IsAdmin')
+    self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
 
-    self.c.IsAdmin().AndReturn(True)
+    panic.auth.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)

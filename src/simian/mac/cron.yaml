@@ -7,9 +7,17 @@ cron:
   url: /cron/maintenance/mark_computers_inactive
   schedule: every 9 hours
 
+- description: Update Average Install Durations 
+  url: /cron/maintenance/update_avg_install_durations
+  schedule: every 1 hours
+
 - description: PackageInfo and Blobstore integrity verification
   url: /cron/maintenance/verify_packages
   schedule: every 9 hours
+
+- description: Apple SUS Catalog Auto-Promote
+  url: /cron/applesus/autopromote
+  schedule: every 12 hours
 
 - description: Apple SUS Catalog Sync
   url: /cron/applesus/catalogsync
@@ -21,7 +29,7 @@ cron:
 
 - description: Install Counts Cache
   url: /cron/reports_cache/installcounts
-  schedule: every 30 minutes
+  schedule: every 15 minutes
 
 - description: MSU User Logs Summary - all
   url: /cron/reports_cache/msu_user_summary
@@ -35,3 +43,6 @@ cron:
   url: /cron/reports_cache/msu_user_summary/7
   schedule: every 24 hours
 
+- description: Send welcome emails every hour.
+  url: /cron/welcome_email
+  schedule: every 1 hours

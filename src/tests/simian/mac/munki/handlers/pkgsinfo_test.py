@@ -81,12 +81,12 @@ class PackagesInfoTest(test.RequestHandlerTest):
       timeout: int, timeout value to ObtainLock with
     """
     if not hasattr(self, '_mock_obtainlock'):
-      self.mox.StubOutWithMock(pkgsinfo.common, 'ObtainLock')
+      self.mox.StubOutWithMock(pkgsinfo.gae_util, 'ObtainLock')
       self._mock_obtainlock = True
     if timeout is not None:
-      pkgsinfo.common.ObtainLock(lock, timeout=timeout).AndReturn(obtain)
+      pkgsinfo.gae_util.ObtainLock(lock, timeout=timeout).AndReturn(obtain)
     else:
-      pkgsinfo.common.ObtainLock(lock).AndReturn(obtain)
+      pkgsinfo.gae_util.ObtainLock(lock).AndReturn(obtain)
 
   def _MockReleaseLock(self, lock):
     """Mock ReleaseLock().
@@ -95,9 +95,9 @@ class PackagesInfoTest(test.RequestHandlerTest):
       lock: str, lock name
     """
     if not hasattr(self, '_mock_releaselock'):
-      self.mox.StubOutWithMock(pkgsinfo.common, 'ReleaseLock')
+      self.mox.StubOutWithMock(pkgsinfo.gae_util, 'ReleaseLock')
       self._mock_releaselock = True
-    pkgsinfo.common.ReleaseLock(lock).AndReturn(None)
+    pkgsinfo.gae_util.ReleaseLock(lock).AndReturn(None)
 
   def testHash(self):
     """Test _Hash()."""
@@ -153,7 +153,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.MockDoAnyAuth()
     self.request.get('hash').AndReturn('1')
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0, obtain=False)
-    self.response.set_status(403, 'Could not lock pkgsinfo')
+    self.response.set_status(403).AndReturn(None)
+    self.response.out.write('Could not lock pkgsinfo').AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(filename_quoted)
@@ -249,7 +250,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.plist.MalformedPlistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400, 'foo error').AndReturn(None)
+    self.response.set_status(400).AndReturn(None)
+    self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(filename)
@@ -272,7 +274,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.plist.InvalidPlistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400, 'foo error').AndReturn(None)
+    self.response.set_status(400).AndReturn(None)
+    self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(filename)
@@ -295,7 +298,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.PackageDoesNotExistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400, 'foo error').AndReturn(None)
+    self.response.set_status(400).AndReturn(None)
+    self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(filename)
@@ -325,7 +329,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
 
-    self.response.set_status(403, 'Only updates supported')
+    self.response.set_status(403).AndReturn(None)
+    self.response.out.write('Only updates supported')
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()
@@ -361,6 +366,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
+    pkginfo.IsSafeToModify().AndReturn(True)
     pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
@@ -413,6 +419,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     mock_mpl.Parse().AndReturn(None)
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+    pkginfo.IsSafeToModify().AndReturn(True)
     self.mox.StubOutWithMock(self.c, '_Hash')
     pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     self.c._Hash(pkginfo.plist).AndReturn('goodhash')
@@ -439,7 +446,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.assertEqual(pkginfo.install_types, install_types)
     self.mox.VerifyAll()
 
-  def testPutSuccessWhenHashFail(self):
+  def testPutWhenHashFail(self):
     """Test put() with valid input params, giving success."""
     filename = 'pkg name.dmg'
     filename_quoted = 'pkg%20name.dmg'
@@ -463,10 +470,99 @@ class PackagesInfoTest(test.RequestHandlerTest):
     mock_mpl.Parse().AndReturn(None)
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+    pkginfo.IsSafeToModify().AndReturn(True)
     self.mox.StubOutWithMock(self.c, '_Hash')
     pkginfo.plist = 'foo'
     self.c._Hash(pkginfo.plist).AndReturn('otherhash')
-    self.response.set_status(409, 'Update hash does not match').AndReturn(None)
+    self.response.set_status(409).AndReturn(None)
+    self.response.out.write('Update hash does not match').AndReturn(None)
+    self._MockReleaseLock('pkgsinfo_%s' % filename)
+
+    self.mox.ReplayAll()
+    self.c.put(filename_quoted)
+    self.mox.VerifyAll()
+
+  def testPutWhenNotModifiableAndPkginfoChanged(self):
+    """Test put() when pkginfo is not modifiable and pkginfo changed."""
+    filename = 'pkg name.dmg'
+    filename_quoted = 'pkg%20name.dmg'
+    name = 'foo pkg name'
+    body = '<fakexml>blabla</fakexml>'
+    pkgloc = '/package/location.pkg'
+    pkgdict = {'installer_item_location': pkgloc}
+    self.request.body = body
+    catalogs = ['catalog1', 'catalog2']
+    manifests = ['manifest1', 'manifest2']
+    install_types = ['type1', 'type2']
+
+    self.request.get('hash').AndReturn('goodhash')
+    self.request.get('catalogs').AndReturn(','.join(catalogs))
+    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('install_types').AndReturn(','.join(install_types))
+    mock_mpl = self.mox.CreateMockAnything()
+    self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
+    self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
+    pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
+    mock_mpl.Parse().AndReturn(None)
+    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
+    pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+    pkginfo.plist = 'foo'
+
+    pkginfo.IsSafeToModify().AndReturn(False)
+    mock_existing_pkginfo = self.mox.CreateMockAnything()
+    pkgsinfo.MunkiPackageInfoPlistStrict(pkginfo.plist).AndReturn(
+        mock_existing_pkginfo)
+    mock_existing_pkginfo.Parse().AndReturn(None)
+    mock_mpl.EqualIgnoringManifestsAndCatalogs(mock_existing_pkginfo).AndReturn(
+        False)
+    self.response.set_status(403).AndReturn(None)
+    self.response.out.write('Changes to pkginfo not allowed').AndReturn(
+        None)
+    self._MockReleaseLock('pkgsinfo_%s' % filename)
+
+    self.mox.ReplayAll()
+    self.c.put(filename_quoted)
+    self.mox.VerifyAll()
+
+  def testPutWhenNotModifiableButOnlyManifestsChanged(self):
+    """Test put() when pkginfo is not modifiable but only manifests changed."""
+    filename = 'pkg name.dmg'
+    filename_quoted = 'pkg%20name.dmg'
+    name = 'foo pkg name'
+    body = '<fakexml>blabla</fakexml>'
+    pkgloc = '/package/location.pkg'
+    pkgdict = {'installer_item_location': pkgloc}
+    self.request.body = body
+    catalogs = ['catalog1', 'catalog2']
+    manifests = ['manifest1', 'manifest2']
+    install_types = ['type1', 'type2']
+
+    self.request.get('hash').AndReturn('goodhash')
+    self.request.get('catalogs').AndReturn(','.join(catalogs))
+    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('install_types').AndReturn(','.join(install_types))
+    mock_mpl = self.mox.CreateMockAnything()
+    self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
+    self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
+    pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
+    mock_mpl.Parse().AndReturn(None)
+    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
+    pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+    pkginfo.plist = 'foo'
+
+    pkginfo.IsSafeToModify().AndReturn(False)
+    mock_existing_pkginfo = self.mox.CreateMockAnything()
+    pkgsinfo.MunkiPackageInfoPlistStrict(pkginfo.plist).AndReturn(
+        mock_existing_pkginfo)
+    mock_existing_pkginfo.Parse().AndReturn(None)
+    mock_mpl.EqualIgnoringManifestsAndCatalogs(mock_existing_pkginfo).AndReturn(
+        True)
+
+    # we've previously tested past hash check, so bail there.
+    self.mox.StubOutWithMock(self.c, '_Hash')
+    self.c._Hash(pkginfo.plist).AndReturn('otherhash')
+    self.response.set_status(409).AndReturn(None)
+    self.response.out.write('Update hash does not match').AndReturn(None)
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()

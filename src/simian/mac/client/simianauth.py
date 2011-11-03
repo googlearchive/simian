@@ -23,10 +23,38 @@ and gMac, not gWindows.
 
 
 
-import logging
-import os.path
-import subprocess
+# BEGIN TERM HACK
+#
+# Below is a hack to avoid the unintended printing of escape sequences to
+# the terminal as we initiialize.  In short, we adjust the TERM value
+# before importing readline for ourselves, and then put it back. Later
+# imports of readline use our version which already initialized itself
+# with our TERM value, instead of the real one.
+#
+# This unintended escape str output problem was first detected on gboduch@'s
+# 10.6 machine.  The root cause was not determined, but the output of the
+# escape sequence is somewhere within GNU readline rl_initialize().  No
+# inputrc file was used and setting an inputrc with "set meta-mode off" did
+# not alievate the problem.  Hijacking the tty to alter stdout also did not
+# help.  The following hack switches the term for one which does not have a
+# "smm" attribute and therefore no escape sequence is able to be outputted.
+# Obviously this hack may have adverse affects on code which actually
+# intends to use readline, but we don't need it to work properly here in
+# simianauth.
+#
+# pylint: disable-msg=C6204,C6203
+import os
 import sys
+_term = os.environ.get('TERM', None)
+os.environ['TERM'] = 'dumb'
+import readline
+del readline
+if _term is not None:
+  os.environ['TERM'] = _term
+#
+# END TERM HACK
+import logging
+import subprocess
 import warnings
 warnings.filterwarnings(
     'ignore',
@@ -35,6 +63,7 @@ from simian.client import simianauth
 from simian.mac.client import client
 from simian.mac.munki import plist
 from simian.auth import settings
+
 
 class SimianAuthCliClient(simianauth.SimianAuthCliClient):
   """SimianAuth CLI client class."""
@@ -67,8 +96,8 @@ class SimianAuthCliClient(simianauth.SimianAuthCliClient):
       # do this because the plist may be in binary format
       p = subprocess.Popen(
           ['/usr/bin/plutil', '-convert', 'xml1', '-o', '-', filename],
-          stdout = subprocess.PIPE,
-          stderr = subprocess.PIPE)
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE)
       (stdout, stderr) = p.communicate()
       rc = p.wait()
       if stderr:

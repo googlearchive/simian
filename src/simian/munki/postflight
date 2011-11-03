@@ -36,22 +36,33 @@ def RemoveAuthTokenHeaderFromPlist(plist):
       del(plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY])
 
 
-def main():
+def main(args):
+  if len(args) > 1:
+    runtype = args[1]
+  else:
+    runtype = 'custom'
+
+  # support enterprise/802.1x user-context wifi auth.
+  # don't bother to perform postflight and exit OK immediately since there's no
+  # network connection.
+  if runtype == 'logoutinstall':
+    sys.exit(0)
+
   # read SecureConfig.plist.
   plist = fpl.readPlist(munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
 
   # Post client_id to server.
   # TODO(user): refactor PostReport* to support multiple reports at once
-  # and move this into ReportInstallsToServerAndLogout.
+  # and move this into UploadAllManagedInstallReports.
   client_id = flight_common.GetClientIdentifier()
   params = {
-     'client_id': flight_common.ClientIdDictToStr(client_id),
+     'client_id': flight_common.DictToStr(client_id),
      'pkgs_to_install': flight_common.GetRemainingPackagesToInstall(),
   }
   flight_common.PostReportToServer('postflight', params, logout=False)
 
   # Report installs/etc to server.
-  flight_common.ReportInstallsToServerAndLogout(
+  flight_common.UploadAllManagedInstallReports(
       client_id.get('on_corp', 'None'), logout=True)
 
   # expire auth token and remove cookie from plist.
@@ -62,4 +73,4 @@ def main():
 
 
 if __name__ == '__main__':
-  main()
+  main(sys.argv)

@@ -2,9 +2,9 @@
 
 {% block title %}Preflight Exits{% endblock %}
 
-{% block search %}{% endblock %}
-
-{% block header %}{% endblock %}
+{% if host_report %}
+  {% block header %}{% endblock %}
+{% endif %}
 
 {% block page-content %}
 
@@ -12,12 +12,11 @@
   <h3>Preflight Exits</h2>
 {% else %}
   <h2>Preflight Exits</h2>
-  <a href="/admin/stats">Back to stats home</a>
 {% endif %}
 
 <p>{{ preflight_exits|length }} exits found (limit {{ limit }}).</p>
 {% if next_page %}
-  <a href="/admin/stats/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
+  <a href="/admin/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
 {% endif %}
 
 
@@ -33,7 +32,7 @@
       <tr class="{% cycle lbg,dbg %}">
         <td>{{ exit.exit_reason }}</td>
         {% if not host_report %}
-        <td><a href="/admin/stats/host/{{ exit.uuid }}">{{ exit.uuid }}</a></td>
+        <td><a href="/admin/host/{{ exit.uuid }}">{{ exit.uuid }}</a></td>
         {% endif %}
         <td>{{ exit.mtime }}</td>
         <td>{{ exit.mtime|timesince }}</td>
@@ -42,7 +41,7 @@
   </table>
 
   {% if next_page %}
-    <a href="/admin/stats/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin/preflightexits?page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
 {% endif %}

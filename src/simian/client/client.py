@@ -20,16 +20,12 @@
 
 
 
-import base64
-import cPickle as Pickle
 import datetime
-import errno
 import getpass
 import httplib
 import logging
 import mimetools
 import os
-import os.path
 import platform
 import re
 import subprocess
@@ -37,10 +33,10 @@ import sys
 import tempfile
 import time
 import urllib
+import urllib2
 import urlparse
 import warnings
-warnings.filterwarnings(
-    'ignore', '.* md5 module .*', DeprecationWarning, '.*', 0)
+
 from M2Crypto import SSL
 try:
   import google.appengine.tools.appengine_rpc
@@ -50,25 +46,30 @@ except ImportError:
   _path = '%s/gae_client.zip' % os.path.dirname(os.path.realpath(__file__))
   google.__path__ = _extend_path(['%s/google/' % _path], google.__name__)
   sys.path.insert(0, _path)
+
+from google.appengine.tools import appengine_rpc
+
 from simian import settings
 from simian.auth import client as auth_client
-from simian.auth import x509
 from simian.auth import settings as auth_settings
-from google.appengine.tools import appengine_rpc
+from simian.auth import x509
+
+warnings.filterwarnings(
+    'ignore', '.* md5 module .*', DeprecationWarning, '.*', 0)
 
 # seek constants moved from posixfile(2.4) to os(2.5+)
 if sys.version_info[0] <= 2 and sys.version_info[1] <= 4:
-  import warnings
   warnings.filterwarnings(
       'ignore', '', DeprecationWarning, 'posixfile', 0)
-  import posixfile as _stdio
+  import posixfile as _stdio  # pylint: disable-msg=C6204
 else:
-  import os as _stdio
+  import os as _stdio  # pylint: disable-msg=C6204,W0404
 
 
 SERVER_HOSTNAME_REGEX = settings.SERVER_HOSTNAME_REGEX
 SERVER_HOSTNAME = settings.SERVER_HOSTNAME
 SERVER_PORT = settings.SERVER_PORT
+AUTH_DOMAIN = settings.AUTH_DOMAIN
 FACTER_CMD = ['/usr/local/bin/simianfacter']
 CLIENT_SSL_PATH = auth_settings.CLIENT_SSL_PATH
 SEEK_SET = _stdio.SEEK_SET
@@ -124,10 +125,10 @@ class Response(object):
     Args:
       status: int, like 200, 400, etc
       reason: str, like 'Bad Request' or 'OK'
+      body: str, optional, body of the response
       headers: dict or list, like
           {'Content-type': 'foo'} or
           [('Content-type', 'foo')]
-      body: str, optional, body of the response
       body_len: int, optional, length of the response body
     """
     self.status = status
@@ -164,7 +165,7 @@ class Response(object):
     return self.status >= 400 and self.status <= 599
 
 
-class MultiBodyConnection:
+class MultiBodyConnection:  # pylint: disable-msg=C6601,W0232
   """Connection which can send multiple items as request body."""
 
   # types we are willing to send in one block
@@ -213,6 +214,10 @@ class MultiBodyConnection:
 
       headers: dict, headers to supply
     """
+    # NOTE(user): if you need extreme amounts of http debugging uncomment
+    # the following line:
+    # self.debuglevel = 9
+
     if headers is None:
       headers = {}
 
@@ -309,7 +314,7 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     self._cert_require_subjects = []
 
   @classmethod
-  def SetCACertChain(self, certs):
+  def SetCACertChain(cls, certs):
     """Set the CA certificate chain to verify SSL peer (server) certs.
 
     NOTE:  Without having called this method to set a CA chain to verify
@@ -320,7 +325,7 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
         another.  the only required delimiter between certs is that
         each cert start on a new line.  (but an empty line is not required)
     """
-    self._ca_cert_chain = certs
+    cls._ca_cert_chain = certs
 
   def SetCertValidSubjects(self, valid_subjects):
     """Set a list of certificate subjects which are the only valid ones.
@@ -392,7 +397,7 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
       1 if valid, 0 if not
     """
     # no valid subjects list, so don't perform any additional checks.
-    if self._cert_valid_subjects == []:
+    if not self._cert_valid_subjects:
       return 1
 
     subject = str(store.get_current_cert().get_subject())
@@ -413,9 +418,10 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     return valid * 1
 
   def _LoadCACertChain(self, ctx):
-    """Load a CA certificate chain into a SSL context and set the
-    context verify modes to require certificate validation on the peer's
-    cert.
+    """Load a CA certificate chain into a SSL context.
+
+    This includes setting the context verify modes to require certificate
+    validation on the peer's cert.
 
     Args:
       ctx: M2Crypto.SSL.Context, to load certificate chain into
@@ -529,9 +535,8 @@ class HttpsClient(object):
   e.g. "http://...."
   """
 
-  def __init__(self, hostname, port=None):
-    """Init."""
-    self._LoadHost(hostname, port)
+  def __init__(self, hostname, port=None, proxy=None):
+    self._LoadHost(hostname, port, proxy)
     self._progress_callback = None
     self._ca_cert_chain = None
     self._cert_valid_subjects = None
@@ -599,26 +604,33 @@ class HttpsClient(object):
       return
 
     SSL.Checker.Checker._match = SSL.Checker.Checker._orig_match
-    del(SSL.Checker.Checker._orig_match)
+    del SSL.Checker.Checker._orig_match
     logging.debug('DisableRFC2818Workaround(): disabled')
 
-  def _LoadHost(self, hostname, port=None):
+  def _LoadHost(self, hostname, port=None, proxy=None):
     """Load hostname and port to connect to.
 
     Args:
       hostname: str, like a URL or a hostname string.  Examples:
         'http://foo' 'http://foo:port' 'https://foo' 'foo:port' 'foo'
-      port: int, optional, port to connect to, which will be overriden by
+      port: int, optional, port to connect to, which will be overridden by
         any port specified in the hostname str.
+      proxy: str, optional, "host:port" formatted HTTP proxy
     Raises:
-      Error: if hostname is malformed
+      Error: if args are malformed
     """
     logging.debug('LoadHost(%s, %s)', hostname, port)
+
+    # unicode causes problems later on the socket level. rid ourselves of it.
+    hostname = str(hostname)
+    if proxy is not None:
+      proxy = str(proxy)
 
     if not hostname.startswith('http'):
       hostname = 'https://%s' % hostname
 
-    (scheme, netloc, path, query, frag) = urlparse.urlsplit(hostname)
+    (scheme, netloc, unused_path, unused_query, unused_frag
+    ) = urlparse.urlsplit(hostname)
 
     (hostname, tmp_port) = urllib.splitport(netloc)
     if tmp_port:
@@ -648,7 +660,17 @@ class HttpsClient(object):
       self.netloc = '%s:%d' % (self.netloc, self.port)
 
     logging.debug('LoadHost(): hostname = %s, port = %s, use_https = %s',
-        self.hostname, self.port, self.use_https)
+                  self.hostname, self.port, self.use_https)
+
+    self.proxy_hostname = None
+    self.proxy_port = None
+    if proxy:
+      (self.proxy_hostname, self.proxy_port) = urllib.splitport(proxy)
+      if not self.proxy_port:
+        raise Error('proxy does not specify port: %s', proxy)
+      self.proxy_port = int(self.proxy_port)
+      logging.debug('LoadHost(): proxy host = %s, proxy port = %s',
+                    self.proxy_hostname, self.proxy_port)
 
     if SERVER_HOSTNAME_REGEX.search(hostname):
       self._EnableRFC2818Workaround()
@@ -664,19 +686,23 @@ class HttpsClient(object):
       headers: dict, headers that will be passed to a http request
     """
 
-  def _Connect(self, hostname, port=None):
-    """Return a HTTPSConnection object connected to host:port.
+  def _Connect(self):
+    """Return a HTTPSConnection object.
 
-    Args:
-      hostname: str, hostname
-      port: int, optional, port number
     Returns:
       HTTPConnection object
     """
+    conn_args = (self.hostname, self.port)
+    if self.proxy_hostname:
+      conn_args = (self.proxy_hostname, self.proxy_port)
     if self.use_https:
-      conn = HTTPSMultiBodyConnection(hostname, port=port)
+      conn = HTTPSMultiBodyConnection(*conn_args)
     else:
-      conn = HTTPMultiBodyConnection(hostname, port=port)
+      conn = HTTPMultiBodyConnection(*conn_args)
+
+    # NOTE(user): at this point it would be nice to copy our debug level
+    # into the http connection instance with set_debuglevel().  however the
+    # debug is printed to stdout, which will foul up our clients.
 
     if self._progress_callback is not None:
       conn.SetProgressCallback(self._progress_callback)
@@ -692,7 +718,7 @@ class HttpsClient(object):
     try:
       conn.connect()
     except httplib.socket.error, e:
-      raise SimianClientError(str(e))
+      raise SimianClientError('_Connect() httplib.socket.error: %s' % str(e))
     return conn
 
   def _GetResponse(self, conn, output_file=None):
@@ -745,17 +771,14 @@ class HttpsClient(object):
     conn.request(method, str(url), body=body, headers=headers)
 
   def _DoRequestResponse(
-      self, method, hostname, url,
-      body=None, headers=None, port=None, output_file=None):
+      self, method, url, body=None, headers=None, output_file=None):
     """Connect to hostname, make a request, obtain response.
 
     Args:
       method: str, like 'GET' or 'POST'
-      hostname: str, hostname like 'foo.com', not 'http://foo.com'
       url: str, url like '/foo.html', not 'http://host/foo.html'
       body: str or dict or file, optional, body to send with request
       headers: dict, optional, headers to send with request
-      port: int, optional, port to connect on
       output_file: file, optional, file to write response body to
     Returns:
       Response instance
@@ -764,8 +787,11 @@ class HttpsClient(object):
     """
     try:
       suffix = self.use_https * 's'
-      logging.debug('Connecting to http%s://%s:%s', suffix, hostname, port)
-      conn = self._Connect(hostname, port)
+      logging.debug('Connecting to http%s://%s:%s',
+                    suffix, self.hostname, self.port)
+      conn = self._Connect()
+      if self.proxy_hostname:
+        url = 'http%s://%s%s' % (self.use_https * 's', self.netloc, url)
       logging.debug('Requesting %s %s', method, url)
       self._Request(method, conn, url, body=body, headers=headers)
       logging.debug('Waiting for response')
@@ -805,8 +831,7 @@ class HttpsClient(object):
       output_file = None
 
     response = self._DoRequestResponse(
-        method, self.hostname, url,
-        port=self.port, body=body, headers=headers, output_file=output_file)
+        method, url, body=body, headers=headers, output_file=output_file)
 
     if output_filename:
       output_file.close()
@@ -826,6 +851,7 @@ class HttpsClient(object):
     Returns:
       Response object
     Raises:
+      Error: if input is invalid
       HTTPError: if a connection level error occured
     """
     if not input_filename and not input_file:
@@ -837,14 +863,12 @@ class HttpsClient(object):
         'Content-Type': 'multipart/form-data; boundary=%s' % boundary,
     }
 
-    output = []
-
     close_input_file = False
     if input_file is None:
       close_input_file = True
       input_file = open(input_filename, 'r')
 
-    CRLF = '\r\n'
+    crlf = '\r\n'
     body = []
 
     # TODO(user): This method should support sending multiple files,
@@ -857,10 +881,10 @@ class HttpsClient(object):
     tmp_body.append('Content-Type: %s' % content_type)
     tmp_body.append('')
 
-    body.append(CRLF.join(tmp_body))
-    body.append(CRLF)
+    body.append(crlf.join(tmp_body))
+    body.append(crlf)
     body.append(input_file)
-    body.append(CRLF)
+    body.append(crlf)
 
     tmp_body = []
     for k, v in params.iteritems():
@@ -871,9 +895,9 @@ class HttpsClient(object):
       tmp_body.append('')
       tmp_body.append(v)
 
-    body.append(CRLF.join(tmp_body))
-    body.append('%s--%s--%s' % (CRLF, boundary, CRLF))
-    body.append(CRLF)
+    body.append(crlf.join(tmp_body))
+    body.append('%s--%s--%s' % (crlf, boundary, crlf))
+    body.append(crlf)
 
     try:
       response = self.Do('POST', url, body=body, headers=headers)
@@ -911,7 +935,7 @@ class UAuth(object):
     if not self.interactive_user:
       raise SimianClientError('UAuth: Requires password, no interactive user')
 
-    user = '%s@google.com' % getpass.getuser()
+    user = '%s@%s' % (getpass.getuser(), AUTH_DOMAIN)
     password = getpass.getpass('%s password: ' % user)
     return (user, password)
 
@@ -920,6 +944,9 @@ class UAuth(object):
 
     Returns:
       cookie string ready to be set into http Cookie header
+    Raises:
+      SimianClientError: if an error occurs on the client
+      SimianServerError: if an unexpected return/error occurs on the server
     """
     # populate the certificates globally in HTTPSMultiBodyConnection
     # to avoid trying to hook its instantiation by urllib2.
@@ -932,7 +959,10 @@ class UAuth(object):
         save_cookies=True,
         secure=True)
 
-    response = s.Send('/uauth')
+    try:
+      response = s.Send('/uauth')
+    except urllib2.HTTPError, e:
+      raise SimianServerError(str(e))
 
     # Step 3 - load the response
     auth1 = auth_client.AuthSimianClient()
@@ -964,6 +994,8 @@ class UAuth(object):
         another
     """
     self._ca_cert_chain = certs
+
+
 
 
 class HttpsAuthClient(HttpsClient):
@@ -1012,9 +1044,10 @@ class HttpsAuthClient(HttpsClient):
     """
     contents = auth_settings.ROOT_CA_CERT_CHAIN_PEM
     if contents:
-      logging.debug('Got root CA  cert chain: %s', contents)
+      logging.debug('Got Root CA Cert Chain: %s', contents)
       return contents
     else:
+      logging.warning('Root CA Cert Chain was EMPTY!')
       return ''
 
   def _AdjustHeaders(self, headers):
@@ -1031,7 +1064,7 @@ class HttpsAuthClient(HttpsClient):
     Returns:
       (str stdout output, str stderr output)
     Raises:
-      SudoExec: if an expect_* condition was not met
+      SudoExecError: if an expect_* condition was not met
     """
     # NOTE(user): sudo 1.6.8p12 on OS X 10.5.8 doesn't understand the '--'
     # argument to stop parsing args.  Instead we do this evilness to enforce
@@ -1051,8 +1084,6 @@ class HttpsAuthClient(HttpsClient):
     (stdout, stderr) = p.communicate()
     rc = p.wait()
 
-    output = stdout
-
     if expect_rc is not None:
       if rc != expect_rc:
         raise SudoExecError(
@@ -1071,7 +1102,7 @@ class HttpsAuthClient(HttpsClient):
       string file contents
     """
     if requires_root and os.getuid() != 0 and sudo_ok:
-      (s, unused) = self._SudoExec(['/bin/cat', filename], expect_rc=0)
+      (s, unused_stderr) = self._SudoExec(['/bin/cat', filename], expect_rc=0)
     else:
       f = open(filename, 'r')
       s = f.read()
@@ -1136,7 +1167,7 @@ class HttpsAuthClient(HttpsClient):
       except IOError:
         return facts
 
-      Pickle.dump(facts, f)
+      f.write('\n'.join(lines))
       f.close()
       logging.debug(
           'CacheFacterContents(): wrote cache %s', self.FACTER_CACHE_PATH)
@@ -1175,10 +1206,21 @@ class HttpsAuthClient(HttpsClient):
         try:
           logging.debug('GetFacter: reading recent facter cache')
           f = open_fn(self.FACTER_CACHE_PATH, 'r')
-          facter = Pickle.load(f)
+          facter = {}
+          line = f.readline()
+          while line:
+            try:
+              (key, unused_sep, value) = line.split(' ', 2)
+              value = value.strip()
+              facter[key] = value
+            except ValueError:
+              # invalid cache format, ignore the cache.
+              facter = {}
+              break
+            line = f.readline()
           f.close()
           logging.debug('GetFacter: read %d entities', len(facter))
-        except (ImportError, EOFError, IOError, Pickle.UnpicklingError), e:
+        except (EOFError, IOError), e:
           logging.debug('GetFacter: error %s', str(e))
           facter = {}
 
@@ -1204,7 +1246,7 @@ class HttpsAuthClient(HttpsClient):
       }
       or {} if the details cannot be read.
     """
-    # TODO(user,user): unit test the puppet ssl cert harvesting functions.
+    # TODO(user): unit test the puppet ssl cert harvesting functions.
     logging.debug('_GetPuppetSslDetails(%s)', cert_fname)
     certs_path = os.path.join(self.CLIENT_SSL_PATH, self.PUPPET_CERTS)
 
@@ -1372,6 +1414,19 @@ class HttpsAuthClient(HttpsClient):
 
     self._cookie_token = token
 
+
+  def DoUserAuth(self, user_auth=None):
+    """Do user authentication.
+
+    This method causes the client to authenticate as a user, not as a machine.
+    So, it is somewhat the opposite method to DoSimianAuth().
+
+    Args:
+      user_auth: str or None, control the user auth type, or when None,
+        use default.
+    """
+    return self.DoUAuth()
+
   def DoSimianAuth(self, interactive_user=None):
     """Do Simian authentication.
 
@@ -1464,6 +1519,10 @@ class SimianClient(HttpsAuthClient):
     """Returns True if the client was initialized with default hostname."""
     return self._default_hostname
 
+  def GetGlobalUuid(self):
+    """Returns str, a global, platform independent, UUID for this machine."""
+    raise NotImplementedError('Client must implement GetGlobalUuid')
+
   def _SimianRequest(
       self, method, url, body=None, headers=None, output_filename=None,
       full_response=False):
@@ -1497,7 +1556,7 @@ class SimianClient(HttpsAuthClient):
       else:
         return response
     else:
-      raise SimianServerError(response.status, response.reason)
+      raise SimianServerError(response.status, response.reason, response.body)
 
   def _SimianRequestRetry(
       self, method, url, retry_on_status, body=None, headers=None,
@@ -1512,7 +1571,7 @@ class SimianClient(HttpsAuthClient):
       headers: optional dict of headers to send with the request.
       output_filename: str, optional, filename to write response body to
       full_response: bool, default False, return response object
-      retry_times: int, default 3, how many times to retry
+      attempt_times: int, default 3, how many times to retry
     Returns:
       if output_filename is not supplied:
         if full_response is True:
@@ -1609,9 +1668,11 @@ class SimianClient(HttpsAuthClient):
     Args:
       name: str, package name
       output_filename: str, optional, filename to write response body to
+    Returns:
+      See _SimianRequest
     """
     return self._SimianRequest(
-        'GET', '/pkgs/%s' % urllib.quote(name), 
+        'GET', '/pkgs/%s' % urllib.quote(name),
         output_filename=output_filename)
 
   def PutPackage(self, filename, params, input_filename=None, input_file=None):
@@ -1632,6 +1693,7 @@ class SimianClient(HttpsAuthClient):
     Returns:
       str UUID for the uploaded payload
     Raises:
+      Error: if input is invalid
       SimianServerError: if an error occured on the Simian server
       SimianClientError: if an error occured on the this client
     """
@@ -1642,7 +1704,8 @@ class SimianClient(HttpsAuthClient):
     logging.debug('Getting POST URL....')
     post_url = self._SimianRequest('GET', URL_UPLOADPKG)
     logging.debug('Received POST URL: %s', post_url)
-    (scheme, netloc, path, query, fragment) = urlparse.urlsplit(post_url)
+    (unused_scheme, netloc, path, unused_query, unused_fragment
+    ) = urlparse.urlsplit(post_url)
 
     if netloc != self.netloc:
       raise SimianClientError(
@@ -1658,7 +1721,8 @@ class SimianClient(HttpsAuthClient):
 
     # upon success OR a controlled failure a redirect will occur
     redirect_url = response.headers.get('location', None)
-    (scheme, netloc, path, query, fragment) = urlparse.urlsplit(redirect_url)
+    (unused_scheme, unused_netloc, path, query, unused_fragment
+    ) = urlparse.urlsplit(redirect_url)
     redirect_url = '%s?%s' % (path, query)
 
     if not response.IsRedirect() or not redirect_url:
@@ -1680,6 +1744,8 @@ class SimianClient(HttpsAuthClient):
     Returns:
       if not request_hash, str pkginfo XML
       if request_hash, tuple of (str sha256 hash, str pkginfo XML)
+    Raises:
+      SimianServerError: if an error occured on the Simian server
     """
     url = '/pkgsinfo/%s' % urllib.quote(filename)
     if get_hash:
@@ -1705,6 +1771,7 @@ class SimianClient(HttpsAuthClient):
       filename: str unique filename for pkginfo.
       pkginfo: str XML pkginfo.
       catalogs: optional, list of str catalogs to target.
+      manifests: optional, list of str manifests to target
       install_types: optional, list of str install types.
       got_hash: optional, str, sha256 hash of pkginfo retrieved earlier.
         if supplied, the server will only update the new pkginfo if the
@@ -1756,7 +1823,7 @@ class SimianClient(HttpsAuthClient):
       SimianServerError: if the Simian server returned an error (status != 200)
     """
     return self._SimianRequest(
-        'GET', '/pkgs/%s' % urllib.quote(filename), 
+        'GET', '/pkgs/%s' % urllib.quote(filename),
         output_filename=filename)
 
   def _IsPackageUploadNecessary(self, filename, upload_pkginfo):
@@ -1869,6 +1936,27 @@ class SimianClient(HttpsAuthClient):
     else:
       body = str(body)
     return self._SimianRequestRetry('POST', url, [500], body)
+
+  def UploadFile(self, file_path, file_type, _open=open):
+    """Uploads a given log file to the server.
+
+    Args:
+      file_path: str, path of log file to upload.
+      file_type: str, type of file being uploaded, like 'log'.
+      params: dict, params to send with the request.
+      _open: func, optional, default builtin open, to open file_path.
+    """
+    if os.path.isfile(file_path):
+      logging.debug('UploadFile uploading file: %s', file_path)
+      file_handle = _open(file_path, 'r')
+      file_name = os.path.basename(file_path)
+      url = '/uploadfile/%s/%s' % (file_type, file_name)
+      try:
+        self.Do('PUT', url, file_handle)
+      finally:
+        file_handle.close()
+    else:
+      logging.error('UploadFile file not found: %s', file_path)
 
 
 class SimianAuthClient(SimianClient):

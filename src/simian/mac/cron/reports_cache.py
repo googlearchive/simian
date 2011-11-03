@@ -28,12 +28,10 @@ import gc
 import logging
 import os
 import time
+from google.appengine.ext import deferred
 from google.appengine.ext import webapp
 from google.appengine.api import taskqueue
-from google.appengine.ext.webapp.util import run_wsgi_app
-from simian.mac import common
 from simian.mac import models
-from simian.mac.munki import plist
 
 
 # list of integer days to keep "days active" counts for.
@@ -58,12 +56,10 @@ class ReportsCache(webapp.RequestHandler):
   def get(self, name=None, arg=None):
     """Handle GET"""
 
-    if name == 'client_counts':
-      self._SetClientCounts()
-    elif name == 'summary':
+    if name == 'summary':
       self._GenerateSummary()
     elif name == 'installcounts':
-      self._GenerateInstallCounts()
+      _GenerateInstallCounts()
     elif name == 'msu_user_summary':
       if arg:
         try:
@@ -76,26 +72,6 @@ class ReportsCache(webapp.RequestHandler):
     else:
       logging.warning('Unknown ReportsCache cron requested: %s', name)
       self.response.set_status(404)
-
-  def _SetClientCounts(self):
-    """Generates and sets various client counts to ReportsCache in Datastore."""
-    total = 0
-    for track in common.TRACKS:
-      n = models.Computer.AllActive(keys_only=True).filter(
-          'track =', track).count()
-      models.ReportsCache.SetClientCount(n, 'track', track)
-      logging.debug('SetClientCounts for %s track: %d', track, n)
-      total += n
-    models.ReportsCache.SetClientCount(total)
-    logging.debug('SetClientCounts for all clients: %s', total)
-
-    now = datetime.datetime.utcnow()
-    for days in DAYS_ACTIVE:
-      x_days_ago = now - datetime.timedelta(days=days)
-      n = models.Computer.AllActive(keys_only=True).filter(
-          'preflight_datetime >', x_days_ago).count()
-      models.ReportsCache.SetClientCount(n, 'days_active', days)
-      logging.debug('SetClientCounts for %d day actives: %d', days, n)
 
   def _GenerateSummary(self):
     """Generates a summary and saves to Datastore for stats summary output."""
@@ -214,7 +190,7 @@ class ReportsCache(webapp.RequestHandler):
       summary['conns_on_corp_percent'] = 0
       summary['conns_off_corp_percent'] = 0
 
-    logging.debug('Saving stats summary to Datastore: %s', summary)
+    #logging.debug('Saving stats summary to Datastore: %s', summary)
     models.ReportsCache.SetStatsSummary(summary)
 
   def _GenerateMsuUserSummary(self, since_days=None, now=None):
@@ -334,22 +310,83 @@ class ReportsCache(webapp.RequestHandler):
       summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
           since=since, tmp=True)
 
-  def _GenerateInstallCounts(self):
-    """Generate install counts reports cache."""
-    install_counts = {}
-    for p in models.PackageInfo.all().order('name'):
-      pl = plist.MunkiPackageInfoPlist(p.plist)
-      pl.Parse()
-      pl_dict = pl.GetContents()
-      if 'display_name' in pl_dict:
-        munki_name = '%s-%s' % (pl_dict['display_name'], pl_dict['version'])
-      else:
-        munki_name = '%s-%s' % (pl_dict['name'], pl_dict['version'])
 
-      count = models.InstallLog.all(keys_only=True).filter(
-          'package =', munki_name).count(999999)
-      install_counts[munki_name] = count
-    models.ReportsCache.SetInstallCounts(install_counts)
+def _GenerateInstallCounts():
+    """Generates a dictionary of all installs names and the count of each."""
+    #logging.debug('Generating install counts....')
+
+    # Obtain a lock.
+    lock = models.KeyValueCache.get_by_key_name('pkgs_list_cron_lock')
+    utcnow = datetime.datetime.utcnow()
+    if not lock or lock.mtime < (utcnow - datetime.timedelta(minutes=30)):
+      # There is no lock or it's old so continue.
+      lock = models.KeyValueCache(key_name='pkgs_list_cron_lock')
+      lock.put()
+    else:
+      logging.warning('GenerateInstallCounts: lock found; exiting.')
+      return
+
+    # Get a list of all packages that have previously been pushed.
+    pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
+
+    # Generate a query of all InstallLog entites that haven't been read yet.
+    query = models.InstallLog.all().order('mtime')
+    cursor_obj = models.KeyValueCache.get_by_key_name('pkgs_list_cursor')
+    if cursor_obj:
+      query.with_cursor(cursor_obj.text_value)
+      #logging.debug('Continuing with cursor: %s', cursor_obj.text_value)
+
+    # Loop over new InstallLog entries.
+    installs = query.fetch(1000)
+    if not installs:
+      #logging.debug('No more installs to process.')
+      models.ReportsCache.SetInstallCounts(pkgs)
+      lock.delete()
+      return
+
+    i = 0
+    for install in installs:
+      i += 1
+      pkg_name = install.package
+      if pkg_name in pkgs:
+        pkgs[pkg_name]['install_count'] += 1
+      else:
+        pkgs[pkg_name] = {
+            'install_count': 1,
+            'applesus': install.applesus,
+        }
+
+      # (re)calculate avg_duration_seconds for this package.
+      if 'duration_seconds_avg' not in pkgs[pkg_name]:
+        pkgs[pkg_name]['duration_count'] = 0
+        pkgs[pkg_name]['duration_total_seconds'] = 0
+        pkgs[pkg_name]['duration_seconds_avg'] = None
+      # only proceed if entity has "duration_seconds" property that's not None.
+      if hasattr(install, 'duration_seconds'):
+        if install.duration_seconds is not None:
+          pkgs[pkg_name]['duration_count'] += 1
+          pkgs[pkg_name]['duration_total_seconds'] += (
+              install.duration_seconds)
+          pkgs[pkg_name]['duration_seconds_avg'] = int(
+              pkgs[pkg_name]['duration_total_seconds'] /
+              pkgs[pkg_name]['duration_count'])
+
+    # Update any changed packages.
+    models.ReportsCache.SetInstallCounts(pkgs)
+    #logging.debug('Processed %d installs and saved to ReportsCache.', i)
+
+    if not cursor_obj:
+      cursor_obj = models.KeyValueCache(key_name='pkgs_list_cursor')
+
+    cursor_txt = str(query.cursor())
+    #logging.debug('Saving new cursor: %s', cursor_txt)
+    cursor_obj.text_value = cursor_txt
+    cursor_obj.put()
+
+    # Delete the lock.
+    lock.delete()
+
+    deferred.defer(_GenerateInstallCounts)
 
 
 def IsWithinPastXHours(datetime_val, hours=24):
@@ -408,19 +445,3 @@ def DictToList(d, sort=True, reverse=True):
   if reverse:
     l.reverse()
   return l
-
-
-application = webapp.WSGIApplication([
-    (r'/cron/reports_cache/([a-z_]+)$', ReportsCache),
-    (r'/cron/reports_cache/([a-z_]+)/(.*)$', ReportsCache),
-])
-
-
-def main():
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
-    logging.getLogger().setLevel(logging.DEBUG)
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()

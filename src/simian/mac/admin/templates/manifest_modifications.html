@@ -1,0 +1,85 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Dynamic Manifest Modifications{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  <h2>Dynamic Manifest Modifications</h2>
+
+  {% if is_admin %}
+  <h3>Add New Manifest Modification</h3>
+  {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <input type="hidden" name="add_manifest_mod" value="1" />
+    Owner: <input type="text" name="owner" /><br />
+
+    Munki Package Name:
+    <select name="munki_pkg_name">
+      <option selected="selected"/>
+      {% for name in munki_pkg_names %}
+        <option>{{ name }}</option>
+      {% endfor %}
+    </select>
+    <br />
+
+    Install Types:
+    {% for install_type in install_types %}
+      {{ install_type }}<input type="checkbox" name="install_types" value="{{ install_type }}" />
+    {% endfor %}
+    <br />
+
+    Manifests:
+    {% for manifest in manifests %}
+      {{ manifest }}<input type="checkbox" name="manifests" value="{{ manifest }}" />
+    {% endfor %}
+    <br />
+
+    <input type="submit" value="Submit" />
+  </form>
+  <h3>Existing Manifest Modifications</h3>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       <th>Owner</th><th>Package</th><th>Manifests</th><th>Install Types</th>
+       <th>Mod Time</th><th>Admin</th><th>Enabled</th>
+    </tr>
+    {% for m in mods %}
+      <tr>
+        <td>
+          <a href="/admin?type=owner&filter={{ m.owner }}">{{ m.owner }}</a>
+        </td>
+        <td>{{ m.value }}</td>
+        <td>
+          {% for manifest in m.manifests %}
+            {{ manifest }},
+          {% endfor %}
+        </td>
+        <td>
+          {% for install_type in m.install_types %}
+            {{ install_type }},
+          {% endfor %}
+        </td>
+        <td>{{ m.mtime }}</td>
+        <td>{{ m.user }}</td>
+        <td>
+          {% if m.enabled %}
+            <input type="checkbox"
+                   onclick="javascript:
+                       simian.toggleManifestModification('{{ m.key }}', this.checked);"
+                   checked="checked" />
+          {% else %}
+            <input type="checkbox"
+                   onclick="javascript:
+                       simian.toggleManifestModification('{{ m.key }}', this.checked);"
+                />
+          {% endif %}
+          <span id="enable-status-{{ m.key }}"></span>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+</div>
+
+{% endblock %}

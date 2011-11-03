@@ -151,8 +151,17 @@ class Auth1ServerDatastoreSession(base.Auth1ServerSession):
       q = self.model.all().filter('mtime <', min_datetime)
     else:
       q = self.model.all()
-    for s in q:
-      yield s
+
+    cursor = None
+    while True:
+      if cursor:
+        q.with_cursor(cursor)
+      sessions = q.fetch(500)
+      if not sessions:
+        raise StopIteration  # or should we just break?
+      for s in sessions:
+        yield s
+      cursor = q.cursor()
 
 
 class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
@@ -181,7 +190,7 @@ class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
     defer_id = '%.0f' % (time.time() * 1000)
     deferred_name = 'a1sdms-%s-%s' % (
         defer_id, method_name.replace('_',''))
-    logging.debug('Deferring %s %s %s', method_name, args, defer_id)
+    #logging.debug('Deferring %s %s %s', method_name, args, defer_id)
     deferred.defer(method, _name=deferred_name, *args, **kwargs)
 
   def _Get(self, sid):
@@ -285,7 +294,7 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
     NotAuthenticated: if Auth1 auth has not been supplied
   """
   if fake_noauth:
-    logging.debug('fake_noauth is True; raising NotAuthenticated.')
+    #logging.debug('fake_noauth is True; raising NotAuthenticated.')
     raise NotAuthenticated
 
   if require_level is None:
@@ -293,34 +302,38 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
 
   cookie_str = os.environ.get('HTTP_COOKIE', None)
   if not cookie_str:
-    logging.debug('HTTP_COOKIE is empty or nonexistent.')
+    logging.warning('HTTP_COOKIE is empty or nonexistent.')
     raise NotAuthenticated
 
   c = Cookie.SimpleCookie()
   try:
     c.load(cookie_str)
   except TypeError, e:
-    logging.debug('Cookie could not be loaded, %s: %s', str(e), cookie_str)
+    logging.warning('Cookie could not be loaded, %s: %s', str(e), cookie_str)
     raise NotAuthenticated
   except Cookie.CookieError, e:
-    logging.debug(
+    logging.warning(
         'Cookie could not be loaded, %s: %s', str(e), cookie_str)
     raise NotAuthenticated
 
   if (auth_settings.AUTH_TOKEN_COOKIE not in c
     or not c[auth_settings.AUTH_TOKEN_COOKIE]):
-    logging.debug('Cookie data is empty or does not contain auth token %s',
+    logging.warning('Cookie data is empty or does not contain auth token %s',
                   auth_settings.AUTH_TOKEN_COOKIE)
     raise NotAuthenticated
 
   a = AuthSimianServer()
   token = c[auth_settings.AUTH_TOKEN_COOKIE].value
-  session = a.GetSessionIfAuthOK(token, require_level)
-  if not session:
-    logging.debug('Unknown or insufficient level auth token %s', token)
+  try:
+    session = a.GetSessionIfAuthOK(token, require_level)
+  except base.AuthSessionError, e:
+    # TODO(user): upgrade this to logging.error once we've sorted out the
+    #   majority of hosts in the field that have broken /usr/local/munki
+    #   permissions.
+    logging.warning('DoMunkiAuth: %s', str(e))
     raise NotAuthenticated
 
-  logging.debug('Auth client connected: uuid %s', session.uuid)
+  #logging.debug('Auth client connected: uuid %s', session.uuid)
 
   return session
 
@@ -342,7 +355,7 @@ def LogoutSession(session):
 def GetSimianPrivateKey():
   """Returns the string Simian Private Key in PEM format string."""
   pk = models.KeyValueCache.MemcacheWrappedGet(
-      'simian_private_key', prop_name='text_value')
+      'server_private_cert.pem', prop_name='text_value')
   if not pk:
-    raise ServerCertMissing('simian_private_key')
+    raise ServerCertMissing('server_private_cert.pem')
   return pk

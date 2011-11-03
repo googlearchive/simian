@@ -15,8 +15,7 @@
 # limitations under the License.
 # #
 
-"""Auth module.  Contains classes to handle authentication and
-authorization with Munki clients.
+"""Handles authentication and authorization with Munki clients.
 
 Classes:
 
@@ -33,27 +32,21 @@ Classes:
 
 
 
-import array
+import warnings
+warnings.filterwarnings(
+    'ignore', '.* sha module .*', DeprecationWarning, '.*', 0)
+
+import array  # (Mute warnings before cause) pylint: disable-msg=C6203,C6204
 import base64
-import Cookie
 import datetime
 import logging
 import os
 import struct
-import time
 import types
-import warnings
-warnings.filterwarnings(
-    'ignore', '.* sha module .*', DeprecationWarning, '.*', 0)
-from simian.auth import x509
-import pyasn1
-from pyasn1.codec.der import decoder as der_decoder
-from pyasn1.codec.der import encoder as der_encoder
-import pyasn1.type.useful
+
 import tlslite
-import tlslite.X509
-import tlslite.utils.keyfactory
-import tlslite.utils.cryptomath
+
+from simian.auth import x509
 
 # Public certificate for CA
 CA_PUBLIC_CERT_PEM = ''
@@ -78,12 +71,17 @@ LEVEL_BASE = 0
 # Admin
 LEVEL_ADMIN = 5
 
+
 class Error(Exception):
-  """Base"""
+  """Base."""
 
 
 class NotAuthenticated(Error):
   """Not authenticated."""
+
+
+class AuthSessionError(Error):
+  """There is a problem with the auth session."""
 
 
 class KeyNotLoaded(Error):
@@ -243,9 +241,6 @@ class AuthSessionBase(object):
 
     Args:
       min_age_seconds: int seconds of minimum age sessions to return.
-
-    Yields:
-      session entity object
     """
     raise NotImplementedError
 
@@ -352,7 +347,8 @@ class AuthSessionData(object):
 class AuthSessionDict(AuthSessionBase):
   """AuthSession storage using an in-memory dict.
 
-  Uses a dict for indexing and AuthSessionData for session value data."""
+  Uses a dict for indexing and AuthSessionData for session value data.
+  """
 
   def __init__(self):
     self._sessions = {}
@@ -392,7 +388,7 @@ class AuthSessionDict(AuthSessionBase):
       sid: str, session id
     """
     try:
-      del(self._sessions[sid])
+      del self._sessions[sid]
     except KeyError:
       pass
 
@@ -406,9 +402,6 @@ class AuthSessionDict(AuthSessionBase):
 
   def All(self, unused_min_age_seconds=None):
     """Iterate through all session entities, yielding each.
-
-    Args:
-      min_age_seconds: int seconds of minimum age sessions to return.
 
     Yields:
       session entity object
@@ -470,7 +463,7 @@ class AuthBase(object):
       if type(output) is dict:
         self._output.update(output)
       else:
-        self._output = self._output + output
+        self._output += output
     else:
       self._output = output
     self._state = State.OUTPUT
@@ -504,7 +497,7 @@ class AuthBase(object):
     """
     return self._state
 
-  def Input(self, *args, **kwargs):
+  def Input(self, *unused_args, **unused_kwargs):
     """Accept input to auth methods."""
     if self._state == State.INPUT:
       # base class, we never do anything but accept input and
@@ -596,14 +589,18 @@ class Auth1(AuthBase):
   def GetSessionClass(self):
     return Auth1ServerSession
 
+  # TODO(user): remove this patch
   def _PatchTlslite(self, public_key):
     """Patch a bug in tlslite.
 
     _rawPublicKeyOp in PyCrypto_RSAKey and OpenSSL_RSAKey doesn't pad
     signatures with the right number of bits in all cases, causing failures.
+
+    Args:
+      public_key: A tlslite.utils.RSAKey.RSAKey object.
     """
     if hasattr(public_key, '_patch_auth1'):
-      logging.debug('PatchTlslite: already patched')
+      #logging.debug('PatchTlslite: already patched')
       return
 
     if not hasattr(public_key, '_rawPublicKeyOp'):
@@ -611,7 +608,7 @@ class Auth1(AuthBase):
       return
 
     def _new_rawPublicKeyOp(self, c):
-      """A copy of tlslite.utils.PyCrypto_RSAKey._rawPublicKeyOp()
+      """A copy of tlslite.utils.PyCrypto_RSAKey._rawPublicKeyOp().
 
       Given input data, perform RSA encryption and return the value.
 
@@ -621,6 +618,7 @@ class Auth1(AuthBase):
        3) more descriptive AssertionError
 
       Args:
+        self: Instance.
         c: int, value to encrypt
       Returns:
         int, encrypted value
@@ -628,38 +626,33 @@ class Auth1(AuthBase):
         AssertionError: if the size of the input was not the correct size
       """
       s = tlslite.utils.cryptomath.numberToString(c)
-      byteLength = tlslite.utils.cryptomath.numBytes(self.n)
-      if len(s) == byteLength:
+      byte_length = tlslite.utils.cryptomath.numBytes(self.n)
+      if len(s) == byte_length:
         # input is the right size
         pass
-      elif len(s) < byteLength:
+      elif len(s) < byte_length:
         # input is too short, pad it.
-        s = '\0' * (byteLength - len(s)) + s
+        s = '\0' * (byte_length - len(s)) + s
       else:
         # paranoia, get out of here.
         raise AssertionError(
             'newPublicKeyOp received bytes len %d, expected %d' % (
-                len(s), byteLength))
+                len(s), byte_length))
 
       # in different original versions of the RSA class this operation
       # is handled with a different lower level RSA method.  detect
       # which class is in use and respect the original method.
-      if (hasattr(
-          tlslite.utils, 'PyCrypto_RSAKey') and
-          tlslite.utils.PyCrypto_RSAKey.pycryptoLoaded and
-          self.__class__ is
-            tlslite.utils.PyCrypto_RSAKey.PyCrypto_RSAKey):
-        m = tlslite.utils.cryptomath.stringToNumber(
-            self.rsa.encrypt(s, None)[0])
-      elif (hasattr(
-          tlslite.utils, 'OpenSSL_RSAKey') and
-          tlslite.utils.OpenSSL_RSAKey.m2cryptoLoaded and
-          self.__class__ is
-            tlslite.utils.OpenSSL_RSAKey.OpenSSL_RSAKey):
-        m = tlslite.utils.cryptomath.stringToNumber(
-            tlslite.utils.OpenSSL_RSAKey.m2.rsa_public_decrypt(
-                self.rsa, s,
-                tlslite.utils.OpenSSL_RSAKey.m2.no_padding))
+      u = tlslite.utils
+      if (hasattr(u, 'PyCrypto_RSAKey') and
+          u.PyCrypto_RSAKey.pycryptoLoaded and
+          self.__class__ is u.PyCrypto_RSAKey.PyCrypto_RSAKey):
+        m = u.cryptomath.stringToNumber(self.rsa.encrypt(s, None)[0])
+      elif (hasattr(u, 'OpenSSL_RSAKey') and
+            u.OpenSSL_RSAKey.m2cryptoLoaded and
+            self.__class__ is u.OpenSSL_RSAKey.OpenSSL_RSAKey):
+        m = u.cryptomath.stringToNumber(
+            u.OpenSSL_RSAKey.m2.rsa_public_decrypt(
+                self.rsa, s, u.OpenSSL_RSAKey.m2.no_padding))
       else:
         raise AssertionError(
             'newPublicKeyOp cannot determine original RSA class')
@@ -752,7 +745,7 @@ class Auth1(AuthBase):
     """Sign data with our loaded key.
 
     Args:
-      data: str, to sign
+      datastr: str, to sign
     Returns:
       str output of signed data
     Raises:
@@ -760,9 +753,9 @@ class Auth1(AuthBase):
     """
     if not self._key:
       raise KeyNotLoaded
-    bytes = array.array('B')
-    bytes.fromstring(datastr)
-    sig_bytes = self._key.hashAndSign(bytes)
+    data_bytes = array.array('B')
+    data_bytes.fromstring(datastr)
+    sig_bytes = self._key.hashAndSign(data_bytes)
     return sig_bytes.tostring()
 
   def LoadSelfKey(self, keystr):
@@ -876,7 +869,20 @@ class Auth1(AuthBase):
     # Get() returns None if the session is not found.
     # carefully check for None here so that a cn lookup with None
     # for sn value does not create a false positive.
-    return orig_sn is not None and orig_sn != AuthState.OK and orig_sn == sn
+    if orig_sn is None:
+      h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
+      logging.warning('%s: orig_sn is None', h)
+      return False
+    elif orig_sn == AuthState.OK:
+      h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
+      logging.warning('%s: orig_sn != AuthState.OK', h)
+      return False
+    elif orig_sn != sn:
+      h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
+      logging.warning('%s: orig_sn (%s) != sn (%s)', h, orig_sn, sn)
+      return False
+
+    return True
 
   def GetSessionIfAuthOK(self, token, require_level=None):
     """Check if auth is OK for a given token.
@@ -887,15 +893,21 @@ class Auth1(AuthBase):
           level require_level access
     Returns:
       session object if the auth token is known, state OK, level OK.
-      None otherwise.
+    Raises:
+      AuthSessionError: auth token is unknown, state is not OK, or level not OK.
     """
     session = self._session.GetToken(token)
 
-    if not session or session.state != AuthState.OK:
-      return None
+    if not session:
+      raise AuthSessionError('GetSessionIfAuthOK: session is None')
+    elif session.state != AuthState.OK:
+      raise AuthSessionError(
+          'GetSessionIfAuthOK: state (%s) != OK', session.state)
 
     if require_level is not None and require_level > session.level:
-      return None
+      raise AuthSessionError(
+          'GetSessionIfAuthOK: require_level (%s) session level (%s)',
+          require_level, session.level)
 
     return session
 
@@ -961,12 +973,13 @@ class Auth1(AuthBase):
     """
     self._session.DelToken(token)
 
-  def Input(self, n=None, m=None, s=None, u=None):
+  def Input(self, n=None, m=None, s=None):  # pylint: disable-msg=W0221
     """Input parameters to the auth function.
+
+    Callers should provide n, OR m and s.
 
     Args:
       n: str, nonce from client, an integer in str form e.g. '12345'
-    OR
       m: str, message from client
       s: str, b64 signature from client
     Raises:
@@ -976,12 +989,12 @@ class Auth1(AuthBase):
     self.ResetState()  # paranoia clear auth_state, tests run OK without
 
     if n is not None and m is None and s is None:
-      logging.debug('Auth step 1')
+      #logging.debug('Auth step 1')
 
       try:
         cn = int(n)
       except ValueError:
-        logging.critical('Non-integer Cn was supplied: %s', n)
+        logging.critical('Non-integer Cn was supplied: %s', str(n))
         self.AuthFail()
         return
 
@@ -997,9 +1010,9 @@ class Auth1(AuthBase):
       m = self._AssembleMessage(m, sig)
       self._AddOutput(m)
       self.SessionSetCnSn(cn, sn)
-      logging.debug('Server supplied Sn %s for Cn %s', sn, cn)
+      #logging.debug('Server supplied Sn %s for Cn %s', sn, cn)
     elif m is not None and s is not None and n is None:
-      logging.debug('Auth step 2')
+      #logging.debug('Auth step 2')
 
       class _Error(Exception):
         """Temporary exception used here."""
@@ -1044,8 +1057,8 @@ class Auth1(AuthBase):
         log_prefix = uuid
 
         # client_cert is loaded
-        logging.debug('%s Client cert loaded', log_prefix)
-        logging.debug('%s Message = %s', log_prefix, m)
+        #logging.debug('%s Client cert loaded', log_prefix)
+        #logging.debug('%s Message = %s', log_prefix, m)
 
         # verify that the client cert is legitimate
         if not self.VerifyCertSignedByCA(client_cert):
@@ -1060,7 +1073,7 @@ class Auth1(AuthBase):
           raise _Error('Client offered unknown Sn %s', sn)
 
         # success!
-        logging.debug('%s Client auth successful', log_prefix)
+        #logging.debug('%s Client auth successful', log_prefix)
 
         # careful here, switching the state setting and AddOutput
         # lines causes a hard to test bug (because Input() test mocks out
@@ -1081,7 +1094,7 @@ class Auth1(AuthBase):
       if cn is not None:
         self.SessionDelCn(cn)
     else:
-      logging.debug('Auth step unknown')
+      #logging.debug('Auth step unknown')
       raise ValueError('invalid input')
 
 
@@ -1095,13 +1108,16 @@ class Auth1Client(Auth1):
   def GetSessionClass(self):
     return Auth1ClientSession
 
-  def Input(self, m=None, t=None):
+  def Input(self, m=None, t=None):  # pylint: disable-msg=W0221
     """Accept input to auth methods.
+
+    Callers should provide either m OR t, or neither, but not both.
 
     Args:
       m: str, message from server (cn, sn, signature)
-      OR
       t: str, token reply from server
+    Raises:
+      ValueError: if invalid combination of arguments supplied
     """
     self.ResetState()
 
@@ -1113,10 +1129,10 @@ class Auth1Client(Auth1):
 
     # message input - step 1 output, produce step 2 input
     elif m is not None and t is None:
+
       class _Error(Exception):
         """Temporary exception used here."""
 
-      log_prefix = ''
       cn = None
 
       try:
@@ -1154,10 +1170,10 @@ class Auth1Client(Auth1):
         sig = self.Sign(out_m)
         sig = base64.urlsafe_b64encode(str(sig))
 
-        logging.debug('M= %s', out_m)
-        logging.debug('S= %s', sig)
+        #logging.debug('M= %s', out_m)
+        #logging.debug('S= %s', sig)
 
-        self._AddOutput({'m': out_m, 's':sig})
+        self._AddOutput({'m': out_m, 's': sig})
 
       except _Error, e:
         self._session.DeleteById('cn')

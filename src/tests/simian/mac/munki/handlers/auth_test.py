@@ -60,6 +60,90 @@ class AuthModuleTest(test.RequestHandlerTest):
         auth.base.NotAuthenticated, self.c.GetAuth1Instance)
     self.mox.VerifyAll()
 
+  def testIsRemoteIpAddressBlockedWhenEmptyIp(self):
+    """Tests _IsRemoteIpAddressBlocked() with empty IP."""
+    self.assertEqual(False, self.c._IsRemoteIpAddressBlocked(''))
+    self.assertEqual(False, self.c._IsRemoteIpAddressBlocked(None))
+
+  def testIsRemoteIpAddressBlockedWhenNone(self):
+    """Tests _IsRemoteIpAddressBlocked() with no blocked IP blocks."""
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = []
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'auth_bad_ip_blocks', 'text_value').AndReturn('serialized')
+    auth.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
+    self.mox.VerifyAll()
+
+  def testIsRemoteIpAddressBlockedWhenNone(self):
+    """Tests _IsRemoteIpAddressBlocked() with empty blocked IP list."""
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = []
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'auth_bad_ip_blocks', 'text_value').AndReturn('')
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
+    self.mox.VerifyAll()
+
+  def testIsRemoteIpAddressBlockedWhenNone(self):
+    """Tests _IsRemoteIpAddressBlocked() with unblocked IP."""
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = ['192.168.0.0/16']
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'auth_bad_ip_blocks', 'text_value').AndReturn('serialized')
+    auth.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
+    self.mox.VerifyAll()
+
+  def testIsRemoteIpAddressBlockedWhenBlocked(self):
+    """Tests _IsRemoteIpAddressBlocked() with a blocked IP."""
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = ['192.168.0.0/16', '1.0.0.0/8']
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'auth_bad_ip_blocks', 'text_value').AndReturn('serialized')
+    auth.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertTrue(self.c._IsRemoteIpAddressBlocked(ip))
+    self.mox.VerifyAll()
+
+  def testIsRemoteIpAddressBlockedWhenIpv6(self):
+    """Tests _IsRemoteIpAddressBlocked() with an ipv6 IP."""
+    self.mox.StubOutWithMock(auth.util, 'Deserialize')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+
+    ip = '2620:0:1003:1007:216:36ff:feee:f090'
+    deserialized = ['192.168.0.0/16', '1.0.0.0/8']
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'auth_bad_ip_blocks', 'text_value').AndReturn('serialized')
+    auth.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
+    self.mox.VerifyAll()
+
   def testGetWithLogout(self):
     """Tests get() with logout."""
     session = 'foosession'
@@ -86,6 +170,10 @@ class AuthModuleTest(test.RequestHandlerTest):
     mock_auth1 = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(self.c, 'GetAuth1Instance')
     self.c.GetAuth1Instance().AndReturn(mock_auth1)
+    self.mox.StubOutWithMock(self.c, '_IsRemoteIpAddressBlocked')
+    ip = '0.0.0.0'
+    auth.os.environ['REMOTE_ADDR'] = ip
+    self.c._IsRemoteIpAddressBlocked(ip).AndReturn(False)
     self.request.get('n', None).AndReturn('n')
     self.request.get('m', None).AndReturn('m')
     self.request.get('s', None).AndReturn('s')

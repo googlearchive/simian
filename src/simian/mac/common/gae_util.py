@@ -21,9 +21,10 @@
 
 
 import logging
+import time
+from google.appengine.api import memcache
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
-
 
 def SafeBlobDel(blobstore_key):
   """Helper method to delete a blob by its key.
@@ -34,7 +35,7 @@ def SafeBlobDel(blobstore_key):
   try:
     blobstore.delete(blobstore_key)
   except blobstore.Error, e:
-    logging.info((
+    logging.warning((
       'blobstore.delete(%s) failed: %s. '
       'this key is now probably orphaned.'), blobstore_key, str(e))
 
@@ -48,7 +49,7 @@ def SafeEntityDel(entity):
   try:
     entity.delete()
   except db.Error, e:
-    logging.info((
+    logging.warning((
       'Model.delete(%s) failed: %s. '
       'this entity is now probably empty.'), entity.key().name(), str(e))
 
@@ -68,3 +69,59 @@ def GetBlobAndDel(blobstore_key):
   blob_reader.close()
   SafeBlobDel(blobstore_key)
   return blob_str
+
+
+
+class QueryIterator(object):
+  """Class to assist with iterating over big App Engine Datastore queries.
+
+  NOTE: this class is not compatible with queries using filters with IN or !=.
+  """
+
+  def __init__(self, query, step=1000):
+    self._query = query
+    self._step = step
+
+  def __iter__(self):
+    """Iterate over query results safely avoiding 30s query limitations."""
+    while True:
+      entities = self._query.fetch(self._step)
+      if not entities:
+        raise StopIteration
+      for entity in entities:
+        yield entity
+      self._query.with_cursor(self._query.cursor())
+
+
+def ObtainLock(name, timeout=0):
+  """Obtain a lock, given a name.
+
+  Args:
+    name: str, name of lock
+    timeout: int, if >0, wait timeout seconds for a lock if it cannot
+      be obtained at first attempt.  NOTE:  Using a timeout near or greater
+      than the AppEngine deadline will be hazardous to your health.
+      The deadline is 30s for live http, 10m for offline tasks as of
+      this note.
+  Returns:
+    True if lock was obtained
+    False if lock was not obtained, some other process has the lock
+  """
+  memcache_key = 'lock_%s' % name
+  while 1:
+    locked = memcache.incr(memcache_key, initial_value=0) == 1
+    timeout -= 1
+    if locked or timeout < 0:
+      return locked
+    time.sleep(1)
+  return False
+
+
+def ReleaseLock(name):
+  """Release a lock, given its name.
+
+  Args:
+    name: str, name of lock
+  """
+  memcache_key = 'lock_%s' % name
+  memcache.delete(memcache_key)

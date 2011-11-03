@@ -9,7 +9,11 @@
 import datetime
 import logging
 import os
+import sys
+import traceback
+import urllib
 from simian.auth import base as _auth_base
+from simian.mac.munki import common
 
 
 HEADER_DATE_FORMAT = '%a, %d %b %Y %H:%M:%S GMT'
@@ -105,11 +109,32 @@ def IsClientResourceExpired(resource_dt, str_header_dt):
   if resource_dt.replace(microsecond=0) == header_dt:
     return False
   else:
-    # this should be very rare - so log it.
-    logging.debug(
-      'resource_dt %s != header %s',
-       resource_dt.replace(microsecond=0), header_dt)
     return True
+
+
+def GetClientIdForRequest(request, session=None, client_id_str=None):
+  """Returns a client_id dict for the given request.
+
+  Args:
+    request: webapp Request object.
+    session: response from auth.DoAnyAuth().
+    client_id_str: str client id.
+  Returns:
+    a dict client_id.
+  """
+  if hasattr(session, 'uuid'):  # DoMunkiAuth returned session, override uuid
+    # webapp's request.headers.get() returns None if the key doesn't exist
+    # which breaks urllib.unquote(), so return empty string default instead.
+    client_id = request.headers.get('X-munki-client-id', '')
+    if not client_id:
+      logging.warning('Client ID header missing: %s', session.uuid)
+    client_id = urllib.unquote(client_id)
+    client_id = common.ParseClientId(client_id, uuid=session.uuid)
+  else:  # DoUserAuth was called; setup client id
+    client_id_str = urllib.unquote(client_id_str)
+    client_id = common.ParseClientId(client_id_str)
+
+  return client_id
 
 
 class AuthenticationHandler(object):
@@ -123,8 +148,10 @@ class AuthenticationHandler(object):
       debug_mode: True if the application is running in debug mode
     """
     if issubclass(exception.__class__, _auth_base.NotAuthenticated):
+      exc_type, exc_value, exc_tb = sys.exc_info()
+      tb = traceback.format_exception(exc_type, exc_value, exc_tb)
+      logging.warning('handle_exception: %s', ''.join(tb))
       self.error(403)
       return
 
-    super(AuthenticationHandler, self).handle_exception(
-        exception, debug_mode)
+    super(AuthenticationHandler, self).handle_exception(exception, debug_mode)

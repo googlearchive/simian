@@ -70,7 +70,7 @@ class SimianCliClient(cli.SimianCliClient):
       self._RunEditor(filename)
       try:
         fd = open(filename, 'r')
-        pkginfo = plist.MunkiPackageInfoPlist(fd.read(10240))
+        pkginfo = plist.MunkiPackageInfoPlist(fd.read())
         fd.close()
         pkginfo.Parse()
         break
@@ -103,8 +103,9 @@ class SimianCliClient(cli.SimianCliClient):
         for catalogs and install_types value if no values are provided.
     Returns:
       tuple of (
-        str filename, str description, str display_name,
-        list manifests, list catalogs, list install_types, bool forced_install
+        str filepath, str description, str display_name,
+        list manifests, list catalogs, list install_types,
+        bool unattended_install, bool unattended_uninstall
       )
     Raises:
       CliError: if a config parameter is invalid
@@ -138,9 +139,9 @@ class SimianCliClient(cli.SimianCliClient):
     # Verify all manifests have associated catalogs.
     if manifests:
       for manifest in manifests:
-        if manifest not in catalogs:
+        if manifest not in common.TRACKS:
           raise CliError(
-              'manifest does not have matching catalog: %s' % manifest)
+              'manifest value %s not valid' % manifest)
 
     # Parse install types, and verify each is valid.
     if defaults:
@@ -157,22 +158,32 @@ class SimianCliClient(cli.SimianCliClient):
               'install_type "%s" is not in supported types: %s' % (
                   install_type, common.INSTALL_TYPES))
 
-    filename = self.config['package']
+    filepath = self.config['package']
+    if not filepath:
+      raise CliError('package is required')
+
     description = self.config['description']
     display_name = self.config['display_name']
 
     if defaults:
       # default, off
-      forced_install = self.config['forced_install'] is not None
+      unattended_install = self.config['unattended_install'] is not None
+      unattended_uninstall = self.config['unattended_uninstall'] is not None
     else:
-      if self.config['forced_install'] is None:
-        forced_install = None
+      if self.config['unattended_install'] is None:
+        unattended_install = None
       else:
-        forced_install = self.config['forced_install'] in ['', True]
+        unattended_install = self.config['unattended_install'] in ['', True]
+
+      if self.config['unattended_uninstall'] is None:
+        unattended_uninstall = None
+      else:
+        unattended_uninstall = self.config['unattended_uninstall'] in ['', True]
 
     return (
-      filename, description, display_name,
-      manifests, catalogs, install_types, forced_install
+      filepath, description, display_name,
+      manifests, catalogs, install_types, unattended_install,
+      unattended_uninstall
     )
 
   def UploadPackage(self):
@@ -182,16 +193,22 @@ class SimianCliClient(cli.SimianCliClient):
 
     (filename, description, display_name,
     manifests, catalogs, install_types,
-    forced_install) = self.ValidatePackageConfig()
+    unattended_install, unattended_uninstall) = self.ValidatePackageConfig()
 
-    if not os.path.isfile(filename):
-      raise CliError('File not found: %s' % filename)
+    if not os.path.exists(filename):
+      raise CliError('Package file does not exist: %s' % filename)
+    elif os.path.isdir(filename):
+      raise CliError('Package must be a file, not a pkg/mpkg bundle dir')
+    elif not os.path.isfile(filename):
+      raise CliError('Package must be a file')
 
     opts = {}
     if self.config['edit_pkginfo'] is not None:
       opts['pkginfo_hook'] = self.PackageInfoEditHook
-    if forced_install:
-      opts['forced_install'] = True
+    if unattended_install:
+      opts['unattended_install'] = True
+    if unattended_uninstall:
+      opts['unattended_uninstall'] = True
 
     (response, filename, name,
     catalogs, manifests, size_kbytes, sha256_hash) = (
@@ -202,7 +219,7 @@ class SimianCliClient(cli.SimianCliClient):
     print 'Package upload successful!'
     print 'Blobstore key: %s' % response
     print 'Catalogs: %s' % catalogs
-    print 'Manifests: %s' % catalogs
+    print 'Manifests: %s' % manifests
     print 'Install Types: %s' % install_types
     print 'Package name: %s' % name
     print 'File name: %s' % filename
@@ -215,14 +232,17 @@ class SimianCliClient(cli.SimianCliClient):
     Raises:
       CliError: if package info is malformed
     """
-    (name, description, display_name,
+    (filepath, description, display_name,
     manifests, catalogs, install_types,
-    forced_install) = self.ValidatePackageConfig(defaults=False)
+    unattended_install, unattended_uninstall) = (
+        self.ValidatePackageConfig(defaults=False))
 
     print 'Editing package info ...'
 
+    filename = os.path.basename(filepath)
+
     (sha256_hash, pkginfo_xml) = self.client.GetPackageInfo(
-        name, get_hash=True)
+        filename, get_hash=True)
 
     pkginfo = plist.MunkiPackageInfoPlist(pkginfo_xml)
     pkginfo.Parse()
@@ -239,9 +259,12 @@ class SimianCliClient(cli.SimianCliClient):
     if display_name is not None:
       pkginfo.SetDisplayName(display_name)
       changes.append('Display name: %s' % display_name)
-    if forced_install is not None:
-      pkginfo.SetForcedInstall(forced_install)
-      changes.append('Forced install: %s' % forced_install)
+    if unattended_install is not None:
+      pkginfo.SetUnattendedInstall(unattended_install)
+      changes.append('Unattended install: %s' % unattended_install)
+    if unattended_uninstall is not None:
+      pkginfo.SetUnattendedUninstall(unattended_uninstall)
+      changes.append('Unattended uninstall: %s' % unattended_uninstall)
     if catalogs is not None:
       pkginfo.SetCatalogs(catalogs)
       kwargs['catalogs'] = catalogs
@@ -259,9 +282,11 @@ class SimianCliClient(cli.SimianCliClient):
         if new_pkginfo is not True:
           pkginfo = new_pkginfo  # changed and valid
           pkginfo.SetChanged()
-          # populate catalogs value back into our properties
+          # populate catalogs and manifests value back into our properties
           catalogs = pkginfo.GetContents().get('catalogs', [])
           kwargs['catalogs'] = catalogs
+          manifests = pkginfo.GetContents().get('manifests', [])
+          kwargs['manifests'] = manifests
         else:
           pass # no change at all
       else:
@@ -270,6 +295,14 @@ class SimianCliClient(cli.SimianCliClient):
     if not kwargs and not pkginfo.HasChanged():
       print 'Package info unchanged.'
       return
+
+    # verify catalogs / manifests relationship
+    if manifests is not None:
+      intended_catalogs = (kwargs.get('catalogs', None) or
+          pkginfo.GetContents().get('catalogs', []))
+      for manifest in manifests:
+        if manifest not in intended_catalogs:
+          raise CliError('Manifest %s not in catalogs' % manifest)
 
     # Parse pkginfo.GetXml() to ensure it's still valid before uploading.
     new_xml = pkginfo.GetXml()
@@ -287,8 +320,8 @@ class SimianCliClient(cli.SimianCliClient):
     # obtain, e.g.  the old manifests value and re-PUT it to avoid losing
     # the value while intending to changing catalogs value.
 
-    self.client.PutPackageInfo(name, new_xml, **kwargs)
+    self.client.PutPackageInfo(filename, new_xml, **kwargs)
 
     print 'Package info update successful!'
-    print 'Package name: %s' % name
+    print 'Package name: %s' % filename
     print '\n'.join(changes)

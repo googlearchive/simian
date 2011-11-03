@@ -25,11 +25,13 @@ import logging
 import os
 import os.path
 import platform
+import re
 import subprocess
 from simian.client import client
+from simian.client import uuid
 from simian.mac.munki import pkgs
 from simian.mac.munki import plist
-
+from simian.mac.common import hw
 
 MUNKI_CONFIG_PLIST = '/Library/Preferences/ManagedInstalls.plist'
 
@@ -38,47 +40,33 @@ class Error(Exception):
   """Base Error class."""
 
 
-def GetMunkiConfigParam(param, munki_config_plist=MUNKI_CONFIG_PLIST):
+def GetMunkiConfigParam(
+    param, munki_config_plist=MUNKI_CONFIG_PLIST, open_fn=open):
   """Get Munki configuration.
 
   Args:
     param: str, key to return, e.g. 'SoftwareRepoURL'
     munki_config_plist: str, optional, filename to read from
+    open_fn: func, optional, open function to use
   Returns:
-    str, SoftwareRepoURL value
+    str, value for param key
     or None if the value cannot be determined
   """
-  if platform.uname()[0] == 'Darwin':
-    # I'm sorry :( blame binary plists.
-    domain = munki_config_plist.rsplit('.', 1)[0]
-    argv = ['/usr/bin/defaults', 'read', domain, param]
-    try:
-      p = subprocess.Popen(
-          argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-      (stdout, stderr) = p.communicate()
-      rc = p.wait()
-    except OSError:
-      return
-
-    if rc != 0 or stderr:
-      logging.debug('defaults read returned %s: %s', rc, stderr)
-      return
-
-    if stdout:
-      stdout = stdout.strip()
-
-    return stdout
-  else:
-    try:
-      f = open(munki_config_plist, 'r')
-      s = f.read(10240)
-      f.close()
-      mpi = plist.MunkiPlist(s)
-      pl = mpi.GetXml()
-    except (IOError, plist.Error), e:
-      logging.debug('Error reading %s: %s', munki_config_plist, str(e))
-      return
-    return pl.get(param, None)
+  try:
+    f = open_fn(munki_config_plist, 'r')
+    buf = []
+    s = f.read()
+    while s:
+      buf.append(s)
+      s = f.read()
+    f.close()
+    mpi = plist.MunkiPlist(''.join(buf))
+    mpi.Parse()
+    pl = mpi.GetContents()
+  except (IOError, plist.Error), e:
+    logging.debug('Error reading %s: %s', munki_config_plist, str(e))
+    return
+  return pl.get(param, None)
 
 
 def GetMunkiSoftwareRepoURL():
@@ -128,6 +116,59 @@ class BaseSimianClient(object):
     else:
       return ''
 
+  def _GetSystemProfile(self):
+    """Get hardware profile
+
+    Returns:
+      dict from hw.SystemProfile.GetProfile
+    Raises:
+      hw.SystemProfilerError: error fetching and parsing System Profiler output.
+    """
+    sp = hw.SystemProfile(include_only=['network', 'system'])
+    profile = sp.GetProfile()
+    return profile
+
+  def _GetMachineUuid(self, profile):
+    """Return machine uuid for system profile.
+
+    Args:
+      profile: dict of system profile
+    Returns:
+      str uuid or None if one cannot be determined
+    """
+    muuid = uuid.MachineUuid()
+    for i in xrange(10):  # covers en0-en9
+      ki = 'interface_en%d' % i
+      if ki in profile:
+        intf_type = profile[ki]
+        if '%s_mac' % intf_type in profile:
+          mac = profile['%s_mac' % intf_type]
+          if intf_type == 'airport':
+            muuid.SetWirelessMac(i, mac)
+          elif intf_type == 'ethernet':
+            muuid.SetEthernetMac(i, mac)
+    if 'platform_uuid' in profile:
+      muuid.SetMachineHardwareId(profile['platform_uuid'])
+
+    try:
+      return muuid.GenerateMachineUuid()
+    except uuid.GenerateMachineUuidError:
+      return None
+
+  def GetGlobalUuid(self):
+    """Returns a global, platform independant UUID for this machine.
+
+    Returns:
+      str, a global, platform independent, UUID for this machine, or None if
+      there was a profile with System Profiler.
+    """
+    try:
+      profile = self._GetSystemProfile()
+    except hw.SystemProfilerError:
+      return None
+
+    return self._GetMachineUuid(profile)
+
 
 class SimianClient(BaseSimianClient, client.SimianClient):
   """Client to connect to the Simian server as a Mac client."""
@@ -155,6 +196,39 @@ class SimianClient(BaseSimianClient, client.SimianClient):
     except pkgs.Error, e:
       raise client.SimianClientError(str(e))
     return p.GetPlist()
+
+  def _IsDiskImageReadOnly(self, filename):
+    """Returns True if the disk image will mount read-only.
+
+    Args:
+      filename: str, disk image filename
+    Returns:
+      True, if the disk image will mount read-only.
+      False, if the disk image will mount read-write.
+    Raises:
+      client.SimianClientError: the package is malformed.
+    """
+    try:
+      argv = ['/usr/bin/hdiutil', 'imageinfo', filename]
+      p = subprocess.Popen(
+          argv,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE)
+      (stdout, stderr) = p.communicate()
+      rc = p.wait()
+    except OSError, e:
+      raise client.SimianClientError(
+          'Could not hdiutil imageinfo %s: %s' % (filename, str(e)))
+
+    if rc != 0:
+      raise client.SimianClientError(
+          '%s: %s: %s' % (filename, str(rc), stderr))
+
+    if stdout:
+      if re.search('Format Description:.*read\-only', stdout):
+        return True
+
+    return False
 
   def _IsPackageUploadNecessary(self, filename, upload_pkginfo):
     """Returns True if the package file should be uploaded.
@@ -207,7 +281,8 @@ class SimianClient(BaseSimianClient, client.SimianClient):
 
   def UploadMunkiPackage(
       self, filename, description, display_name, catalogs, manifests,
-      install_types, forced_install=False, pkginfo_hook=None):
+      install_types, unattended_install=False, unattended_uninstall=False,
+      pkginfo_hook=None):
     """Uploads a Munki PackageInfo plist along with a Package.
 
     Args:
@@ -217,21 +292,33 @@ class SimianClient(BaseSimianClient, client.SimianClient):
       catalogs: list of str catalog names.
       manifests: list of str manifest names.
       install_types: list of str install types.
-      forced_install: bool, if True inject "forced_install" bool to plist XML.
+      unattended_install: bool, if True inject "unattended_install" bool into
+              plist XML.
+      unattended_uninstall: bool, if True inject "unattended_uninstall" bool
+              into plist XML.
       pkginfo_hook: optional, function to call with package info after
               generated
     Returns:
       Tuple. (Str response body from upload, filename, name of the package,
               list of manifests, file size in kilobytes, SHA-256 hash of file)
+    Raises:
+      client.SimianClientError: if a client generated error occurs.
     """
-    file_path = filename
-    filename = os.path.basename(filename)  # filename should be name only
+    if not self._IsDiskImageReadOnly(filename):
+      raise client.SimianClientError(
+          '%s is not a read-only disk image' % filename)
 
     pkginfo = self._LoadPackageInfo(
-        file_path, description, display_name, catalogs)
+        filename, description, display_name, catalogs)
 
-    if forced_install:
+    if unattended_install:
+      pkginfo['unattended_install'] = True
+      # TODO(user): remove backwards compatibility after a while...
       pkginfo['forced_install'] = True
+    if unattended_uninstall:
+      pkginfo['unattended_uninstall'] = True
+      # TODO(user): remove backwards compatibility after a while...
+      pkginfo['forced_uninstall'] = True
 
     if pkginfo_hook is not None:
       while 1:
@@ -291,7 +378,11 @@ class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
     """
     logging.debug('SimianAuthClient._GetPuppetSslDetails')
     if not cert_fname:
-      facts = self.GetFacter()
+      try:
+        facts = self.GetFacter()
+      except client.FacterError:
+        # don't give up, facter fails from time to time.
+        facts = {}
       cert_name = facts.get('certname', None)
       logging.debug('Certname from facter: "%s"', cert_name)
       if not cert_name:

@@ -41,19 +41,17 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     track = 'stable'
     full_os_version = '10.6.6'
     major_minor_os_version = '10.6'
-    client_id = 'client_id'
-    client_id_dict = {'track': track, 'os_version': full_os_version}
-    session = self.mox.CreateMockAnything()
-    session.uuid = 'uuid'
+    client_id = {'track': track, 'os_version': full_os_version}
+    session = 'session'
     catalog_date = datetime.datetime(2011, 01, 01)
     header_date_str = 'foo str date'
     catalog_name = '%s_%s' % (major_minor_os_version, track)
 
+    self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
     self.MockDoAnyAuth(and_return=session)
-    self.request.headers.get('X-munki-client-id', '').AndReturn(client_id)
-    self.mox.StubOutWithMock(applesus.common, 'ParseClientId')
-    applesus.common.ParseClientId(client_id, uuid=session.uuid).AndReturn(
-        client_id_dict)
+    applesus.handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str='').AndReturn(client_id)
+
     catalog = self.MockModelStatic(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name)
     catalog.mtime = catalog_date
@@ -77,19 +75,17 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     track = 'stable'
     full_os_version = '10.6.6'
     major_minor_os_version = '10.6'
-    client_id = 'client_id'
-    client_id_dict = {'track': track, 'os_version': full_os_version}
-    session = self.mox.CreateMockAnything()
-    session.uuid = 'uuid'
+    client_id = {'track': track, 'os_version': full_os_version}
+    session = 'session'
     catalog_date = datetime.datetime(2011, 01, 01)
     header_date_str = 'foo str date'
     catalog_name = '%s_%s' % (major_minor_os_version, track)
 
+    self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
     self.MockDoAnyAuth(and_return=session)
-    self.request.headers.get('X-munki-client-id', '').AndReturn(client_id)
-    self.mox.StubOutWithMock(applesus.common, 'ParseClientId')
-    applesus.common.ParseClientId(client_id, uuid=session.uuid).AndReturn(
-        client_id_dict)
+    applesus.handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str='').AndReturn(client_id)
+
     catalog = self.MockModelStatic(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name)
     catalog.mtime = catalog_date
@@ -107,17 +103,15 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
   def testGet404(self):
     """Tests AppleSUS.get() where track is not found."""
     track = 'notfound'
-    client_id = 'client_id'
-    client_id_dict = {'track': track, 'os_version': ''}
-    session = self.mox.CreateMockAnything()
-    session.uuid = 'uuid'
+    client_id = {'track': track, 'os_version': ''}
+    session = 'session'
     catalog_name = '_%s' % track
 
+    self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
     self.MockDoAnyAuth(and_return=session)
-    self.request.headers.get('X-munki-client-id', '').AndReturn(client_id)
-    self.mox.StubOutWithMock(applesus.common, 'ParseClientId')
-    applesus.common.ParseClientId(client_id, uuid=session.uuid).AndReturn(
-        client_id_dict)
+    applesus.handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str='').AndReturn(client_id)
+
     self.MockModelStaticBase(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
     self.response.set_status(404).AndReturn(None)
@@ -131,22 +125,23 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     track = 'notfound'
     full_os_version = '10.6.6'
     major_minor_os_version = '10.6'
-    client_id = 'track=%s|os_version=%s' % (track, full_os_version)
-    client_id_dict = {'track': track, 'os_version': full_os_version}
+    client_id_str = 'track=%s|os_version=%s' % (track, full_os_version)
+    client_id = {'track': track, 'os_version': full_os_version}
     session = None  # easier than mock obj, no .uuid property
     catalog_name = '%s_%s' % (major_minor_os_version, track)
 
-    self.mox.StubOutWithMock(applesus.common, 'ParseClientId')
-    applesus.common.ParseClientId(client_id).AndReturn(
-        client_id_dict)
-
+    self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
     self.MockDoAnyAuth(and_return=session)
+    applesus.handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str=client_id_str).AndReturn(
+            client_id)
+
     self.MockModelStaticBase(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
     self.response.set_status(404).AndReturn(None)
 
     self.mox.ReplayAll()
-    self.c.get(client_id)
+    self.c.get(client_id_str)
     self.mox.VerifyAll()
 
   def testPut(self):
@@ -160,19 +155,19 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     self.request.body = xml
 
     self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.common, 'ObtainLock')
-    self.mox.StubOutWithMock(applesus.common, 'ReleaseLock')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
 
     self.MockDoMunkiAuth(
       fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
     applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
     mock_plist.Parse().AndReturn(None)
-    applesus.common.ObtainLock(lock, timeout=5.0).AndReturn(True)
+    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(True)
 
     model = self.MockModelStatic('AppleSUSCatalog', 'get_or_insert', name)
     model.put().AndReturn(None)
 
-    applesus.common.ReleaseLock(lock).AndReturn(None)
+    applesus.gae_util.ReleaseLock(lock).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(name)
@@ -195,7 +190,8 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
       fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
     applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
     mock_plist.Parse().AndRaise(applesus.plist.PlistError)
-    self.response.set_status(400, '')
+    self.response.set_status(400)
+    self.response.out.write('')
 
     self.mox.ReplayAll()
     self.c.put(name)
@@ -210,7 +206,7 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     mock_plist = self.mox.CreateMockAnything()
 
     self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.common, 'ObtainLock')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
 
     self.request.body = xml
 
@@ -218,8 +214,9 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
       fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
     applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
     mock_plist.Parse().AndReturn(None)
-    applesus.common.ObtainLock(lock, timeout=5.0).AndReturn(False)
-    self.response.set_status(403, 'Could not lock applesus')
+    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(False)
+    self.response.set_status(403)
+    self.response.out.write('Could not lock applesus')
 
     self.mox.ReplayAll()
     self.c.put(name)
@@ -234,8 +231,8 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     mock_plist = self.mox.CreateMockAnything()
 
     self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.common, 'ObtainLock')
-    self.mox.StubOutWithMock(applesus.common, 'ReleaseLock')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
 
     self.request.body = xml
 
@@ -243,13 +240,14 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
       fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
     applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
     mock_plist.Parse().AndReturn(None)
-    applesus.common.ObtainLock(lock, timeout=5.0).AndReturn(True)
+    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(True)
 
     model = self.MockModelStatic('AppleSUSCatalog', 'get_or_insert', name)
     model.put().AndRaise(applesus.db.Error)
 
-    self.response.set_status(500, '')
-    applesus.common.ReleaseLock(lock).AndReturn(None)
+    self.response.set_status(500)
+    self.response.out.write('')
+    applesus.gae_util.ReleaseLock(lock).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(name)

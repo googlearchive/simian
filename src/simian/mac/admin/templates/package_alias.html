@@ -1,0 +1,59 @@
+{% extends "stats_base.html" %}
+
+{% block title %}Package Alias{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  <h2>Package Alias Admin</h2>
+
+  {% if is_admin %}
+  <h3>Add New or Edit Existing Package Alias</h3>
+  {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <input type="hidden" name="create_package_alias" value="1" />
+    Package Alias: <input type="text" name="package_alias" /><br />
+    Munki Package Name:
+    <select name="munki_pkg_name">
+      <option selected="selected"/>
+      {% for name in munki_pkg_names %}
+        <option>{{ name }}</option>
+      {% endfor %}
+    </select>
+    <input type="submit" value="Submit" />
+  </form>
+  <h3>Existing Package Aliases</h3>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Package Alias</th><th>Munki Package Name</th><th>Enabled</th>
+    </tr>
+    {% for a in package_aliases %}
+      <tr>
+        <td>{{ a.key.name }}</td>
+        <td>{% if a.munki_pkg_name %}{{ a.munki_pkg_name }}{% endif %}</td>
+        <td>
+          {% if is_admin %}
+            {% if a.enabled %}
+              <input type="checkbox"
+                     onclick="javascript:
+                         simian.togglePackageAlias('{{ a.key.name }}', this.checked);"
+                     checked="checked" />
+            {% else %}
+              <input type="checkbox"
+                     onclick="javascript:
+                         simian.togglePackageAlias('{{ a.key.name }}', this.checked);"
+                  />
+            {% endif %}
+            <span id="enable-status-{{ a.key.name }}"></span>
+          {% else %}
+            {{ a.enabled }}
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+</div>
+
+{% endblock %}

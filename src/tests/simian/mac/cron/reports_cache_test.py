@@ -84,49 +84,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testGet(self):
-    """Test get()."""
-    self.mox.StubOutWithMock(reports_cache.models.Computer, 'AllActive')
-    self.mox.StubOutWithMock(
-        reports_cache.models.ReportsCache, 'SetClientCount')
-
-    tracks = {'stable': 1000, 'unstable': 20, 'testing': 100}
-    total_count = sum(tracks.values())
-    reports_cache.common.TRACKS = tracks
-
-    for track, count in tracks.iteritems():
-      mock_query = self.mox.CreateMockAnything()
-      reports_cache.models.Computer.AllActive(
-          keys_only=True).AndReturn(mock_query)
-      mock_query.filter('track =', track).AndReturn(mock_query)
-      mock_query.count().AndReturn(count)
-      reports_cache.models.ReportsCache.SetClientCount(
-          count, 'track', track).AndReturn(None)
-    reports_cache.models.ReportsCache.SetClientCount(total_count).AndReturn(
-        None)
-
-    now = datetime.datetime.utcnow()
-    self.mox.StubOutWithMock(datetime, 'datetime')
-    reports_cache.datetime.datetime.utcnow().AndReturn(now)
-    days_active = {1: 100, 7: 400, 30: 1000}
-    reports_cache.DAYS_ACTIVE = days_active
-    for days, count in days_active.iteritems():
-      days_datetime = now - datetime.timedelta(days=days)
-      mock_query = self.mox.CreateMockAnything()
-      reports_cache.models.Computer.AllActive(
-          keys_only=True).AndReturn(mock_query)
-      mock_query.filter('preflight_datetime >', days_datetime).AndReturn(
-          mock_query)
-      mock_query.count().AndReturn(count)
-      reports_cache.models.ReportsCache.SetClientCount(
-          count, 'days_active', days).AndReturn(None)
-
-    rc = reports_cache.ReportsCache()
-
-    self.mox.ReplayAll()
-    rc.get('client_counts')
-    self.mox.VerifyAll()
-
   def _GenDatetimes(self, *add_seconds):
     """Generate a random datetime and additional datetimes after it.
 
@@ -653,6 +610,98 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     rc._GenerateMsuUserSummary()
     rc._GenerateMsuUserSummary()
+    self.mox.VerifyAll()
+
+  def testGenerateInstallCounts(self):
+    """Test _GenerateInstallCounts()."""
+    install_counts = {
+        'foo': {
+            'install_count': 2,
+            'applesus': True,
+            'duration_count': 1,
+            'duration_total_seconds': 30,
+            'duration_seconds_avg': 30},
+        'bar': {'install_count': 2, 'applesus': False},
+    }
+
+    new_foo = self.mox.CreateMockAnything()
+    new_foo.package = 'foo'
+    new_foo.applesus = True
+    new_foo.duration_seconds = 20
+    new_bar = self.mox.CreateMockAnything()
+    new_bar.package = 'bar'
+    new_bar.applesus = False
+    new_bar.duration_seconds = 10
+    new_zzz = self.mox.CreateMockAnything()
+    new_zzz.package = 'zzz'
+    new_zzz.applesus = False
+    new_zzz.duration_seconds = None
+
+    new_installs = [new_foo, new_bar, new_bar, new_zzz]
+
+    new_install_counts = {
+        'foo': {
+            'install_count': 3,
+            'applesus': True,
+            'duration_count': 2,
+            'duration_total_seconds': 50,
+            'duration_seconds_avg': int((50)/2),
+         },
+        'bar': {
+            'install_count': 4,
+            'applesus': False,
+            'duration_count': 2,
+            'duration_total_seconds': 20,
+            'duration_seconds_avg': 10,
+         },
+        'zzz': {
+            'install_count': 1,
+            'applesus': False,
+            'duration_count': 0,
+            'duration_total_seconds': 0,
+            'duration_seconds_avg': None,
+        },
+    }
+
+    self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
+    reports_cache.models.KeyValueCache.get_by_key_name = (
+        self.mox.CreateMockAnything())
+    self.mox.StubOutWithMock(reports_cache.models.InstallLog, 'all')
+    self.mox.StubOutWithMock(
+        reports_cache.models.ReportsCache, 'GetInstallCounts')
+    self.mox.StubOutWithMock(
+        reports_cache.models.ReportsCache, 'SetInstallCounts')
+
+    reports_cache.models.KeyValueCache.get_by_key_name(
+        'pkgs_list_cron_lock').AndReturn(None)
+    mock_lock = self.mox.CreateMockAnything()
+    reports_cache.models.KeyValueCache(
+        key_name='pkgs_list_cron_lock').AndReturn(mock_lock)
+    mock_lock.put().AndReturn(None)
+
+    reports_cache.models.ReportsCache.GetInstallCounts().AndReturn(
+        (install_counts, None))
+    mock_query = self.mox.CreateMockAnything()
+    reports_cache.models.InstallLog.all().AndReturn(mock_query)
+    mock_query.order('mtime').AndReturn(mock_query)
+    mock_cursor_obj = self.mox.CreateMockAnything()
+    mock_cursor_obj.text_value = 'foocursor'
+    reports_cache.models.KeyValueCache.get_by_key_name(
+        'pkgs_list_cursor').AndReturn(mock_cursor_obj)
+    mock_query.with_cursor(mock_cursor_obj.text_value)
+    mock_query.fetch(1000).AndReturn(new_installs)
+
+    reports_cache.models.ReportsCache.SetInstallCounts(new_install_counts)
+    mock_query.cursor().AndReturn(None)
+    mock_cursor_obj.put().AndReturn(None)
+    mock_lock.delete().AndReturn(None)
+
+    self.mox.StubOutWithMock(reports_cache.deferred, 'defer')
+    reports_cache.deferred.defer(
+        reports_cache._GenerateInstallCounts).AndReturn(None)
+
+    self.mox.ReplayAll()
+    reports_cache._GenerateInstallCounts()
     self.mox.VerifyAll()
 
 

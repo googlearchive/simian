@@ -28,6 +28,7 @@ from simian.mac import models
 from simian.auth import gaeserver
 from simian.mac.munki import common
 from simian.mac.common import auth
+from simian.mac.common import gae_util
 from simian.mac.munki import handlers
 from simian.mac.munki import plist
 from simian.mac.munki.handlers import pkgs
@@ -67,8 +68,9 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
 
       if hash_str:
         lock = 'pkgsinfo_%s' % filename
-        if not common.ObtainLock(lock, timeout=5.0):
-          self.response.set_status(403, 'Could not lock pkgsinfo')
+        if not gae_util.ObtainLock(lock, timeout=5.0):
+          self.response.set_status(403)
+          self.response.out.write('Could not lock pkgsinfo')
           return
 
       pkginfo = models.PackageInfo.get_by_key_name(filename)
@@ -79,9 +81,10 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
         self.response.out.write(pkginfo.plist)
       else:
         self.response.set_status(404)
+        return
 
       if hash_str:
-        common.ReleaseLock(lock)
+        gae_util.ReleaseLock(lock)
     else:
       gaeserver.DoMunkiAuth(require_level=gaeserver.LEVEL_UPLOADPKG)
       query = models.PackageInfo.all()
@@ -140,12 +143,14 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
       mpl.Parse()
     except plist.PlistError, e:
       logging.exception('Invalid pkginfo plist PUT: \n%s\n', self.request.body)
-      self.response.set_status(400, str(e))
+      self.response.set_status(400)
+      self.response.out.write(str(e))
       return
 
     lock = 'pkgsinfo_%s' % filename
-    if not common.ObtainLock(lock, timeout=5.0):
-      self.response.set_status(403, 'Could not lock pkgsinfo')
+    if not gae_util.ObtainLock(lock, timeout=5.0):
+      self.response.set_status(403)
+      self.response.out.write('Could not lock pkgsinfo')
       return
 
     # To avoid pkginfo uploads without corresponding packages, only allow
@@ -154,17 +159,32 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
     if pkginfo is None:
       logging.warning(
           'pkginfo "%s" does not exist; PUT only allows updates.', filename)
-      self.response.set_status(403, 'Only updates supported')
-      common.ReleaseLock(lock)
+      self.response.set_status(403)
+      self.response.out.write('Only updates supported')
+      gae_util.ReleaseLock(lock)
       return
+
+    # If the pkginfo is not modifiable, ensure only manifests have changed.
+    if not pkginfo.IsSafeToModify():
+      existing_pkginfo = MunkiPackageInfoPlistStrict(pkginfo.plist)
+      existing_pkginfo.Parse()
+      if not mpl.EqualIgnoringManifestsAndCatalogs(existing_pkginfo):
+        logging.warning(
+            'pkginfo "%s" is in stable or testing; change prohibited.',
+            filename)
+        self.response.set_status(403)
+        self.response.out.write('Changes to pkginfo not allowed')
+        gae_util.ReleaseLock(lock)
+        return
 
     # If the update parameter asked for a careful update, by supplying
     # a hash of the last known pkgsinfo, then compare the hash to help
     # the client make a non destructive update.
     if hash_str:
       if self._Hash(pkginfo.plist) != hash_str:
-        self.response.set_status(409, 'Update hash does not match')
-        common.ReleaseLock(lock)
+        self.response.set_status(409)
+        self.response.out.write('Update hash does not match')
+        gae_util.ReleaseLock(lock)
         return
 
     # All verification has passed, so let's create the PackageInfo entity.
@@ -178,11 +198,7 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
       pkginfo.install_types = install_types
     pkginfo.put()
 
-    common.ReleaseLock(lock)
-
-    logging.debug(
-        'pkginfo submitted (%s) with catalogs (%s) and manifests (%s)',
-        filename, pkginfo.catalogs, pkginfo.manifests)
+    gae_util.ReleaseLock(lock)
 
     for track in pkginfo.catalogs:
       common.CreateCatalog(track, delay=1)

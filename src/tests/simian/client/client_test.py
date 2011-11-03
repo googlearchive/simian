@@ -21,7 +21,6 @@
 
 import logging
 import sys
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from google.apputils import basetest
@@ -30,6 +29,13 @@ import stubout
 from simian.client import client
 
 if hasattr(mox.MockAnything, '__str__'): del(mox.MockAnything.__str__)
+logging.basicConfig(filename='/dev/null')
+
+
+class GenericException(Exception):
+  """A generic exception that can be used for mocks."""
+  pass
+
 
 class MultiBodyConnectionTest(mox.MoxTestBase):
   """Test MultiBodyConnection class."""
@@ -172,7 +178,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     else:
       client.httplib.HTTPConnection.endheaders().AndReturn(None)
 
-    # with a body supplied, send() is called inside _send_request() on 
+    # with a body supplied, send() is called inside _send_request() on
     # httplib < 2.6. in >=2.7 endheaders() sends the body and headers
     # all at once.
     client.httplib.HTTPConnection.putrequest(method, url).AndReturn(None)
@@ -230,7 +236,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
         self.mbc,
         method, url, body=None, headers=headers).AndReturn(None)
     for s in body:
-        client.httplib.HTTPConnection.send(s).AndReturn(None)
+      client.httplib.HTTPConnection.send(s).AndReturn(None)
     self.mox.ReplayAll()
     self.mbc.request(method, url, body=body)
     self.mox.VerifyAll()
@@ -427,7 +433,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):
+    def __connect(address):  # pylint: disable-msg=C6409
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = ['subject1']
       return None
@@ -446,7 +452,6 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
   def testConnectWhenNoCACertChain(self):
     """Test connect()."""
     context = self.mox.CreateMockAnything()
-    conn = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(client, 'SSL')
     self.mox.StubOutWithMock(client.SSL, 'Context')
 
@@ -470,7 +475,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):
+    def __connect(address):  # pylint: disable-msg=C6409
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = []
       return None
@@ -499,7 +504,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):
+    def __connect(address):  # pylint: disable-msg=C6409
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = ['subject1']
       return None
@@ -514,7 +519,6 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.assertRaises(client.SimianClientError, self.mbc.connect)
     self.assertEqual(self.mbc.sock, None)
     self.mox.VerifyAll()
-
 
 
 class HttpsClientTest(mox.MoxTestBase):
@@ -536,7 +540,7 @@ class HttpsClientTest(mox.MoxTestBase):
     mock_lh = self.mox.CreateMockAnything()
     self.stubs.Set(client.HttpsClient, '_LoadHost', mock_lh)
     self.mox.StubOutWithMock(self.client, '_LoadHost')
-    mock_lh(self.hostname, None).AndReturn(None)
+    mock_lh(self.hostname, None, None).AndReturn(None)
     self.mox.ReplayAll()
     i = client.HttpsClient(self.hostname)
     self.assertEqual(i._progress_callback, None)
@@ -558,6 +562,8 @@ class HttpsClientTest(mox.MoxTestBase):
     self.client._DisableRFC2818Workaround().AndReturn(None)
     self.client._EnableRFC2818Workaround().AndReturn(None)
     self.client._EnableRFC2818Workaround().AndReturn(None)
+    self.client._DisableRFC2818Workaround().AndReturn(None)
+    self.client._DisableRFC2818Workaround().AndReturn(None)
     self.client._DisableRFC2818Workaround().AndReturn(None)
 
     self.mox.ReplayAll()
@@ -609,6 +615,16 @@ class HttpsClientTest(mox.MoxTestBase):
     self.assertEqual(self.client.port, 1234)
     self.assertFalse(self.client.use_https)
 
+    self.client._LoadHost(u'http://unicodehost')
+    self.assertTrue(type(self.client.hostname) is str)
+    self.assertEqual(self.client.hostname, 'unicodehost')
+
+    self.client._LoadHost(u'http://unicodehost', proxy=u'http://evilproxy:9')
+    self.assertTrue(type(self.client.hostname) is str)
+    self.assertEqual(self.client.hostname, 'unicodehost')
+    self.assertTrue(type(self.client.proxy_hostname) is str)
+    self.assertEqual(self.client.proxy_hostname, 'http://evilproxy')
+
     self.mox.VerifyAll()
 
   def testSetCACertChain(self):
@@ -616,21 +632,28 @@ class HttpsClientTest(mox.MoxTestBase):
     self.client.SetCACertChain('foo')
     self.assertEqual(self.client._ca_cert_chain, 'foo')
 
-  def testConnect(self):
+  def _TestConnect(self, test_client, hostname, port):
     """Test _Connect()."""
     m = self.mox.CreateMockAnything()
     # we stub this out weirdly because the parent class isn't an object,
     # it's an oldschool Python class.
-    self.client._ca_cert_chain = 'cert chain'
-    self.client._cert_valid_subjects = 'valid subjects'
+    test_client._ca_cert_chain = 'cert chain'
+    test_client._cert_valid_subjects = 'valid subjects'
     self.stubs.Set(client, 'HTTPSMultiBodyConnection', m)
-    m(self.hostname, port=self.port).AndReturn(m)
+    m(hostname, port).AndReturn(m)
     m.SetCACertChain('cert chain').AndReturn(None)
     m.SetCertValidSubjects('valid subjects').AndReturn(None)
     m.connect().AndReturn(None)
     self.mox.ReplayAll()
-    self.client._Connect(self.hostname, port=self.port)
+    test_client._Connect()
     self.mox.VerifyAll()
+
+  def testConnect(self):
+    self._TestConnect(self.client, self.hostname, self.port)
+
+  def testConnectWithProxy(self):
+    test_client = client.HttpsClient(self.hostname, proxy='proxyhost:123')
+    self._TestConnect(test_client, 'proxyhost', 123)
 
   def testGetResponseNoFile(self):
     """Test _GetResponse() storing body directly into response obj."""
@@ -704,41 +727,46 @@ class HttpsClientTest(mox.MoxTestBase):
     self.client._Request(method, conn, url, body2, headers)
     self.mox.VerifyAll()
 
-  def testDoRequestResponse(self):
+  def _TestDoRequestResponse(self, test_client, url, req_url):
     """Test _DoRequestResponse()."""
     method = 'zomg'
-    hostname = 'zomghost'
     conn = self.mox.CreateMockAnything()
-    url = '/url'
     body = 'body'
     headers = 'headers'
     output_file = None
-    port = None
     response = self.mox.CreateMockAnything()
     response.status = 200
 
-    self.mox.StubOutWithMock(self.client, '_Connect')
-    self.mox.StubOutWithMock(self.client, '_Request')
-    self.mox.StubOutWithMock(self.client, '_GetResponse')
+    self.mox.StubOutWithMock(test_client, '_Connect')
+    self.mox.StubOutWithMock(test_client, '_Request')
+    self.mox.StubOutWithMock(test_client, '_GetResponse')
 
-    self.client._Connect(hostname, port).AndReturn(conn)
-    self.client._Request(
-        method, conn, url, body=body, headers=headers).AndReturn(None)
-    self.client._GetResponse(
+    test_client._Connect().AndReturn(conn)
+    test_client._Request(
+        method, conn, req_url, body=body, headers=headers).AndReturn(None)
+    test_client._GetResponse(
         conn, output_file=output_file).AndReturn(response)
 
-    self.client._Connect(hostname, port).AndRaise(client.httplib.HTTPException)
+    test_client._Connect().AndRaise(client.httplib.HTTPException)
 
     self.mox.ReplayAll()
     self.assertEqual(
         response,
-        self.client._DoRequestResponse(
-        method, hostname, url, body, headers, port, output_file))
+        test_client._DoRequestResponse(
+            method, url, body, headers, output_file))
     self.assertRaises(
         client.HTTPError,
-        self.client._DoRequestResponse,
-        method, hostname, url, body, headers, port, output_file)
+        test_client._DoRequestResponse,
+        method, url, body, headers, output_file)
     self.mox.VerifyAll()
+
+  def testDoRequestResponse(self):
+    self._TestDoRequestResponse(self.client, '/url', '/url')
+
+  def testDoRequestResponseWithProxy(self):
+    test_client = client.HttpsClient(self.hostname, proxy='proxyhost:123')
+    req_url = 'https://' + self.hostname + '/url'
+    self._TestDoRequestResponse(test_client, '/url', req_url)
 
   def testDoWithInvalidMethod(self):
     """Test Do() with invalid method."""
@@ -754,12 +782,10 @@ class HttpsClientTest(mox.MoxTestBase):
     headers = None
     output_file = None
     output_filename = None
-    port = None
 
     self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
     self.client._DoRequestResponse(
-        method, self.hostname, url,
-        body=body, headers={}, output_file=output_file, port=port)
+        method, url, body=body, headers={}, output_file=output_file)
     self.mox.ReplayAll()
     self.client.Do(method, url, body, headers, output_filename)
     self.mox.VerifyAll()
@@ -773,18 +799,41 @@ class HttpsClientTest(mox.MoxTestBase):
     mock_open = self.mox.CreateMockAnything()
     output_file = self.mox.CreateMockAnything()
     output_filename = '/tmpfile'
-    port = None
 
     self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
     mock_open(output_filename, 'w').AndReturn(output_file)
     self.client._DoRequestResponse(
-        method, self.hostname, url,
-        body=body, headers={}, output_file=output_file, port=port)
+        method, url, body=body, headers={}, output_file=output_file)
     output_file.close().AndReturn(None)
     self.mox.ReplayAll()
     self.client.Do(
         method, url, body, headers, output_filename, _open=mock_open)
     self.mox.VerifyAll()
+
+  def testDoWithProxy(self):
+    """Test Do() with a proxy specified."""
+    method = 'GET'
+    url = 'url'
+    proxy = 'proxyhost:123'
+
+    # Working case.
+    test_client = client.HttpsClient(self.hostname, proxy=proxy)
+    self.mox.StubOutWithMock(test_client, '_DoRequestResponse')
+    test_client._DoRequestResponse(
+        method, url, body=None, headers={}, output_file=None)
+    self.mox.ReplayAll()
+    test_client.Do(method, url)
+    self.mox.VerifyAll()
+    # No port case.
+    proxy = 'proxyhost'
+    self.assertRaises(
+        client.Error,
+        client.HttpsClient, self.hostname, proxy=proxy)
+    # Bad port case.
+    proxy = 'proxyhost:alpha'
+    self.assertRaises(
+        client.Error,
+        client.HttpsClient, self.hostname, proxy=proxy)
 
 
 class HttpsAuthClientTest(mox.MoxTestBase):
@@ -835,24 +884,24 @@ class HttpsAuthClientTest(mox.MoxTestBase):
   def testCacheFacterContents(self):
     """Test CacheFacterContents()."""
     self.mox.StubOutWithMock(self.client, '_SudoExec')
-    self.mox.StubOutWithMock(client.Pickle, 'dump')
     stdout = self.mox.CreateMockAnything()
     stderr = None
 
     facts = {'foo': 'bar', 'zoo': 'bar bar'}
     self.client.FACTER_CACHE_PATH = '/x'
+    lines = [
+        'foo => bar',
+        'zoo => bar bar',
+    ]
 
     self.client._SudoExec(
         client.FACTER_CMD, expect_rc=0).AndReturn((stdout, stderr))
-    stdout.splitlines().AndReturn([
-        'foo = bar',
-        'zoo = bar bar',
-        ])
+    stdout.splitlines().AndReturn(lines)
 
     mock_open = self.mox.CreateMockAnything()
     mock_file = self.mox.CreateMockAnything()
     mock_open(self.client.FACTER_CACHE_PATH, 'w').AndReturn(mock_file)
-    client.Pickle.dump(facts, mock_file).AndReturn(None)
+    mock_file.write('\n'.join(lines))
     mock_file.close()
 
     self.mox.ReplayAll()
@@ -862,12 +911,6 @@ class HttpsAuthClientTest(mox.MoxTestBase):
   def testCacheFacterContentsWhenSudoError(self):
     """Test CacheFacterContents()."""
     self.mox.StubOutWithMock(self.client, '_SudoExec')
-    self.mox.StubOutWithMock(client.Pickle, 'dump')
-
-    stdout = self.mox.CreateMockAnything()
-    stderr = None
-
-    facts = {}
 
     self.client._SudoExec(
         client.FACTER_CMD, expect_rc=0).AndRaise(client.SudoExecError)
@@ -879,7 +922,6 @@ class HttpsAuthClientTest(mox.MoxTestBase):
   def testCacheFacterContentsWhenNoCachePath(self):
     """Test CacheFacterContents()."""
     self.mox.StubOutWithMock(self.client, '_SudoExec')
-    self.mox.StubOutWithMock(client.Pickle, 'dump')
     stdout = self.mox.CreateMockAnything()
     stderr = None
 
@@ -889,8 +931,8 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.client._SudoExec(
         client.FACTER_CMD, expect_rc=0).AndReturn((stdout, stderr))
     stdout.splitlines().AndReturn([
-        'foo = bar',
-        'zoo = bar bar',
+        'foo => bar',
+        'zoo => bar bar',
         ])
     self.mox.ReplayAll()
     self.assertEqual(facts, self.client.CacheFacterContents())
@@ -910,12 +952,15 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.stubs.Set(client.datetime, 'datetime', mock_dt)
     self.mox.StubOutWithMock(client.os, 'stat')
     self.mox.StubOutWithMock(client.os, 'geteuid')
-    self.mox.StubOutWithMock(client.Pickle, 'load')
 
     mock_dt.now().AndReturn(now)
     stat.st_uid = 0
     stat.st_mtime = int(past.strftime('%s'))
-    facter = 'foo facter'
+    facter = {'foo': 'bar', 'one': '1'}
+    lines = [
+        'foo => bar',
+        'one => 1',
+    ]
 
     client.os.stat(self.client.FACTER_CACHE_PATH).AndReturn(stat)
     client.os.geteuid().AndReturn(0)
@@ -923,7 +968,9 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     mock_dt.fromtimestamp(stat.st_mtime).AndReturn(past)
 
     mock_open(self.client.FACTER_CACHE_PATH, 'r').AndReturn(mock_file)
-    client.Pickle.load(mock_file).AndReturn(facter)
+    for line in lines:
+      mock_file.readline().AndReturn(line)
+    mock_file.readline().AndReturn(None)
     mock_file.close().AndReturn(None)
 
     self.mox.ReplayAll()
@@ -937,14 +984,12 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.client.FACTER_CACHE_PATH = '/x'
 
     mock_open = self.mox.CreateMockAnything()
-    mock_file = self.mox.CreateMockAnything()
     stat = self.mox.CreateMockAnything()
     mock_dt = self.mox.CreateMockAnything()
 
     self.stubs.Set(client.datetime, 'datetime', mock_dt)
     self.mox.StubOutWithMock(client.os, 'stat')
     self.mox.StubOutWithMock(client.os, 'geteuid')
-    self.mox.StubOutWithMock(client.Pickle, 'load')
     self.mox.StubOutWithMock(self.client, 'CacheFacterContents')
 
     mock_dt.now().AndReturn(now)
@@ -970,14 +1015,12 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.client.FACTER_CACHE_PATH = '/x'
 
     mock_open = self.mox.CreateMockAnything()
-    mock_file = self.mox.CreateMockAnything()
     stat = self.mox.CreateMockAnything()
     mock_dt = self.mox.CreateMockAnything()
 
     self.stubs.Set(client.datetime, 'datetime', mock_dt)
     self.mox.StubOutWithMock(client.os, 'stat')
     self.mox.StubOutWithMock(client.os, 'geteuid')
-    self.mox.StubOutWithMock(client.Pickle, 'load')
     self.mox.StubOutWithMock(self.client, 'CacheFacterContents')
 
     mock_dt.now().AndReturn(now)
@@ -1002,14 +1045,12 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.client.FACTER_CACHE_PATH = '/x'
 
     mock_open = self.mox.CreateMockAnything()
-    mock_file = self.mox.CreateMockAnything()
     stat = self.mox.CreateMockAnything()
     mock_dt = self.mox.CreateMockAnything()
 
     self.stubs.Set(client.datetime, 'datetime', mock_dt)
     self.mox.StubOutWithMock(client.os, 'stat')
     self.mox.StubOutWithMock(client.os, 'geteuid')
-    self.mox.StubOutWithMock(client.Pickle, 'load')
     self.mox.StubOutWithMock(self.client, 'CacheFacterContents')
 
     mock_dt.now().AndReturn(now)
@@ -1029,9 +1070,47 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.assertEqual(facter, self.client.GetFacter(open_fn=mock_open))
     self.mox.VerifyAll()
 
+  def testDoUAuth(self):
+    """Test DoUAuth()."""
+    self.mox.StubOutWithMock(client.os, 'isatty')
+    self.mox.StubOutWithMock(client, 'UAuth')
+    mock_ua = self.mox.CreateMockAnything()
 
-  #TODO(user): Complete more tests here.
+    client.os.isatty(client.sys.stdin.fileno()).AndReturn(True)
+    client.UAuth(
+        hostname=self.client.netloc, interactive_user=True).AndReturn(mock_ua)
+    mock_ua.SetCACertChain(self.client._ca_cert_chain).AndReturn(None)
+    mock_ua.Login().AndReturn('token')
 
+    self.mox.ReplayAll()
+    self.client.DoUAuth()
+    self.assertEqual('token', self.client._cookie_token)
+    self.mox.VerifyAll()
+
+  def testDoUAuthWhenNoToken(self):
+    """Test DoUAuth() when no token returned."""
+    self.mox.StubOutWithMock(client.os, 'isatty')
+    self.mox.StubOutWithMock(client, 'UAuth')
+    mock_ua = self.mox.CreateMockAnything()
+
+    client.os.isatty(client.sys.stdin.fileno()).AndReturn(True)
+    client.UAuth(
+        hostname=self.client.netloc, interactive_user=True).AndReturn(mock_ua)
+    mock_ua.SetCACertChain(self.client._ca_cert_chain).AndReturn(None)
+    mock_ua.Login().AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(client.SimianClientError, self.client.DoUAuth)
+    self.mox.VerifyAll()
+
+
+  def testDoUserAuth(self):
+    """Test DoUserAuth()."""
+    self.mox.StubOutWithMock(self.client, 'DoUAuth')
+    self.client.DoUAuth().AndReturn(None)
+    self.mox.ReplayAll()
+    self.client.DoUserAuth()
+    self.mox.VerifyAll()
 
 class UAuthTest(mox.MoxTestBase):
   """Test UAuth."""
@@ -1061,9 +1140,10 @@ class UAuthTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.getpass, 'getuser')
     self.mox.StubOutWithMock(client.getpass, 'getpass')
     client.getpass.getuser().AndReturn('joe')
-    client.getpass.getpass('joe@google.com password: ').AndReturn('pass')
+    email = 'joe@%s' % client.AUTH_DOMAIN
+    client.getpass.getpass('%s password: ' % email).AndReturn('pass')
     self.mox.ReplayAll()
-    self.assertEqual(('joe@google.com', 'pass'), self.client._AuthFunction())
+    self.assertEqual((email, 'pass'), self.client._AuthFunction())
     self.mox.VerifyAll()
 
   def testLogin(self):
@@ -1123,6 +1203,8 @@ class UAuthTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
+
+
 class SimianClientTest(mox.MoxTestBase):
   """Test SimianClient class."""
 
@@ -1174,8 +1256,15 @@ class SimianClientTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
   def testIsDefaultHostClient(self):
+    """Test IsDefaultHostClient()."""
     self.client._default_hostname = 'foo'
     self.assertEqual(self.client.IsDefaultHostClient(), 'foo')
+
+  def testGetGlobalUuid(self):
+    """Test GetGlobalUuid()."""
+    self.assertRaises(
+        NotImplementedError,
+        self.client.GetGlobalUuid)
 
   def testSimianRequest(self):
     """Test _SimianRequest()."""
@@ -1204,7 +1293,7 @@ class SimianClientTest(mox.MoxTestBase):
     headers = {'foo': 'bar'}
     output_filename = None
 
-    error_response = client.Response(status=401, body='')
+    error_response = client.Response(status=401, body='fooerror')
 
     self.mox.StubOutWithMock(self.client, 'Do')
     self.client.Do(
@@ -1284,7 +1373,7 @@ class SimianClientTest(mox.MoxTestBase):
     self.assertRaises(
         client.SimianServerError,
         self.client._SimianRequestRetry,
-            method, url, retry_on_status, headers=headers)
+        method, url, retry_on_status, headers=headers)
     self.mox.VerifyAll()
 
   def testSimianRequestRetryUnsuccessfulOtherFailure(self):
@@ -1315,7 +1404,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     try:
-      response = self.client._SimianRequestRetry(
+      unused_response = self.client._SimianRequestRetry(
           method, url, retry_on_status, headers=headers)
       self.fail('the above method should not have succeeded')
     except client.SimianServerError, e:
@@ -1336,6 +1425,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     Args:
       method: method, to invoke in the test
+      method_return: any, value to expect from method
       method_args: list, arguments to send to method during test
       stub_method_name: str, method name to stub out in SimianClient class
       stub_method_return: any, value to return from stubbed method call
@@ -1365,6 +1455,8 @@ class SimianClientTest(mox.MoxTestBase):
       stub_method_name: str, method name to stub out in SimianClient class
       stub_args: list, args to expect when calling stub_method_name
       stub_kwargs: dict, kwargs to expect when calling stub_method_name
+    Returns:
+      string, 'returnval'
     """
     rv = 'returnval'
     return self.GenericStubTestAndReturn(
@@ -1455,7 +1547,6 @@ class SimianClientTest(mox.MoxTestBase):
     redirect_path = '/ok?foo=bar'
     redirect_url = 'http://%s%s' % (self.hostname, redirect_path)
     input_file = 'input_file'
-    result = 'result'
     mock_response = self.mox.CreateMockAnything()
 
     self.mox.StubOutWithMock(self.client, '_SimianRequest')
@@ -1527,8 +1618,8 @@ class SimianClientTest(mox.MoxTestBase):
     got_hash = 'hash'
 
     url = '/pkgsinfo/%s?catalogs=%s&manifests=%s&install_types=%s&hash=%s' % (
-       quoted_name, ','.join(catalogs), ','.join(manifests),
-       ','.join(install_types), got_hash)
+        quoted_name, ','.join(catalogs), ','.join(manifests),
+        ','.join(install_types), got_hash)
 
     self.GenericStubTest(
         self.client.PutPackageInfo,
@@ -1599,6 +1690,40 @@ class SimianClientTest(mox.MoxTestBase):
         self.client.PostReportBody, [body, True],
         '_SimianRequestRetry', 'POST', url, [500], body_with_feedback)
 
+  def testUploadFile(self):
+    """Test UploadFile()."""
+    self.mox.StubOutWithMock(client.os.path, 'isfile')
+    self.mox.StubOutWithMock(self.client, 'Do')
+
+    file_type = 'log'
+    file_name = 'file.log'
+    file_path = 'path/to/' + file_name
+    url = '/uploadfile/%s/%s' % (file_type, file_name)
+
+    mock_open = self.mox.CreateMockAnything()
+    mock_open(file_path, 'r').AndReturn(mock_open)
+    client.os.path.isfile(file_path).AndReturn(True)
+    self.client.Do('PUT', url, mock_open).AndReturn(None)
+    mock_open.close().AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.client.UploadFile(file_path, file_type, _open=mock_open)
+    self.mox.VerifyAll()
+
+  def testUploadFileWhenLogNotFound(self):
+    """Test UploadFile() when the file is not found."""
+    self.mox.StubOutWithMock(client.os.path, 'isfile')
+    self.mox.StubOutWithMock(client.logging, 'error')
+
+    file_path = 'path/to/file.log'
+
+    client.os.path.isfile(file_path).AndReturn(False)
+    client.logging.error('UploadFile file not found: %s', file_path)
+
+    self.mox.ReplayAll()
+    self.client.UploadFile(file_path, 'foo-file-type')
+    self.mox.VerifyAll()
+
   def testIsPackageUploadNecessary(self):
     """Test _IsPackageUploadNecessary()."""
     filename = 'filename'
@@ -1611,7 +1736,6 @@ class SimianClientTest(mox.MoxTestBase):
     filename = 'filename.dmg'
     description = 'foo package description!!'
     display_name = 'Foo Package'
-    name = 'foo pkg name'
     pkginfo = 'pkginfo'
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']
@@ -1647,7 +1771,6 @@ class SimianClientTest(mox.MoxTestBase):
     filename = 'filename.dmg'
     description = 'foo package description!!'
     display_name = 'Foo Package'
-    name = 'foo pkg name'
     pkginfo = 'pkginfo'
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']

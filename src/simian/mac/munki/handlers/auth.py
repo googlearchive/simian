@@ -28,6 +28,7 @@ from simian.mac import models
 from simian.auth import base
 from simian.auth import settings as auth_settings
 from simian.auth import gaeserver
+from simian.mac.common import util
 
 
 class Auth(
@@ -46,6 +47,45 @@ class Auth(
       raise base.NotAuthenticated
     return auth1
 
+  def _IsRemoteIpAddressBlocked(self, ip):
+    """Check if the remote's IP address is within a blocked range.
+
+    Args:
+      ip: str, IP address
+    Returns:
+      True if it is within blocked range, False if not.
+    """
+    if not ip:
+      return False  # lenient response
+
+    try:
+      bad_ip_blocks_str = models.KeyValueCache.MemcacheWrappedGet(
+          'auth_bad_ip_blocks', 'text_value')
+      if not bad_ip_blocks_str:
+        return False
+      bad_ip_blocks = util.Deserialize(bad_ip_blocks_str)
+    except (util.DeserializeError, models.db.Error), e:
+      logging.exception('_IsRemoteIpAddressBlocked(%s)' % ip)
+      return False  # lenient response
+
+    if ip.find(':') > -1:  # ipv6
+      return False
+
+    # note, unrolling the bad ip blocks list into network ints & mask ints
+    # instead of ip/mask strings actually ends up being slower.  the time to
+    # json deserialize for nested lists is more expensive than the
+    # repeated IpMaskToInts() call on a more compactly serialized ip/mask str.
+    # note that forcing pickle and forcing no-json speeds this up about 2.3X
+    # but this whole operation should take < 1 ms
+    ip_int = util.IpToInt(ip)
+
+    for ip_mask_str in bad_ip_blocks:
+      ip_mask = util.IpMaskToInts(ip_mask_str)
+      if (ip_int & ip_mask[1]) == ip_mask[0]:
+        return True
+
+    return False
+
   def get(self):
     """GET"""
     session = gaeserver.DoMunkiAuth()
@@ -57,11 +97,15 @@ class Auth(
     """POST"""
     auth1 = self.GetAuth1Instance()
 
+    if self._IsRemoteIpAddressBlocked(os.environ.get('REMOTE_ADDR', '')):
+      raise base.NotAuthenticated
+
     n = self.request.get('n', None)
     m = self.request.get('m', None)
     s = self.request.get('s', None)
 
-    logging.debug('Input n=%s m=%s s=%s', n, m, s)
+    # uncomment for verbose logging on input auth sesssions
+    #logging.debug('Input n=%s m=%s s=%s', n, m, s)
 
     try:
       auth1.Input(n=n, m=m, s=s)

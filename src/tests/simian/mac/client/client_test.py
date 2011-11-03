@@ -29,6 +29,78 @@ import stubout
 from simian.mac.client import client
 
 
+class ClientModuleTest(mox.MoxTestBase):
+  """Test module level functions in client."""
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testGetMunkiConfigParam(self):
+    """Test GetMunkiConfigParam()."""
+    open_fn = self.mox.CreateMockAnything()
+    mock_plist = self.mox.CreateMockAnything()
+    name = 'foo'
+    value = 'bar'
+
+    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndReturn(open_fn)
+    open_fn.read().AndReturn('abc')
+    open_fn.read().AndReturn('def')
+    open_fn.read().AndReturn(None)
+    open_fn.close()
+
+    self.mox.StubOutWithMock(client.plist, 'MunkiPlist')
+    client.plist.MunkiPlist('abcdef').AndReturn(mock_plist)
+    mock_plist.Parse().AndReturn(None)
+    mock_plist.GetContents().AndReturn({name: value})
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        client.GetMunkiConfigParam(name, open_fn=open_fn),
+        value)
+    self.mox.VerifyAll()
+
+  def testGetMunkiConfigParamWhenPlistError(self):
+    """Test GetMunkiConfigParam()."""
+    open_fn = self.mox.CreateMockAnything()
+    mock_plist = self.mox.CreateMockAnything()
+    name = 'foo'
+    value = None
+
+    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndReturn(open_fn)
+    open_fn.read().AndReturn('abc')
+    open_fn.read().AndReturn('def')
+    open_fn.read().AndReturn(None)
+    open_fn.close()
+
+    self.mox.StubOutWithMock(client.plist, 'MunkiPlist')
+    client.plist.MunkiPlist('abcdef').AndReturn(mock_plist)
+    mock_plist.Parse().AndRaise(client.plist.Error)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        client.GetMunkiConfigParam(name, open_fn=open_fn),
+        value)
+    self.mox.VerifyAll()
+
+  def testGetMunkiConfigParamWhenIOError(self):
+    """Test GetMunkiConfigParam()."""
+    open_fn = self.mox.CreateMockAnything()
+    name = 'foo'
+    value = None
+
+    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndRaise(IOError)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        client.GetMunkiConfigParam(name, open_fn=open_fn),
+        value)
+    self.mox.VerifyAll()
+
+
 class BaseSimianClientTest(mox.MoxTestBase):
   def setUp(self):
     mox.MoxTestBase.setUp(self)
@@ -114,6 +186,66 @@ class BaseSimianClientTest(mox.MoxTestBase):
     self.assertEqual('', self.client.GetSystemRootCACertChain())
     self.mox.VerifyAll()
 
+  def testGetSystemProfile(self):
+    """Test _GetSystemProfile()."""
+    profile = 'profile'
+
+    mock_profile = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(client.hw, 'SystemProfile')
+
+    client.hw.SystemProfile(
+        include_only=['network', 'system']).AndReturn(mock_profile)
+    mock_profile.GetProfile().AndReturn(profile)
+
+    self.mox.ReplayAll()
+    self.assertEqual(profile, self.client._GetSystemProfile())
+    self.mox.VerifyAll()
+
+  def testGetMachineUuid(self):
+    """Test _GetMachineUuid()."""
+    profile = {
+        'interface_en5': 'airport',
+        'airport_mac': '01:02:03:04:05:06'
+    }
+    mock_muuid = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(client.uuid, 'MachineUuid')
+    client.uuid.MachineUuid().AndReturn(mock_muuid)
+    mock_muuid.SetWirelessMac(5, profile['airport_mac']).AndReturn(None)
+    mock_muuid.GenerateMachineUuid().AndReturn('FOOUUID')
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        'FOOUUID',
+        self.client._GetMachineUuid(profile))
+    self.mox.VerifyAll()
+
+  def testGetGlobalUuid(self):
+    """Test GetGlobalUuid()."""
+    self.mox.StubOutWithMock(self.client, '_GetSystemProfile')
+    self.mox.StubOutWithMock(self.client, '_GetMachineUuid')
+
+    self.client._GetSystemProfile().AndReturn('profile')
+    self.client._GetMachineUuid('profile').AndReturn('uuid')
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        'uuid',
+        self.client.GetGlobalUuid())
+    self.mox.VerifyAll()
+
+  def testGetGlobalUuidWithSystemProfilerError(self):
+    """Test GetGlobalUuid() with a SystemProfilerError."""
+    self.mox.StubOutWithMock(self.client, '_GetSystemProfile')
+    self.mox.StubOutWithMock(self.client, '_GetMachineUuid')
+
+    self.client._GetSystemProfile().AndRaise(client.hw.SystemProfilerError)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        None,
+        self.client.GetGlobalUuid())
+    self.mox.VerifyAll()
+
 
 class SimianClient(mox.MoxTestBase):
   """Test SimianClient class."""
@@ -127,9 +259,94 @@ class SimianClient(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
+  def testIsDiskImageReadOnly(self):
+    """Test _IsDiskImageReadOnly()."""
+    filename = '/tmp/pkgname.dmg'
+    stdout = 'foo\nFormat Description: UDIF read-only compressed (bzip2)\nbar\n'
+    stderr = ''
+    rc = 0
+
+    mock_p = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(client.subprocess, 'Popen')
+    client.subprocess.Popen(
+        ['/usr/bin/hdiutil', 'imageinfo', filename],
+        stdout=client.subprocess.PIPE,
+        stderr=client.subprocess.PIPE).AndReturn(mock_p)
+    mock_p.communicate().AndReturn((stdout, stderr))
+    mock_p.wait().AndReturn(rc)
+
+    self.mox.ReplayAll()
+    self.assertTrue(self.client._IsDiskImageReadOnly(filename))
+    self.mox.VerifyAll()
+
+  def testIsDiskImageReadOnlyWhenReadWrite(self):
+    """Test _IsDiskImageReadOnly()."""
+    filename = '/tmp/pkgname.dmg'
+    stdout = 'Format Description: UDIF read-write compressed (bzip2)\nfoo\n'
+    stderr = ''
+    rc = 0
+
+    mock_p = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(client.subprocess, 'Popen')
+    client.subprocess.Popen(
+        ['/usr/bin/hdiutil', 'imageinfo', filename],
+        stdout=client.subprocess.PIPE,
+        stderr=client.subprocess.PIPE).AndReturn(mock_p)
+    mock_p.communicate().AndReturn((stdout, stderr))
+    mock_p.wait().AndReturn(rc)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.client._IsDiskImageReadOnly(filename))
+    self.mox.VerifyAll()
+
+  def testIsDiskImageReadOnlyWhenExecError(self):
+    """Test _IsDiskImageReadOnly()."""
+    filename = '/tmp/pkgname.dmg'
+
+    mock_p = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(client.subprocess, 'Popen')
+    client.subprocess.Popen(
+        ['/usr/bin/hdiutil', 'imageinfo', filename],
+        stdout=client.subprocess.PIPE,
+        stderr=client.subprocess.PIPE).AndReturn(mock_p)
+    mock_p.communicate().AndRaise(OSError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        client.client.SimianClientError,
+        self.client._IsDiskImageReadOnly, filename)
+    self.mox.VerifyAll()
+
+  def testIsDiskImageReadOnlyWhenNonZero(self):
+    """Test _IsDiskImageReadOnly()."""
+    filename = '/tmp/pkgname.dmg'
+    stdout = 'Format Description: UDIF read-write compressed (bzip2)\nfoo\n'
+    stderr = ''
+    rc = 9
+
+    mock_p = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(client.subprocess, 'Popen')
+    client.subprocess.Popen(
+        ['/usr/bin/hdiutil', 'imageinfo', filename],
+        stdout=client.subprocess.PIPE,
+        stderr=client.subprocess.PIPE).AndReturn(mock_p)
+    mock_p.communicate().AndReturn((stdout, stderr))
+    mock_p.wait().AndReturn(rc)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        client.client.SimianClientError,
+        self.client._IsDiskImageReadOnly, filename)
+    self.mox.VerifyAll()
+
+
   def testIsPackageUploadNecessaryWhenNew(self):
     """Test _IsPackageUploadNecessary()."""
-    filename = 'pkgname.dmg'
+    filename = '/tmp/pkgname.dmg'
     pkginfo = self.mox.CreateMockAnything()
 
     self.mox.StubOutWithMock(self.client, 'GetPackageInfo')
@@ -144,7 +361,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testIsPackageUploadNecessaryWhenPlistParseError(self):
     """Test _IsPackageUploadNecessary()."""
-    filename = 'pkgname.dmg'
+    filename = '/tmp/pkgname.dmg'
     pkginfo = 'ha'
     cur_pkginfo = 'xml pkginfo data'
     mock_mpip = self.mox.CreateMockAnything()
@@ -163,7 +380,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testIsPackageUploadNecessaryWhenHashMissing(self):
     """Test _IsPackageUploadNecessary()."""
-    filename = 'pkgname.dmg'
+    filename = '/tmp/pkgname.dmg'
     upload_pkginfo = self.mox.CreateMockAnything()
     upload_pkginfo_dict = {
       'installer_item_size': 1,
@@ -193,7 +410,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testIsPackageUploadNecessaryWhenHashDifferent(self):
     """Test _IsPackageUploadNecessary()."""
-    filename = 'pkgname.dmg'
+    filename = '/tmp/pkgname.dmg'
     orig_sha256_hash = 'haha hash 2'
     upload_pkginfo = self.mox.CreateMockAnything()
     upload_pkginfo_dict = {
@@ -224,7 +441,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testIsPackageUploadNecessaryWhenHashSame(self):
     """Test _IsPackageUploadNecessary()."""
-    filename = 'pkgname.dmg'
+    filename = '/tmp/pkgname.dmg'
     orig_sha256_hash = 'haha hash 2'
     upload_pkginfo = self.mox.CreateMockAnything()
     upload_pkginfo_dict = {
@@ -253,9 +470,9 @@ class SimianClient(mox.MoxTestBase):
        self.client._IsPackageUploadNecessary(filename, upload_pkginfo))
     self.mox.VerifyAll()
 
-  def testUploadMunkiPackageWhenInstaller(self):
+  def testUploadMunkiPackageWhenNotReadOnlyDiskImage(self):
     """Test UploadMunkiPackage()."""
-    filename = 'filename'
+    filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
     catalogs = 'catalogs'
@@ -269,11 +486,41 @@ class SimianClient(mox.MoxTestBase):
     }
     response = 'http response'
 
-    self.mox.StubOutWithMock(client.os.path, 'basename')
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
     self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
     self.mox.StubOutWithMock(self.client, 'UploadPackage')
 
-    client.os.path.basename(filename).AndReturn(filename)
+    self.client._IsDiskImageReadOnly(filename).AndReturn(False)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        client.client.SimianClientError,
+        self.client.UploadMunkiPackage,
+        filename, description, display_name, catalogs, manifests,
+        install_types, pkginfo_hook=pkginfo_hook)
+    self.mox.VerifyAll()
+
+  def testUploadMunkiPackageWhenInstaller(self):
+    """Test UploadMunkiPackage()."""
+    filename = '/tmp/filename'
+    description = 'desc'
+    display_name = 'dn'
+    catalogs = 'catalogs'
+    manifests = 'manifests'
+    install_types = 'install_types'
+    pkginfo = self.mox.CreateMockAnything()
+    pkginfo_hook = None
+    pkginfo_dict = {
+      'installer_item_size': 'size',
+      'installer_item_hash': 'hash',
+    }
+    response = 'http response'
+
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
+    self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
+    self.mox.StubOutWithMock(self.client, 'UploadPackage')
+
+    self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo.GetXml().AndReturn('pkginfo xml')
@@ -297,7 +544,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testUploadMunkiPackageWhenUninstaller(self):
     """Test UploadMunkiPackage()."""
-    filename = 'filename'
+    filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
     catalogs = 'catalogs'
@@ -311,11 +558,11 @@ class SimianClient(mox.MoxTestBase):
     }
     response = 'http response'
 
-    self.mox.StubOutWithMock(client.os.path, 'basename')
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
     self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
     self.mox.StubOutWithMock(self.client, 'UploadPackage')
 
-    client.os.path.basename(filename).AndReturn(filename)
+    self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo.GetXml().AndReturn('pkginfo xml')
@@ -339,7 +586,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testUploadMunkiPackageWhenHookTrue(self):
     """Test UploadMunkiPackage()."""
-    filename = 'filename'
+    filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
     catalogs = 'catalogs'
@@ -353,11 +600,11 @@ class SimianClient(mox.MoxTestBase):
     }
     response = 'http response'
 
-    self.mox.StubOutWithMock(client.os.path, 'basename')
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
     self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
     self.mox.StubOutWithMock(self.client, 'UploadPackage')
 
-    client.os.path.basename(filename).AndReturn(filename)
+    self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hook(pkginfo).AndReturn(True)
@@ -382,7 +629,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testUploadMunkiPackageWhenHookFalse(self):
     """Test UploadMunkiPackage()."""
-    filename = 'filename'
+    filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
     catalogs = 'catalogs'
@@ -396,11 +643,11 @@ class SimianClient(mox.MoxTestBase):
     }
     response = 'http response'
 
-    self.mox.StubOutWithMock(client.os.path, 'basename')
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
     self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
     self.mox.StubOutWithMock(self.client, 'UploadPackage')
 
-    client.os.path.basename(filename).AndReturn(filename)
+    self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hook(pkginfo).AndReturn(False)
@@ -415,7 +662,7 @@ class SimianClient(mox.MoxTestBase):
 
   def testUploadMunkiPackageWhenHookObject(self):
     """Test UploadMunkiPackage()."""
-    filename = 'filename'
+    filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
     catalogs = 'catalogs'
@@ -429,11 +676,11 @@ class SimianClient(mox.MoxTestBase):
     }
     response = 'http response'
 
-    self.mox.StubOutWithMock(client.os.path, 'basename')
+    self.mox.StubOutWithMock(self.client, '_IsDiskImageReadOnly')
     self.mox.StubOutWithMock(self.client, '_LoadPackageInfo')
     self.mox.StubOutWithMock(self.client, 'UploadPackage')
 
-    client.os.path.basename(filename).AndReturn(filename)
+    self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hook(pkginfo).AndReturn(pkginfo)

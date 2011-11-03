@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#   #!/usr/bin/python2.4
+#
 
 """Shared resources for handlers."""
 
@@ -21,6 +22,7 @@
 
 import datetime
 import logging
+import os
 import time
 from google.appengine.ext import db
 from google.appengine.ext import deferred
@@ -30,13 +32,16 @@ from google.appengine.runtime import apiproxy_errors
 from simian.mac import models
 from simian.mac import common
 from simian.mac.munki import plist as plist_module
+from simian.mac.common import gae_util
+from simian.mac.common import util
+
 
 CLIENT_ID_FIELDS = {
-    'uuid': str, 'owner': str, 'hostname': str, 'config_track': str,
-    'track': str, 'site': str, 'office': str, 'os_version': str,
-    'client_version': str, 'on_corp': lambda x: bool(int(x)),
+    'uuid': str, 'owner': str, 'hostname': str, 'serial': str,
+    'config_track': str, 'track': str, 'site': str, 'office': str,
+    'os_version': str, 'client_version': str, 'on_corp': bool,
     'last_notified_datetime': str, 'uptime': float, 'root_disk_free': int,
-    'user_disk_free': int,
+    'user_disk_free': int, 'global_uuid': str, 'applesus': bool,
 }
 CONNECTION_DATETIMES_LIMIT = 10
 CONNECTION_DATES_LIMIT = 30
@@ -78,40 +83,6 @@ CATALOG_PLIST_XML = '%s<array>\n%s\n</array>%s' % (
     plist_module.PLIST_HEAD, '%s', plist_module.PLIST_FOOT)
 
 
-def ObtainLock(name, timeout=0):
-  """Obtain a lock, given a name.
-
-  Args:
-    name: str, name of lock
-    timeout: int, if >0, wait timeout seconds for a lock if it cannot
-      be obtained at first attempt.  NOTE:  Using a timeout near or greater
-      than the AppEngine deadline will be hazardous to your health.
-      The deadline is 30s for live http, 10m for offline tasks as of
-      this note.
-  Returns:
-    True if lock was obtained
-    False if lock was not obtained, some other process has the lock
-  """
-  memcache_key = 'lock_%s' % name
-  while 1:
-    locked = memcache.incr(memcache_key, initial_value=0) == 1
-    timeout -= 1
-    if locked or timeout < 0:
-      return locked
-    time.sleep(1)
-  return False
-
-
-def ReleaseLock(name):
-  """Release a lock, given its name.
-
-  Args:
-    name: str, name of lock
-  """
-  memcache_key = 'lock_%s' % name
-  memcache.delete(memcache_key)
-
-
 def CreateManifest(name, delay=0):
   """Creates a manifest from available and matching PackageInfo entities.
 
@@ -120,19 +91,20 @@ def CreateManifest(name, delay=0):
     delay: int. if > 0, AddPackageToManifest call is deferred this many seconds.
   """
   if delay:
-    now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    now = datetime.datetime.utcnow()
+    now_str = '%s-%d' % (now.strftime('%Y-%m-%d-%H-%M-%S'), now.microsecond)
     deferred_name = 'create-manifest-%s-%s' % (name, now_str)
     deferred.defer(CreateManifest, name, _name=deferred_name, _countdown=delay)
     return
 
   lock = 'manifest_lock_%s' % name
-  if not ObtainLock(lock):
+  if not gae_util.ObtainLock(lock):
     logging.debug(
         'CreateManifest for %s is locked. Delaying....', name)
     CreateManifest(name, delay=5)
     return
 
-  logging.debug('Creating manifest: %s', name)
+  #logging.debug('Creating manifest: %s', name)
   try:
     package_infos = models.PackageInfo.all().filter('manifests =', name)
     if not package_infos:
@@ -160,13 +132,13 @@ def CreateManifest(name, delay=0):
     manifest_entity.plist = manifest.GetXml()
     manifest_entity.put()
     models.Manifest.ResetMemcacheWrap(name)
-    logging.debug(
-        'Manifest %s created successfully', name)
+    #logging.debug(
+    #    'Manifest %s created successfully', name)
   except (ManifestCreationError, db.Error, plist_module.Error):
     logging.exception('CreateManifest failure: %s', name)
-    ReleaseLock(lock)
+    gae_util.ReleaseLock(lock)
     raise
-  ReleaseLock(lock)
+  gae_util.ReleaseLock(lock)
 
 
 def CreateCatalog(name, delay=0):
@@ -177,20 +149,21 @@ def CreateCatalog(name, delay=0):
     delay: int. if > 0, CreateCatalog call is deferred this many seconds.
   """
   if delay:
-    now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    now = datetime.datetime.utcnow()
+    now_str = '%s-%d' % (now.strftime('%Y-%m-%d-%H-%M-%S'), now.microsecond)
     deferred_name = 'create-catalog-%s-%s' % (name, now_str)
     deferred.defer(CreateCatalog, name, _name=deferred_name, _countdown=delay)
     return
 
   lock = 'catalog_lock_%s' % name
   # Obtain a lock on the catalog name.
-  if not ObtainLock(lock):
+  if not gae_util.ObtainLock(lock):
     # If catalog creation for this name is already in progress then delay.
     logging.debug('Catalog creation for %s is locked. Delaying....', name)
-    CreateCatalog(name, delay=5)
+    CreateCatalog(name, delay=10)
     return
 
-  logging.debug('Creating catalog: %s', name)
+  #logging.debug('Creating catalog: %s', name)
   try:
     pkgsinfo_dicts = []
     package_infos = models.PackageInfo.all().filter('catalogs =', name)
@@ -210,14 +183,14 @@ def CreateCatalog(name, delay=0):
     c.plist = catalog
     c.put()
     models.Catalog.ResetMemcacheWrap(name)
-    logging.debug('Created catalog successfully: %s', name)
+    #logging.debug('Created catalog successfully: %s', name)
     # Create manifest for newly generated catalog.
     CreateManifest(name, delay=1)
   except (CatalogCreationError, db.Error, plist_module.Error):
     logging.exception('CreateCatalog failure for catalog: %s', name)
-    ReleaseLock(lock)
+    gae_util.ReleaseLock(lock)
     raise
-  ReleaseLock(lock)
+  gae_util.ReleaseLock(lock)
 
 
 def _SaveFirstConnection(client_id, computer):
@@ -227,7 +200,7 @@ def _SaveFirstConnection(client_id, computer):
     client_id: dict client id.
     computer: models.Computer entity.
   """
-  logging.debug('Saving first connection for: %s' % client_id)
+  #logging.debug('Saving first connection for: %s' % client_id)
   e = models.FirstClientConnection(key_name=client_id['uuid'])
   e.computer = computer
   e.owner = client_id['owner']
@@ -238,7 +211,8 @@ def _SaveFirstConnection(client_id, computer):
 
 
 def LogClientConnection(
-    event, client_id, user_settings=None, pkgs_to_install=None, delay=0):
+    event, client_id, user_settings=None, pkgs_to_install=None, delay=0,
+    computer=None, ip_address=None):
   """Logs a host checkin to Simian.
 
   Args:
@@ -247,36 +221,43 @@ def LogClientConnection(
     user_settings: optional dict of user settings.
     pkgs_to_install: optional list of string packages remaining to install.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
+    computer: optional models.Computer object.
+    ip_address: str IP address of the connection.
   """
-  logging.debug(
-      ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
-       'delay=%s)'),
-      event, client_id, user_settings not in [None, {}], pkgs_to_install, delay)
+  #logging.debug(
+  #    ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
+  #     'ip_address: %s, delay=%s)'),
+  #    event, client_id, user_settings not in [None, {}], pkgs_to_install,
+  #    ip_address, delay)
 
   if delay:
-    logging.debug('Delaying LogClientConnection call %s seconds', delay)
+    #logging.debug('Delaying LogClientConnection call %s seconds', delay)
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
     deferred_name = 'log-client-conn-%s-%s' % (client_id['uuid'], now_str)
     deferred.defer(
         LogClientConnection, event, client_id, user_settings=user_settings,
-        pkgs_to_install=pkgs_to_install, _name=deferred_name, _countdown=delay)
+        pkgs_to_install=pkgs_to_install, ip_address=ip_address,
+        _name=deferred_name, _countdown=delay)
     return
 
   if not client_id['uuid']:
-    logging.debug('uuid is unknown, skipping log.')
+    logging.warning('LogClientConnection: uuid is unknown, skipping log')
     return
 
   def __UpdateComputerEntity(
-      event, _client_id, _user_settings, _pkgs_to_install):
+      event, _client_id, _user_settings, _pkgs_to_install, c=None,
+      ip_address=None):
     """Update the computer entity, or create a new one if it doesn't exists."""
     now = datetime.datetime.utcnow()
-    c = models.Computer.get_by_key_name(_client_id['uuid'])
     is_new_client = False
+    if c is None:
+      c = models.Computer.get_by_key_name(_client_id['uuid'])
     if c is None:  # First time this client has connected.
       c = models.Computer(key_name=_client_id['uuid'])
       is_new_client = True
     c.uuid = _client_id['uuid']
     c.hostname = _client_id['hostname']
+    c.serial= _client_id['serial']
     c.owner = _client_id['owner']
     c.track = _client_id['track']
     c.site = _client_id['site']
@@ -287,6 +268,8 @@ def LogClientConnection(
     c.uptime = _client_id['uptime']
     c.root_disk_free = _client_id['root_disk_free']
     c.user_disk_free = _client_id['user_disk_free']
+    c.global_uuid = _client_id['global_uuid']
+    c.ip_address = ip_address
 
     last_notified_datetime = _client_id['last_notified_datetime']
     if last_notified_datetime:  # might be None
@@ -337,7 +320,7 @@ def LogClientConnection(
 
     c.put()
     if is_new_client:  # Queue welcome email to be sent.
-      logging.debug('Deferring _SaveFirstConnection....')
+      #logging.debug('Deferring _SaveFirstConnection....')
       deferred.defer(
           _SaveFirstConnection, client_id=_client_id, computer=c,
           _countdown=300, _queue='first')
@@ -345,13 +328,14 @@ def LogClientConnection(
   try:
     db.run_in_transaction(
         __UpdateComputerEntity,
-        event, client_id, user_settings, pkgs_to_install)
+        event, client_id, user_settings, pkgs_to_install, c=computer,
+        ip_address=ip_address)
     # to run w/o transaction:
     # __UpdateComputerEntity(event, client_id, user_settings, pkgs_to_install)
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
-    logging.warning('LogClientConnection put() failure; deferring...')
+    logging.exception('LogClientConnection put() failure; deferring...')
     LogClientConnection(
-        event, client_id, user_settings, pkgs_to_install,
+        event, client_id, user_settings, pkgs_to_install, ip_address=ip_address,
         delay=DATASTORE_NOWRITE_DELAY)
 
 
@@ -366,7 +350,7 @@ def WriteClientLog(model, uuid, **kwargs):
     models.Computer instance which is this client
   """
   if 'uuid' in kwargs:
-    logging.warning('Deleting uuid from kwargs in WriteClientLog call.')
+    #logging.debug('WriteClientLog: Deleting uuid from kwargs')
     del(kwargs['uuid'])
 
   uuid = common.SanitizeUUID(uuid)
@@ -388,7 +372,7 @@ def WriteClientLog(model, uuid, **kwargs):
   return kwargs['computer']
 
 
-def WriteBrokenClient(details):
+def WriteBrokenClient(uuid, details):
   """Parses facter facts and saves a BrokenClient entity.
 
   This point of doing this over simply using WriteClientLog is that we have a
@@ -397,6 +381,7 @@ def WriteBrokenClient(details):
   broken clients.
 
   Args:
+    uuid: str uuid of client.
     details: str output of facter.
   """
   facts = {}
@@ -409,12 +394,8 @@ def WriteBrokenClient(details):
     value = value.strip()
     facts[key] = value
 
-  uuid = facts.get('certname', None)
-  if uuid:
-    uuid = common.SanitizeUUID(uuid)
-    bc = models.ComputerClientBroken.get_or_insert(uuid)
-  else:
-    bc = models.ComputerClientBroken()
+  uuid = common.SanitizeUUID(uuid)
+  bc = models.ComputerClientBroken.get_or_insert(uuid)
   bc.hostname = facts.get('hostname', '')
   bc.owner = facts.get('primary_user', '')
   bc.details = details
@@ -445,10 +426,51 @@ def WriteComputerMSULog(uuid, details):
   c.source = details['source']
   c.user = details['user']
   c.desc = details['desc']
-  new_dt = datetime.datetime(*time.gmtime(details['time'])[0:6])
-  if c.mtime is None or new_dt > c.mtime:
-    c.mtime = new_dt
+  try:
+    mtime = util.Datetime.utcfromtimestamp(details.get('time', None))
+  except ValueError, e:
+    logging.warning('Ignoring msu_log time; %s' % str(e))
+    mtime = datetime.datetime.utcnow()
+  except util.EpochExtremeFutureValueError, e:
+    logging.warning('Ignoring msu_log time; %s' % str(e))
+    mtime = datetime.datetime.utcnow()
+  except util.EpochValueError:
+    mtime = datetime.datetime.utcnow()
+  if c.mtime is None or mtime > c.mtime:
+    c.mtime = mtime
     c.put()
+
+
+def GetBoolValueFromString(s):
+  """Returns True for true/1 strings, and False for false/0, None otherwise."""
+  if s.lower() == 'true' or s == '1':
+    return True
+  elif s.lower() == 'false' or s == '0':
+    return False
+  else:
+    return None
+
+
+def KeyValueStringToDict(s, delimiter='|'):
+  """Parses a key=value string with delimiter and returns a dict.
+
+  Args:
+    s: string with key=value pairs.
+    delimiter: delimiter char(s) to parse the string with.
+  Returns:
+    dictionary of key value pairs. 'None' converted to None.
+  """
+  d = {}
+  pairs = s.split(delimiter)
+  for pair in pairs:
+    try:
+      key, value = pair.split('=', 1)
+      if not value or value == 'None':
+        value = None  # Convert empty strings to None.
+      d[key] = value
+    except ValueError:
+      logging.debug('Ignoring invalid key/value pair: %s', pair)
+  return d
 
 
 def ParseClientId(client_id, uuid=None):
@@ -461,22 +483,15 @@ def ParseClientId(client_id, uuid=None):
     Dict. Client id string "foo=bar|key=|one=1" yields
         {'foo': 'bar', 'key': None, 'one': '1'}.
   """
-  out = {}
-  pairs = client_id.split('|')
-  for pair in pairs:
-    try:
-      key, value = pair.split('=', 1)
-      if not value or value == 'None':
-        value = None  # Convert empty strings to None.
-      out[key] = value
-    except ValueError:
-      logging.warning('Ignoring invalid key/value pair in client id: %s', pair)
+  out = KeyValueStringToDict(client_id)
 
   # If any required fields were not present in the client id string, add them.
   # Also cast all values to their defined output types.
   for field, value_type in CLIENT_ID_FIELDS.iteritems():
     if field not in out:
       out[field] = None
+    elif value_type is bool:
+      out[field] = GetBoolValueFromString(out[field])
     elif out[field] is not None and value_type is not str:
       try:
         out[field] = value_type(out[field])
@@ -575,32 +590,39 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
     ManifestNotFoundError: manifest requested is invalid (not found)
     ManifestDisabledError: manifest requested is disabled
   """
+  if client_id is None and uuid is None:
+    raise ValueError('uuid or client_id must be supplied')
+
+  if client_id is not None:
+    if type(client_id) is not dict:
+      raise ValueError('client_id must be dict')
+    uuid = client_id.get('uuid')
+
+  user_settings = None
   if uuid is not None:
     c = models.Computer.get_by_key_name(uuid)
     if not c:
       raise ComputerNotFoundError
 
+    user_settings = c.user_settings
     client_id = {
         'uuid': uuid,
         'owner': c.owner,
         'hostname': c.hostname,
+        'serial': c.serial,
         'config_track': c.config_track,
         'track': c.track,
         'site': c.site,
         'office': c.office,
         'os_version': c.os_version,
         'client_version': c.client_version,
+        # TODO(user): Fix this; it may not be accurate.
         'on_corp': c.connections_on_corp > c.connections_off_corp,
         'last_notified_datetime': c.last_notified_datetime,
         'uptime': None,
         'root_disk_free': None,
         'user_disk_free': None,
     }
-  elif client_id is not None:
-    if type(client_id) is not dict:
-      raise ValueError('client_id must be dict')
-  else:
-    raise ValueError('uuid or client_id must be supplied')
 
   # Step 1: Obtain a manifest for this uuid.
   manifest_plist_xml = None
@@ -616,7 +638,8 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
     elif not m.enabled:
       raise ManifestDisabledError(manifest_name)
 
-    manifest_plist_xml = GenerateDynamicManifest(m.plist, client_id)
+    manifest_plist_xml = GenerateDynamicManifest(
+        m.plist, client_id, user_settings=user_settings)
 
   if not manifest_plist_xml:
     raise ManifestNotFoundError(manifest_name)
@@ -666,43 +689,87 @@ def _ModifyList(l, value):
     l.append(value)
 
 
-def GenerateDynamicManifest(plist_xml, client_id):
+def GenerateDynamicManifest(plist_xml, client_id, user_settings=None):
   """Generate a dynamic manifest based on a the various client_id fields.
 
   Args:
     plist_xml: str XML manifest to start with.
     client_id: dict client_id parsed by common.ParseClientId.
+    user_settings: dict UserSettings as defined in Simian client.
   Returns:
     str XML manifest with any custom modifications based on the client_id.
   """
+  plist = None
+  manifest_changed = False
   manifest = client_id['track']
-  # TODO(user): we'll probably want to memcache *all* site modificiations,
-  #    since there will be very few, but not hostname/owner modifications as
-  #    they'll be widespread after Stuff integration.
-  site_mods = models.SiteManifestModification.all().filter(
-      'site =', client_id['site'])
-  os_version_mods = models.OSVersionManifestModification.all().filter(
-      'os_version =', client_id['os_version'])
-  # host_mods = mods.HostManifestModification.all().filter(
-  #   'hostname =', client_id['hostname'])
-  host_mods = []  # temporary.
+
+  site_mods = models.SiteManifestModification.MemcacheWrappedGetAllFilter(
+      (('site =', client_id['site']),))
+
+  os_version_mods = \
+      models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
+          (('os_version =', client_id['os_version']),))
+
+  try:
+    owner_mods = models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
+        'owner', client_id['owner'])
+  except KeyError:
+    owner_mods = []
+
+  try:
+    uuid_mods = models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
+        'uuid', client_id['uuid'])
+  except KeyError:
+    uuid_mods = []
 
   def __ApplyModifications(manifest, mod, plist):
-    """Applies a manifest modification if the manifest matches mod manifest."""
-    if mod.enabled and manifest in mod.manifests:
-      logging.debug(
-          'Applying manifest mod: %s %s', mod.install_type, mod.value)
-      plist_module.UpdateIterable(
-          plist, mod.install_type, mod.value, default=[], op=_ModifyList)
+    """Applies a manifest modification if the manifest matches mod manifest.
 
-  if site_mods or host_mods or os_version_mods:
+    NOTE(user): if mod.manifests is empty or None, mod is made to any manifest.
+    """
+    if not mod.enabled:
+      return  # return it the mod is disabled
+    elif mod.manifests and manifest not in mod.manifests:
+      return  # return if the desired manifest is not in the mod manifests.
+
+    #logging.debug(
+    #    'Applying manifest mod: %s %s', mod.install_types, mod.value)
+    for install_type in mod.install_types:
+      plist_module.UpdateIterable(
+          plist, install_type, mod.value, default=[], op=_ModifyList)
+
+  if site_mods or owner_mods or os_version_mods or uuid_mods:
+    manifest_changed = True
     plist = plist_module.MunkiManifestPlist(plist_xml)
     plist.Parse()
     for mod in site_mods:
       __ApplyModifications(manifest, mod, plist)
-    for mod in host_mods:
-      __ApplyModifications(manifest, mod, plist)
     for mod in os_version_mods:
       __ApplyModifications(manifest, mod, plist)
+    for mod in owner_mods:
+      __ApplyModifications(manifest, mod, plist)
+    for mod in uuid_mods:
+      __ApplyModifications(manifest, mod, plist)
+
+  if user_settings:
+    block_packages = user_settings.get('BlockPackages', [])
+    if block_packages and not plist:
+      plist = plist_module.MunkiManifestPlist(plist_xml)
+      plist.Parse()
+    # Look for each block package in each install type, remove if found.
+    for block_package in block_packages:
+      for install_type in common.INSTALL_TYPES:
+        # Former hack here to rename block package with previous packaged
+        # version of Flash.
+        #        if block_package == 'flashplugin':
+        #          block_package = 'Adobe Flash Player'
+        if block_package in plist.get(install_type, []):
+          manifest_changed = True
+          plist[install_type].remove(block_package)
+          #logging.debug(
+          #    'Removed BlockPackage from %s: %s', block_package, install_type)
+
+  if manifest_changed:
     plist_xml = plist.GetXml()
+
   return plist_xml

@@ -2,11 +2,7 @@
 
 {% block title %}User Settings{% endblock %}
 
-{% block search %}{% endblock %}
-
 {% block page-content %}
-
-<a href="/admin/stats">Back to stats home</a><br /><br />
 
 <h3>User Settings</h3>
 {% if computers %}
@@ -21,9 +17,9 @@
   {% for c in computers %}
     <tr class="{% cycle lbg,dbg %}">
       <td>{{ c.hostname }}</td>
-      <td><a href="/admin/stats/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
+      <td><a href="/admin/host/{{ c.uuid }}">{{ c.uuid }}</a></td>
       <td>
-        <a href="/admin/stats/?type=owner&filter={{ c.owner }}"
+        <a href="/admin?type=owner&filter={{ c.owner }}"
            >{{ c.owner }}</a>
       </td>
       <td>{{ c.track }}</td>

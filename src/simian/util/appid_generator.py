@@ -21,16 +21,17 @@
 
 
 
-from gae_bundle.simian import settings
-
-
-APP_YAML_FILE = 'gae_bundle/app.yaml'
+import ConfigParser
 
 
 def GenerateAppID():
-  """Returns a Google App Engine appid based on subdomain + domain settings."""
-  subdomain = settings.SUBDOMAIN
-  domain = settings.DOMAIN
+  """Returns a Google App Engine appid based on subdomain + domain configs."""
+  f = open('etc/simian/common.cfg', 'r')
+  cp = ConfigParser.ConfigParser()
+  cp.readfp(f)
+  f.close()
+  subdomain = cp.get('common', 'subdomain')
+  domain = cp.get('common', 'domain')
 
   if domain == 'appspot.com':
     return subdomain

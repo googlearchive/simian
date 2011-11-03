@@ -57,7 +57,12 @@ class Packages(
       None if a blob is being returned,
       or a response object
     """
-    auth.DoAnyAuth()
+    auth_return = auth.DoAnyAuth()
+    if hasattr(auth_return, 'email'):
+      email = auth_return.email()
+      if not auth.IsAdminUser(email) and not auth.IsSupportStaff(email):
+        raise auth.IsAdminMismatch
+
     filename = urllib.unquote(filename)
     pkg = models.PackageInfo.MemcacheWrappedGet(filename)
 
@@ -84,12 +89,74 @@ class Packages(
         return
 
     header_date_str = self.request.headers.get('If-Modified-Since', '')
+    etag_nomatch_str = self.request.headers.get('If-None-Match', 0)
+    etag_match_str = self.request.headers.get('If-Match', 0)
     pkg_date = blob_info.creation
-    if handlers.IsClientResourceExpired(pkg_date, header_date_str):
+
+    # TODO(user): The below can be simplified once all of our clients
+    # have ETag values set on the filesystem for these files.  The
+    # parsing of If-Modified-Since could be removed.  Removing it prematurely
+    # will cause a re-download of all packages on all clients for 1 iteration
+    # until they all have ETag values.
+
+    # Reduce complexity of elif conditional below.
+    # If an If-None-Match: ETag is supplied, don't worry about a
+    # missing file modification date -- the ETag supplies everything needed.
+    if etag_nomatch_str and not header_date_str:
+      resource_expired = False
+    else:
+      resource_expired = handlers.IsClientResourceExpired(
+        pkg_date, header_date_str)
+
+    # Client supplied If-Match: etag, but that etag does not match current
+    # etag.  return 412.
+    if (etag_match_str and pkg.pkgdata_sha256 and
+      etag_match_str != pkg.pkgdata_sha256):
+      self.response.set_status(412)
+
+    # Client supplied no etag or If-No-Match: etag, and the etag did not
+    # match, or the client's file is older than the mod time of this package.
+    elif ((etag_nomatch_str and pkg.pkgdata_sha256 and
+      etag_nomatch_str != pkg.pkgdata_sha256) or resource_expired):
+      self.response.headers['Content-Disposition'] = (
+          'attachment; filename=%s' % filename)
       # header date empty or package has changed, send blob with last-mod date.
+      if pkg.pkgdata_sha256:
+        self.response.headers['ETag'] = pkg.pkgdata_sha256
       self.response.headers['Last-Modified'] = pkg_date.strftime(
           handlers.HEADER_DATE_FORMAT)
       self.send_blob(pkg.blobstore_key)
     else:
-      # If-Modified-Since and Blobstore pkg datetimes match, return 304.
+      # Client doesn't need to do anything, current version is OK based on
+      # ETag and/or last modified date.
+      if pkg.pkgdata_sha256:
+        self.response.headers['ETag'] = pkg.pkgdata_sha256
       self.response.set_status(304)
+
+
+class ClientRepair(Packages):
+  """Handler for /repair/"""
+
+  def get(self, client_id_str=''):
+    """GET
+
+    Returns:
+      None if a blob is being returned,
+      or a response object
+    """
+    session = auth.DoAnyAuth()
+    client_id = handlers.GetClientIdForRequest(
+        self.request, session=session, client_id_str=client_id_str)
+
+    logging.warning('Repair client ID: %s', client_id)
+    filename = None
+    for pkg in models.PackageInfo.all().filter('name =', 'munkitools'):
+      if client_id.get('track', '') in pkg.catalogs:
+        filename = pkg.filename
+        break
+
+    if filename:
+      logging.warning('Sending client: %s', filename)
+      super(ClientRepair, self).get(filename)
+    else:
+      logging.warning('No repair client found.')

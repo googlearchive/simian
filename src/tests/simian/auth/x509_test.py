@@ -24,6 +24,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+from pyasn1.type import univ
 from simian.auth import x509
 
 
@@ -57,7 +58,7 @@ class X509ModuleTest(mox.MoxTestBase):
         'ok')
     self.assertEqual(
         x509.LoadCertificateFromPEM(
-            '\n\n\n%s\nbase64\n%s' % (header, footer)),
+            '\n \n\t\n%s\nbase64\n%s\n\t\n ' % (header, footer)),
         'ok')
     self.mox.VerifyAll()
 
@@ -264,7 +265,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDKeyUsage(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_key_usage = '\x03e_key_usage'
+    e_key_usage = univ.OctetString('\x03e_key_usage')
     d_key_usage = ((1, 0, 1),)
 
     x509.der_decoder.decode(e_key_usage).AndReturn(d_key_usage)
@@ -289,7 +290,7 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testGetV3ExtensionFieldsFromSequenceWhenOIDKeyUsageBadParse(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
-    e_key_usage = 'e_key_usage'
+    e_key_usage = univ.OctetString('e_key_usage')
     d_key_usage = ((1, 0, 1),)
 
     seq = (
@@ -307,7 +308,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraint(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = 'e_basic_const'
+    e_basic_const = univ.OctetString('e_basic_const')
     d_basic_const = ((True,), '')
 
     x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
@@ -330,7 +331,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintForm2(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = 'e_basic_const'
+    e_basic_const = univ.OctetString('e_basic_const')
     d_basic_const = ((True,), '')
 
     x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
@@ -353,7 +354,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintBadForm(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = 'e_basic_const'
+    e_basic_const = univ.OctetString('e_basic_const')
     d_basic_const = ((True,), '')
 
     seq = (
@@ -375,7 +376,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintPaths(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = 'e_basic_const'
+    e_basic_const = univ.OctetString('e_basic_const')
     d_basic_const = ((True,), ['unsupported path data'])
 
     x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
@@ -399,7 +400,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetV3ExtensionFieldsFromSequenceWhenOIDSubjectAltName(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_mspn = '\x30mspn der encoded'
+    e_mspn = univ.OctetString('\x30mspn der encoded')
     d_mspn = (
         (x509.OID_MS_NT_PRINCIPAL_NAME, 'foo'),
     )
@@ -423,7 +424,7 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testGetV3ExtensionFieldsFromSequenceWhenOIDSubjectAltNameBadForm(self):
     """Test _GetV3ExtensionFieldsFromSequence()."""
-    e_mspn = 'mspn der encoded wrong encapsulation'
+    e_mspn = univ.OctetString('mspn der encoded wrong encapsulation')
     d_mspn = (
         (x509.OID_MS_NT_PRINCIPAL_NAME, 'foo'),
     )
@@ -448,7 +449,7 @@ class X509CertificateTest(mox.MoxTestBase):
     """Test _GetV3ExtensionFieldsFromSequence()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
     unknown_oid = (1, 2, 3)
-    e_mspn = '\x30mspn der encoded'
+    e_mspn = univ.OctetString('\x30mspn der encoded')
     d_mspn = (
         (unknown_oid, 'foo'),
     )

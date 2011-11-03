@@ -25,12 +25,15 @@ Classes:
 
 import logging
 import os
+import re
 import time
 from google.appengine.ext import blobstore
 from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
 from simian.auth import gaeserver
 from simian.mac import models
+from simian.mac.common import gae_util
+from simian.mac.munki import common
+from simian.mac.munki import plist
 
 
 class AuthSessionCleanup(webapp.RequestHandler):
@@ -40,8 +43,8 @@ class AuthSessionCleanup(webapp.RequestHandler):
     """Handle GET"""
     asd = gaeserver.AuthSessionSimianServer()
     expired_sessions_count = asd.ExpireAll()
-    logging.debug(
-        'AuthSessionCleanup: %d sessions expired.', expired_sessions_count)
+    #logging.debug(
+    #    'AuthSessionCleanup: %d sessions expired.', expired_sessions_count)
 
 
 class MarkComputersInactive(webapp.RequestHandler):
@@ -49,17 +52,97 @@ class MarkComputersInactive(webapp.RequestHandler):
 
   def get(self):
     """Handle GET."""
-    logging.debug('Marking inactive computers....')
+    #logging.debug('Marking inactive computers....')
     count = models.Computer.MarkInactive()
-    logging.debug('Complete! Marked %s inactive.' % count)
+    #logging.debug('Complete! Marked %s inactive.' % count)
+
+
+class UpdateAverageInstallDurations(webapp.RequestHandler):
+  """Class to update average install duration pkginfo descriptions reguarly."""
+
+  AVG_DURATION_TEXT = (
+      '%d users have installed this with an average duration of %d seconds.')
+  AVG_DURATION_REGEX = re.compile(
+      '\d+ users have installed this with an average duration of \d+ seconds\.')
+
+  def _GetUpdatedDescription(self, duration_dict, desc):
+    """."""
+    avg_duration_text = self.AVG_DURATION_TEXT % (
+        duration_dict['duration_count'], duration_dict['duration_seconds_avg'])
+    # Add new or replace existing avg duration message with updated one.
+    if self.AVG_DURATION_REGEX.search(desc):
+      desc = self.AVG_DURATION_REGEX.sub(avg_duration_text, desc)
+    else:
+      if desc:
+        desc = '%s\n\n%s' % (desc, avg_duration_text)
+      else:
+        desc = avg_duration_text
+    return desc
+
+  def _ParsePackageInfoPlist(self, plist_xml):
+    """Parses a plist and returns a MunkiPackageInfoPlist object.
+
+    Args:
+      plist_xml: str plist xml.
+    Returns:
+      MunkiPackageInfoPlist object, or None if there were parsing errors.
+    """
+    try:
+      pl = plist.MunkiPackageInfoPlist(plist_xml)
+      pl.Parse()
+      return pl
+    except plist.Error, e:
+      logging.exception('Error parsing pkginfo: %s', str(e))
+      return None
+
+  def get(self):
+    """Handle GET."""
+    pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
+
+    for p in models.PackageInfo.all():
+      pl = self._ParsePackageInfoPlist(p.plist)
+      if not pl:
+        continue  # skip over plist parsing errors.
+
+      if p.munki_name not in pkgs:
+        # Skip pkginfos that ReportsCache lacks.
+        continue
+      elif not pkgs[p.munki_name].get('duration_seconds_avg', None):
+        # Skip pkginfos where there is no known average duration.
+        continue
+
+      # Obtain a lock on the PackageInfo entity for this package, or skip.
+      lock = 'pkgsinfo_%s' % p.filename
+      if not gae_util.ObtainLock(lock, timeout=5.0):
+        continue  # Skip; it'll get updated next time around.
+
+      # Append the avg duration text to the description; in the future the
+      # avg duration time and overall install count will be added to they're
+      # own pkginfo keys so the information can be displayed independantly.
+      # This requires MSU changes to read and display such values, so for now
+      # simply append text to the description.
+      old_description = pl.get('description', '')
+      new_description = self._GetUpdatedDescription(
+          pkgs[p.munki_name], old_description)
+      if old_description != new_description:
+        pl['description'] = new_description
+        p.plist = pl.GetXml()
+        p.put()
+      gae_util.ReleaseLock(lock)
+
+    # Asyncronously regenerate all Catalogs to include updated pkginfo plists.
+    delay = 0
+    for c in models.Catalog.all():
+      delay += 5
+      common.CreateCatalog(c.name, delay=delay)
 
 
 class VerifyPackages(webapp.RequestHandler):
   """Class to verify all packages have matching Blobstore blobs."""
 
   def get(self):
-    """Handle GET"""
-    logging.debug('Verifying all PackageInfo and Blobstore Blobs....')
+    """Handle GET."""
+    #logging.debug('Verifying all PackageInfo and Blobstore Blobs....')
     pkginfo_count = 0
     for p in models.PackageInfo.all():
       blob_info = blobstore.BlobInfo.get(p.blobstore_key)
@@ -82,23 +165,6 @@ class VerifyPackages(webapp.RequestHandler):
         time.sleep(1)
 
       blob_count += 1
-    logging.debug(
-        'Verification of %d PackageInfo entities and %d Blobs complete.',
-        pkginfo_count, blob_count)
-
-
-application = webapp.WSGIApplication([
-    ('/cron/maintenance/authsession_cleanup', AuthSessionCleanup),
-    ('/cron/maintenance/mark_computers_inactive', MarkComputersInactive),
-    ('/cron/maintenance/verify_packages', VerifyPackages),
-])
-
-
-def main():
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
-    logging.getLogger().setLevel(logging.DEBUG)
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()
+    #logging.debug(
+    #    'Verification of %d PackageInfo entities and %d Blobs complete.',
+    #    pkginfo_count, blob_count)

@@ -51,6 +51,9 @@ class SystemProfileTest(mox.MoxTestBase):
   def testInit(self):
     """Test __init__()."""
     self.assertEqual(self.sp._profile, {})
+    self.assertEqual(self.sp._include_only, None)
+    temp_sp = hw.SystemProfile(include_only='foo')
+    self.assertEqual(temp_sp._include_only, 'foo')
 
   def testGetSystemProfilerOutput(self):
     """Test _GetSystemProfilerOutput()."""
@@ -58,14 +61,24 @@ class SystemProfileTest(mox.MoxTestBase):
     stderr = ''
     self.mox.StubOutWithMock(hw.subprocess, 'Popen', True)
     mock_sp = self.mox.CreateMockAnything()
+
     hw.subprocess.Popen(
-        ['/usr/bin/system_profiler', '-XML'],
+        ['/usr/sbin/system_profiler', '-XML'],
+        stdout = hw.subprocess.PIPE,
+        stderr = hw.subprocess.PIPE).AndReturn(mock_sp)
+    mock_sp.communicate().AndReturn((stdout, stderr))
+    mock_sp.wait().AndReturn(0)
+
+    hw.subprocess.Popen(
+        ['/usr/sbin/system_profiler', '-XML', 'SPNetworkDataType'],
         stdout = hw.subprocess.PIPE,
         stderr = hw.subprocess.PIPE).AndReturn(mock_sp)
     mock_sp.communicate().AndReturn((stdout, stderr))
     mock_sp.wait().AndReturn(0)
 
     self.mox.ReplayAll()
+    self.assertEqual(stdout, self.sp._GetSystemProfilerOutput())
+    self.sp._include_only = ['network', 'unknown thing']
     self.assertEqual(stdout, self.sp._GetSystemProfilerOutput())
     self.mox.VerifyAll()
 
@@ -88,11 +101,29 @@ class SystemProfileTest(mox.MoxTestBase):
     self.assertEqual(self.sp._system_profile, 'contents')
     self.mox.VerifyAll()
 
+  def testGetSystemProfilePlistParseError(self):
+    """Test _GetSystemProfile() with plist.Error raised when calling Parse()."""
+    sp_xml = 'foo'
+    mock_plist = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(self.sp, '_GetSystemProfilerOutput')
+    self.mox.StubOutWithMock(hw.plist, 'ApplePlist', True)
+
+    self.sp._GetSystemProfilerOutput().AndReturn(sp_xml)
+    hw.plist.ApplePlist(sp_xml).AndReturn(mock_plist)
+    mock_plist.Parse().AndRaise(hw.plist.Error)
+
+    self.mox.ReplayAll()
+    self.assertRaises(hw.SystemProfilerError, self.sp._GetSystemProfile)
+    self.mox.VerifyAll()
+
   def testFindAll(self):
     """Test _FindAll()."""
     funcs = (
         '_GetSystemProfile',
+        '_FindHDDSerial',
         '_FindSerialNumber',
+        '_FindPlatformUuid',
         '_FindMacAddresses',
         '_FindBatteryInfo',
         '_FindUSBDevices')
@@ -118,6 +149,17 @@ class SystemProfileTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     self.assertEqual('foo', self.sp.GetProfile())
     self.mox.VerifyAll()
+
+  def testFindBatteryInfoWithMissingSerial(self):
+    """Test _FindBatteryInfo() with a missing serial number."""
+    # sppower_battery_model_info dict lacking sppower_battery_serial_number
+    spd = [{
+        '_dataType': 'SPPowerDataType',
+        '_items': [{'fookey': 'foovalue', 'sppower_battery_model_info': {}}],
+    }]
+    self.sp._system_profile = spd
+    self.sp._FindBatteryInfo()
+    self.assertEqual('unknown', self.sp._profile['battery_serial_number'])
 
 
 def main(unused_argv):

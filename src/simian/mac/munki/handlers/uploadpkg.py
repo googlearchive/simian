@@ -56,7 +56,8 @@ class UploadPackage(
       key: optionally, blobstore key that was uploaded
     """
     if not handlers.IsHttps(self):
-      logging.info('Access to /uploadpkg without https')
+      # TODO(user): Does blobstore support https yet? If so, we can
+      # enforce security in app.yaml and not do this check here.
       return
 
     gaeserver.DoMunkiAuth()
@@ -66,7 +67,8 @@ class UploadPackage(
     if mode == 'success':
       self.response.out.write(self.request.get('key'))
     elif mode == 'error':
-      self.response.set_status(400, msg)
+      self.response.set_status(400)
+      self.response.out.write(msg)
     else:
       upload_url = blobstore.create_upload_url('/uploadpkg')
       self.response.out.write(upload_url)
@@ -100,7 +102,8 @@ class UploadPackage(
     if not catalogs or not install_types or not user or not filename:
       msg = 'uploadpkg POST required parameters missing'
       logging.error(msg)
-      self.response.set_status(400, msg)
+      self.response.set_status(400)
+      self.response.out.write(msg)
       return
     catalogs = catalogs.split(',')
     if manifests:
@@ -124,19 +127,21 @@ class UploadPackage(
       # otherwise, grab the form parameter.
       pkginfo_str = self.request.get('pkginfo')
 
+    blob_info = upload_files[0]
+    blobstore_key = str(blob_info.key())
+
     # Parse, validate, and encode the pkginfo plist.
     pkginfo = pkgsinfo.plist.MunkiPackageInfoPlist(pkginfo_str)
     try:
       pkginfo.Parse()
     except pkgsinfo.plist.PlistError, e:
       logging.exception('Invalid pkginfo plist uploaded:\n%s\n', pkginfo_str)
+      gae_util.SafeBlobDel(blobstore_key)
       self.redirect('/uploadpkg?mode=error&msg=No%20valid%20pkginfo%20received')
       return
 
-    blob_info = upload_files[0]
-    blobstore_key = str(blob_info.key())
-    old_blobstore_key = None
     filename = pkginfo.GetContents()['installer_item_location']
+    pkgdata_sha256 = pkginfo.GetContents()['installer_item_hash']
 
     # verify the blob was actually written; in case Blobstore failed to write
     # the blob but still POSTed to this handler (very, very rare).
@@ -150,12 +155,20 @@ class UploadPackage(
 
     # Obtain a lock on the PackageInfo entity for this package.
     lock = 'pkgsinfo_%s' % filename
-    if not common.ObtainLock(lock, timeout=5.0):
+    if not gae_util.ObtainLock(lock, timeout=5.0):
       gae_util.SafeBlobDel(blobstore_key)
-      self.response.set_status(403, 'Could not lock pkgsinfo')
+      self.response.set_status(403)
+      self.response.out.write('Could not lock pkgsinfo')
       return
 
+    old_blobstore_key = None
     pkg = models.PackageInfo.get_or_insert(filename)
+    if not pkg.IsSafeToModify():
+      gae_util.SafeBlobDel(blobstore_key)
+      self.response.set_status(403)
+      self.response.out.write('Package is not modifiable')
+      return
+
     if pkg.blobstore_key:
       # a previous blob exists.  delete it when the update has succeeded.
       old_blobstore_key = pkg.blobstore_key
@@ -168,6 +181,7 @@ class UploadPackage(
     pkg.manifests = manifests
     pkg.install_types = install_types
     pkg.plist = pkginfo.GetXml()
+    pkg.pkgdata_sha256 = pkgdata_sha256
 
     # update the PackageInfo model with the new plist string and blobstore key.
     try:
@@ -184,7 +198,7 @@ class UploadPackage(
       # if this is a new entity (get_or_insert puts), attempt to delete it.
       if not old_blobstore_key:
         gae_util.SafeEntityDel(pkg)
-      common.ReleaseLock(lock)
+      gae_util.ReleaseLock(lock)
       self.redirect('/uploadpkg?mode=error')
       return
 
@@ -193,7 +207,7 @@ class UploadPackage(
     if old_blobstore_key:
       gae_util.SafeBlobDel(old_blobstore_key)
 
-    common.ReleaseLock(lock)
+    gae_util.ReleaseLock(lock)
 
     # Create catalogs for newly uploaded pkginfo plist.
     for catalog in pkg.catalogs:
@@ -205,5 +219,4 @@ class UploadPackage(
         manifests=manifests, install_types=install_types, plist=pkg.plist)
     admin_log.put()
 
-    logging.debug('UploadPkg success for %s by %s', filename, user)
     self.redirect('/uploadpkg?mode=success&key=%s' % blobstore_key)
