@@ -67,6 +67,17 @@ class ReportFeedback(object):
 class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
   """Handler for /reports/."""
 
+  def _IsExitFeedbackIpAddress(self, ip_address):
+    """Is this an IP address that should result in an exit feedback?
+
+    Args:
+      ip_address: str, like "1.2.3.4"
+    Returns:
+      True if this IP address should result in exit feedback
+    """
+    return (ip_address and
+        models.KeyValueCache.IpInList('client_exit_ip_blocks', ip_address))
+
   def GetReportFeedback(self, uuid, report_type, **kwargs):
     """Inspect a report and provide a feedback status/command.
 
@@ -78,6 +89,7 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
       on_corp: str, optional, '1' or '0', on_corp status
       message: str, optional, message from client
       details: str, optional, details from client
+      ip_address: str, optional, IP address of client
     Returns:
       ReportFeedback.* constant
     """
@@ -86,10 +98,15 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
       c = kwargs['computer']
     else:
       c = models.Computer.get_by_key_name(uuid)
+    ip_address = kwargs.get('ip_address', None)
 
     # TODO(user): if common.BusinessLogicMethod ...
     if report_type == 'preflight':
-      if not c or c.preflight_datetime is None:
+      if self._IsExitFeedbackIpAddress(ip_address):
+        report = ReportFeedback.EXIT
+      elif common.IsPanicModeNoPackages():
+        report = ReportFeedback.EXIT
+      elif not c or c.preflight_datetime is None:
         # this is the first preflight post from this host
         report = ReportFeedback.FORCE_CONTINUE
       elif getattr(c, 'upload_logs_and_notify', None) is not None:
@@ -161,7 +178,9 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
         # we want to get feedback now, before preflight_datetime changes.
         if feedback:
           self.response.out.write(
-              self.GetReportFeedback(uuid, report_type, computer=computer))
+              self.GetReportFeedback(
+                  uuid, report_type, computer=computer,
+                  ip_address=ip_address))
       common.LogClientConnection(
           report_type, client_id, user_settings, pkgs_to_install,
           computer=computer, ip_address=ip_address)

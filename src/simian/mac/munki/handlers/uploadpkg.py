@@ -97,19 +97,21 @@ class UploadPackage(
     user = self.request.get('user')
     filename = self.request.get('name')
     install_types = self.request.get('install_types')
-    catalogs = self.request.get('catalogs')
-    manifests = self.request.get('manifests')
-    if not catalogs or not install_types or not user or not filename:
+    catalogs = self.request.get('catalogs', None)
+    manifests = self.request.get('manifests', None)
+    if catalogs is None or not install_types or not user or not filename:
       msg = 'uploadpkg POST required parameters missing'
       logging.error(msg)
-      self.response.set_status(400)
-      self.response.out.write(msg)
+      self.redirect('/uploadpkg?mode=error&msg=%s' % msg)
       return
-    catalogs = catalogs.split(',')
-    if manifests:
-      manifests = manifests.split(',')
+    if catalogs == '':
+      catalogs = []
     else:
+      catalogs = catalogs.split(',')
+    if manifests in ['', None]:
       manifests = []
+    else:
+      manifests = manifests.split(',')
     install_types = install_types.split(',')
 
     upload_files = self.get_uploads('file')
@@ -157,16 +159,14 @@ class UploadPackage(
     lock = 'pkgsinfo_%s' % filename
     if not gae_util.ObtainLock(lock, timeout=5.0):
       gae_util.SafeBlobDel(blobstore_key)
-      self.response.set_status(403)
-      self.response.out.write('Could not lock pkgsinfo')
+      self.redirect('/uploadpkg?mode=error&msg=Could%20not%20lock%20pkgsinfo')
       return
 
     old_blobstore_key = None
     pkg = models.PackageInfo.get_or_insert(filename)
     if not pkg.IsSafeToModify():
       gae_util.SafeBlobDel(blobstore_key)
-      self.response.set_status(403)
-      self.response.out.write('Package is not modifiable')
+      self.redirect('/uploadpkg?mode=error&msg=Package%20is%20not%20modifiable')
       return
 
     if pkg.blobstore_key:

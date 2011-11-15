@@ -307,7 +307,15 @@ class ApplePlist(object):
     Returns:
       str, like 'display_name'
     """
-    return self._current_key[-1]
+    try:
+      return self._current_key[-1]
+    except IndexError:
+      if self._current_mode[-1] == 'dict':
+        # e.g. <string>foo</string> without <key>..</key> before it.
+        raise MalformedPlistError('Missing key element before value element')
+      else:
+        # Undefined error condition, traceback please.
+        raise
 
   def _ReleaseKey(self):
     """Release the current key."""
@@ -1192,7 +1200,19 @@ class MunkiPackageInfoPlist(MunkiPlist):
 
   def __init__(self, *args, **kwargs):
     super(MunkiPackageInfoPlist, self).__init__(*args, **kwargs)
+    self.AddValidationHook(self._ValidateName)
     self.AddValidationHook(self._ValidateInstallsFilePath)
+
+  def _ValidateName(self):
+    """Validate a pkginfo <key>name</key> value."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    # verify the pkginfo "name" field does not contain any dashes, as they
+    # conflict with Munki's manifest <pkginfo_name>-<version> selection feature.
+    if self._plist.get('name', '').find('-') != -1:
+      raise InvalidPlistError(
+          '<key>name</key> cannot contain a dash: %s' % self._plist['name'])
 
   def _ValidateInstallsFilePath(self):
     """Validate the path strings of installs node of type=file.

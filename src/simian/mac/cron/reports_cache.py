@@ -348,13 +348,18 @@ def _GenerateInstallCounts():
     for install in installs:
       i += 1
       pkg_name = install.package
-      if pkg_name in pkgs:
-        pkgs[pkg_name]['install_count'] += 1
-      else:
+      if pkg_name not in pkgs:
         pkgs[pkg_name] = {
-            'install_count': 1,
+            'install_count': 0,
+            'install_fail_count': 0,
             'applesus': install.applesus,
         }
+      if install.IsSuccess():
+        pkgs[pkg_name]['install_count'] = (
+            pkgs[pkg_name].setdefault('install_count', 0) + 1)
+      else:
+        pkgs[pkg_name]['install_fail_count'] = (
+            pkgs[pkg_name].setdefault('install_fail_count', 0) + 1)
 
       # (re)calculate avg_duration_seconds for this package.
       if 'duration_seconds_avg' not in pkgs[pkg_name]:
@@ -362,14 +367,13 @@ def _GenerateInstallCounts():
         pkgs[pkg_name]['duration_total_seconds'] = 0
         pkgs[pkg_name]['duration_seconds_avg'] = None
       # only proceed if entity has "duration_seconds" property that's not None.
-      if hasattr(install, 'duration_seconds'):
-        if install.duration_seconds is not None:
-          pkgs[pkg_name]['duration_count'] += 1
-          pkgs[pkg_name]['duration_total_seconds'] += (
-              install.duration_seconds)
-          pkgs[pkg_name]['duration_seconds_avg'] = int(
-              pkgs[pkg_name]['duration_total_seconds'] /
-              pkgs[pkg_name]['duration_count'])
+      if getattr(install, 'duration_seconds', None) is not None:
+        pkgs[pkg_name]['duration_count'] += 1
+        pkgs[pkg_name]['duration_total_seconds'] += (
+            install.duration_seconds)
+        pkgs[pkg_name]['duration_seconds_avg'] = int(
+            pkgs[pkg_name]['duration_total_seconds'] /
+            pkgs[pkg_name]['duration_count'])
 
     # Update any changed packages.
     models.ReportsCache.SetInstallCounts(pkgs)

@@ -101,17 +101,21 @@ class UserAuthTest(test.RequestHandlerTest):
 
   def testGetWhenAuthTokenNotReturned(self):
     """Test get()."""
+    self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
+
     user = uauth.settings.ADMINS[0]
     mock_user = self.mox.CreateMockAnything()
-    mock_user.email().AndReturn(user)
-    mock_user.email().AndReturn(user)
 
     self.MockDoMunkiAuth(fail=True)
-    self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    uauth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(user)
+    uauth.auth.IsAdminUser(user).AndReturn(True)
+
     mock_aps = self.mox.CreateMockAnything()
     self.stubs.Set(uauth.gaeserver, 'AuthSimianServer', mock_aps)
-    uauth.users.get_current_user().AndReturn(mock_user)
     mock_aps().AndReturn(mock_aps)
+    mock_user.email().AndReturn(user)
     mock_aps.SessionCreateUserAuthToken(
         user, level=uauth.gaeserver.LEVEL_ADMIN).AndReturn(None)
 
@@ -123,18 +127,22 @@ class UserAuthTest(test.RequestHandlerTest):
 
   def testGet(self):
     """Test get()."""
+    self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
+
     user = uauth.settings.ADMINS[0]
     mock_user = self.mox.CreateMockAnything()
-    mock_user.email().AndReturn(user)
-    mock_user.email().AndReturn(user)
     token = 'token'
 
     self.MockDoMunkiAuth(fail=True)
-    self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    uauth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(user)
+    uauth.auth.IsAdminUser(user).AndReturn(True)
+
     mock_aps = self.mox.CreateMockAnything()
     self.stubs.Set(uauth.gaeserver, 'AuthSimianServer', mock_aps)
-    uauth.users.get_current_user().AndReturn(mock_user)
     mock_aps().AndReturn(mock_aps)
+    mock_user.email().AndReturn(user)
     mock_aps.SessionCreateUserAuthToken(
         user, level=uauth.gaeserver.LEVEL_ADMIN).AndReturn(token)
     self.response.headers.__setitem__(

@@ -127,13 +127,17 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
 
     filename = urllib.unquote(filename)
     hash_str = self.request.get('hash')
-    catalogs = self.request.get('catalogs')
-    manifests = self.request.get('manifests')
+    catalogs = self.request.get('catalogs', None)
+    manifests = self.request.get('manifests', None)
     install_types = self.request.get('install_types')
 
-    if catalogs:
+    if catalogs == '':
+      catalogs = []
+    elif catalogs:
       catalogs = catalogs.split(',')
-    if manifests:
+    if manifests == '':
+      manifests = []
+    elif manifests:
       manifests = manifests.split(',')
     if install_types:
       install_types = install_types.split(',')
@@ -190,9 +194,9 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
     # All verification has passed, so let's create the PackageInfo entity.
     pkginfo.plist = mpl.GetXml()
     pkginfo.name = mpl.GetPackageName()
-    if catalogs:
+    if catalogs is not None:
       pkginfo.catalogs = catalogs
-    if manifests:
+    if manifests is not None:
       pkginfo.manifests = manifests
     if install_types:
       pkginfo.install_types = install_types

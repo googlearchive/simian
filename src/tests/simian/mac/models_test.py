@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # #
+#
 
 """models module tests."""
 
@@ -118,7 +119,7 @@ class ModelsModuleTest(mox.MoxTestBase):
     mock_func = self.mox.CreateMockAnything()
 
     b = _BaseModel()
-    
+
     if type(__builtins__) is dict:
       # __builtins__ is a dict under setuptools + python. ???
       self.mox.StubOutWithMock(models.db.Model, 'put')
@@ -487,6 +488,94 @@ class ModelsModuleTest(mox.MoxTestBase):
     models.PackageAlias.MemcacheWrappedGet(pkg_alias).AndReturn(None)
     self.mox.ReplayAll()
     self.assertEqual(None, models.PackageAlias.ResolvePackageName(pkg_alias))
+    self.mox.VerifyAll()
+
+
+class KeyValueCacheTest(mox.MoxTestBase):
+  """Test KeyValueCache class."""
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+    self.cls = models.KeyValueCache
+    self.key = 'example_ip_blocks'
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testIpInListWhenEmptyIp(self):
+    """Tests IpInList() with empty IP values."""
+    self.assertEqual(False, self.cls.IpInList(self.key, ''))
+    self.assertEqual(False, self.cls.IpInList(self.key, None))
+
+  def testIpInListWhenIpNotInEmptyList(self):
+    """Tests IpInList() with an IP that will not match an empty list."""
+    self.mox.StubOutWithMock(models.util, 'Deserialize')
+    self.mox.StubOutWithMock(self.cls, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = []
+
+    self.cls.MemcacheWrappedGet(
+        self.key, 'text_value').AndReturn('serialized')
+    models.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.cls.IpInList(self.key, ip))
+    self.mox.VerifyAll()
+
+  def testIpInListWhenPropertyValueIsEmpty(self):
+    """Tests IpInList() with null/empty property text_value for list."""
+    self.mox.StubOutWithMock(models.util, 'Deserialize')
+    self.mox.StubOutWithMock(self.cls, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+
+    self.cls.MemcacheWrappedGet(self.key, 'text_value').AndReturn('')
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.cls.IpInList(self.key, ip))
+    self.mox.VerifyAll()
+
+  def testIpInListWhenIpNotInList(self):
+    """Tests IpInList() with an IP not in the lists."""
+    self.mox.StubOutWithMock(models.util, 'Deserialize')
+    self.mox.StubOutWithMock(self.cls, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = ['192.168.0.0/16']
+
+    self.cls.MemcacheWrappedGet(
+        self.key, 'text_value').AndReturn('serialized')
+    models.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.cls.IpInList(self.key, ip))
+    self.mox.VerifyAll()
+
+  def testIpInListWhenTrue(self):
+    """Tests IpInList() with an IP that is found in the list."""
+    self.mox.StubOutWithMock(models.util, 'Deserialize')
+    self.mox.StubOutWithMock(self.cls, 'MemcacheWrappedGet')
+
+    ip = '1.2.3.4'
+    deserialized = ['192.168.0.0/16', '1.0.0.0/8']
+
+    self.cls.MemcacheWrappedGet(
+        self.key, 'text_value').AndReturn('serialized')
+    models.util.Deserialize('serialized').AndReturn(deserialized)
+
+    self.mox.ReplayAll()
+    self.assertTrue(self.cls.IpInList(self.key, ip))
+    self.mox.VerifyAll()
+
+  def testIpInListWhenIpv6(self):
+    """Tests IpInList() with an IPv6 IP."""
+    ip = '2620:0:1003:1007:216:36ff:feee:f090'
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.cls.IpInList(self.key, ip))
     self.mox.VerifyAll()
 
 

@@ -603,8 +603,11 @@ class Auth1Test(AuthTestingBase):
     func = lambda: x
     pk._rawPublicKeyOp = func
 
+    hasattr_ = self.mox.CreateMockAnything()
+    hasattr_(base.tlslite.utils, 'Python_RSAKey').AndReturn(False)
+
     self.mox.ReplayAll()
-    self.ba._PatchTlslite(pk)
+    self.ba._PatchTlslite(pk, hasattr_=hasattr_)
     self.assertTrue(hasattr(pk, '_patch_auth1'))
     self.assertEqual(pk._patch_auth1, 1)
     self.assertTrue(type(pk._rawPublicKeyOp) is base.types.MethodType)
@@ -622,6 +625,24 @@ class Auth1Test(AuthTestingBase):
 
     self.mox.ReplayAll()
     self.ba._PatchTlslite(pk)
+    self.assertEqual(pk._rawPublicKeyOp, 'untouched')
+    self.mox.VerifyAll()
+
+  def testPatchTlsliteWhenNoPatchRequired(self):
+    """Test _PatchTlslite()."""
+    class DummyPublicKey(object):
+      """dummy public key object for this test, mock objects too heavy."""
+
+    pk = DummyPublicKey()
+    pk._rawPublicKeyOp = 'untouched'
+
+    hasattr_ = self.mox.CreateMockAnything()
+    hasattr_(base.tlslite.utils, 'Python_RSAKey').AndReturn(True)
+    hasattr_(base.tlslite.utils, 'PyCrypto_RSAKey').AndReturn(False)
+    hasattr_(base.tlslite.utils, 'OpenSSL_RSAKey').AndReturn(False)
+
+    self.mox.ReplayAll()
+    self.ba._PatchTlslite(pk, hasattr_=hasattr_)
     self.assertEqual(pk._rawPublicKeyOp, 'untouched')
     self.mox.VerifyAll()
 

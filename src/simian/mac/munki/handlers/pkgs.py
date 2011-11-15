@@ -60,7 +60,7 @@ class Packages(
     auth_return = auth.DoAnyAuth()
     if hasattr(auth_return, 'email'):
       email = auth_return.email()
-      if not auth.IsAdminUser(email) and not auth.IsSupportStaff(email):
+      if not auth.IsAdminUser(email) and not auth.IsSupportUser(email):
         raise auth.IsAdminMismatch
 
     filename = urllib.unquote(filename)

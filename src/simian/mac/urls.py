@@ -80,13 +80,13 @@ application = webapp.WSGIApplication(
      manifest_modifications.ManifestModifications),
     # GET/POST Manifest Modifications admin.
     (r'/admin/package_alias/?$', package_alias.PackageAlias),
+    # GET or POST admin panic interface,
+    (r'/admin/panic/?$', admin_panic.AdminPanic),
     # GET reports pages.
     (r'/admin/?$', admin_stats.Stats),
     (r'/admin/([\w\-\_\.\=\|\%]+)$', admin_stats.Stats),
     (r'/admin/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$',
      admin_stats.Stats),
-    # GET or POST admin panic interface,
-    (r'/admin/panic/?$', admin_panic.AdminPanic),
     # GET or POST user auth.
     (r'/uauth/?$', uauth.UserAuth),
     # GET auth logout, POST munki auth.

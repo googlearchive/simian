@@ -68,15 +68,18 @@ class SimianCliClient(object):
       'download',
       'delete',
       'edit',
+      'print',
       'server=',
       'user_auth=',
       'package=',
       'description=',
       'display_name=',
+      'name=',
       'catalogs=',
       'manifests=',
       'install_types=',
       'edit_pkginfo',
+      'template_pkginfo=',
       'unattended_install',
       'nounattended_install',
       'unattended_uninstall',
@@ -114,6 +117,11 @@ class SimianCliClient(object):
           'method': 'ListPackages',
           'auth': 'userauth',
       },
+      'print': {
+          'require': [ 'package' ],
+          'method': 'PrintPackage',
+          'auth': 'userauth',
+      },
       'help': {
           'method': 'Usage',
       },
@@ -140,6 +148,9 @@ class SimianCliClient(object):
         edit an already uploaded software package
     --list_packages
         lists all packages of given --install_types and --catalogs.
+    --print
+        print information about a software package. currently just
+        prints the pkginfo XML.
 
     options:
 
@@ -150,9 +161,14 @@ class SimianCliClient(object):
         for upload, specify description of the upload.
     --display_name [str display name]
         for upload, specify the human-readable display name of the upload.
+    --name [str name]
+        for upload, specify the Munki name, in pkginfo, of the upload.
     --edit_pkginfo
         when uploading or editing a package, run an editor on the generated
         package info before submitting it to the Simian server.
+    --template_pkginfo [plist filename]
+        when uploading or editing a package, overwrite allowable values from
+        this incoming template plist into the pkginfo.
     --[no]unattended_install
         when uploading a package, add "unattended_install" bool to package info.
     --[no]unattended_uninstall
@@ -162,6 +178,8 @@ class SimianCliClient(object):
         specify the catalog names to target; comma delimited string
     --manifests [unstable,testing,stable]
         specify the manifest names to target; comma delimited string
+        if you supply the string "none" as a value to this option then
+        the manifests value will be an empty list, i.e. NO manifests.
     --install_types [managed_installs,managed_updates,type3]
         specify the install types of upload; comma delimited string
     --server [hostname(:port)]
@@ -187,13 +205,16 @@ class SimianCliClient(object):
       'package': None,
       'description': None,
       'display_name': None,
+      'name': None,
       'catalogs': None,
       'manifests': None,
       'install_types': None,
       'edit_pkginfo': None,
+      'template_pkginfo': None,
       'unattended_install': None,
       'unattended_uninstall': None,
       'list_packages': None,
+      'print': None,
     }
     self.command = None
 
@@ -377,6 +398,10 @@ class SimianCliClient(object):
     catalogs = self.config['catalogs']
     print self.client.ListPackages(install_types, catalogs)
     print 'Complete!'
+
+  def PrintPackage(self):
+    """Prints information about the package from Simian."""
+    print self.client.GetPackageInfo(self.config['package'])
 
   def EditPackageInfo(self):
     """Edit a package info on Simian. To be implement in subclasses."""

@@ -1637,9 +1637,7 @@ class SimianClient(HttpsAuthClient):
     name = str(name.encode('utf-8'))
     new_params = params.copy()
     new_params['name'] = name
-    # TODO(user): the following injects a non-fqdn username, which is
-    # inconsistent with the rest of usernames used.
-    new_params['user'] = self._user
+    new_params['user'] = '%s@%s' % (self._user, AUTH_DOMAIN)
     for k, v in new_params.iteritems():
       if type(v) is unicode:
         new_params[k] = str(v.encode('utf-8'))
@@ -1652,7 +1650,7 @@ class SimianClient(HttpsAuthClient):
     if not response.IsError():
       return response
     else:
-      raise SimianServerError(response.status, response.reason)
+      raise SimianServerError(response.status, response.body)
 
   def GetCatalog(self, name):
     """Get a catalog."""
@@ -1784,13 +1782,13 @@ class SimianClient(HttpsAuthClient):
     filename = urllib.quote(filename)
     pkginfo = pkginfo.encode('utf-8')
     opts = []
-    if catalogs:
+    if catalogs is not None:
       opts.append('catalogs=%s' % ','.join(catalogs))
-    if manifests:
+    if manifests is not None:
       opts.append('manifests=%s' % ','.join(manifests))
-    if install_types:
+    if install_types is not None:
       opts.append('install_types=%s' % ','.join(install_types))
-    if got_hash:
+    if got_hash is not None:
       opts.append('hash=%s' % got_hash)
     url = '/pkgsinfo/%s?%s' % (
         filename, '&'.join(opts))

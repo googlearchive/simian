@@ -6,12 +6,21 @@
 <div class="wrap">
   <h2>Dynamic Manifest Modifications</h2>
 
-  {% if is_admin %}
+  {% if is_admin or is_security %}
   <h3>Add New Manifest Modification</h3>
   {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
-  <form method="POST">
+  <form method="POST" action="/admin/manifest_modifications">
     <input type="hidden" name="add_manifest_mod" value="1" />
-    Owner: <input type="text" name="owner" /><br />
+
+    Mod Type:
+    <select name="mod_type">
+      <option selected="selected" value="owner">Owner</option>
+      <option value="uuid">UUID</option>
+      <option value="site">Site</option>
+      <option value="os_version">OS Version</option>
+    </select>
+    Mod Value:
+    <input type="text" name="mod_value" size="50" /><br />
 
     Munki Package Name:
     <select name="munki_pkg_name">
@@ -22,32 +31,65 @@
     </select>
     <br />
 
-    Install Types:
-    {% for install_type in install_types %}
-      {{ install_type }}<input type="checkbox" name="install_types" value="{{ install_type }}" />
-    {% endfor %}
-    <br />
+    {% if is_security %}
+      <input type="hidden" name="install_types" value="managed_installs">
+    {% else %}
+      Install Types:
+      {% for install_type in install_types %}
+        <label for="type-{{ install_type }}">{{ install_type }}</label><input type="checkbox" name="install_types" value="{{ install_type }}" id="type-{{ install_type }}" />
+      {% endfor %}
+      <br />
 
-    Manifests:
-    {% for manifest in manifests %}
-      {{ manifest }}<input type="checkbox" name="manifests" value="{{ manifest }}" />
-    {% endfor %}
-    <br />
+      Manifests:
+      {% for manifest in manifests %}
+        <label for="manifest-{{ manifest }}">{{ manifest }}</label><input type="checkbox" name="manifests" value="{{ manifest }}" id="manifest-{{ manifest }}" />
+      {% endfor %}
+      <br />
+    {% endif %}
 
     <input type="submit" value="Submit" />
   </form>
-  <h3>Existing Manifest Modifications</h3>
-  {% endif %}
+{% endif %}
 
+<p>
+  Select a mod type to view:
+  <a href="?mod_type=owner">Owner</a> |
+  <a href="?mod_type=uuid">UUID</a> |
+  <a href="?mod_type=site">Site</a> |
+  <a href="?mod_type=os_version">OS Version</a>
+</p>
+
+{% if mod_type %}
+  <h3>Existing {{ mod_type|upper }} Manifest Modifications</h3>
+  <p>
+    {{ mods|length }} modifications found (limit {{ limit }}).
+    {% if next_page %}
+      <a href="/admin/manifest_modifications?page={{ next_page }}&mod_type={{ mod_type }}">Next Page &raquo;</a>
+    {% endif %}
+  </p>
+
+  {% if mods %}
   <table class="stats-table">
     <tr class="multi-header">
-       <th>Owner</th><th>Package</th><th>Manifests</th><th>Install Types</th>
+       <th>Key</th><th>Package</th><th>Manifests</th><th>Install Types</th>
        <th>Mod Time</th><th>Admin</th><th>Enabled</th>
     </tr>
     {% for m in mods %}
       <tr>
         <td>
-          <a href="/admin?type=owner&filter={{ m.owner }}">{{ m.owner }}</a>
+          {% if mod_type == 'owner' %}
+            <a href="/admin?type=owner&filter={{ m.owner }}">{{ m.owner }}</a>
+          {% else %}
+            {% if mod_type == 'uuid' %}
+              <a href="/admin?type=uuid&filter={{ m.uuid }}">{{ m.uuid }}</a>
+            {% else %}
+              {% if mod_type == 'site' %}
+                 <a href="/admin?type=site&filter={{ m.site }}">{{ m.site }}</a>
+              {% else %}
+                 <a href="/admin?type=os_version&filter={{ m.os_version }}">{{ m.os_version }}</a>
+              {% endif %}
+            {% endif %}
+          {% endif %}
         </td>
         <td>{{ m.value }}</td>
         <td>
@@ -79,7 +121,15 @@
       </tr>
     {% endfor %}
   </table>
+  {% endif %}
 
+  <p>
+    {% if next_page %}
+      <a href="/admin/manifest_modifications?page={{ next_page }}&mod_type={{ mod_type }}">Next Page &raquo;</a>
+    {% endif %}
+  </p>
+
+{% endif %}
 </div>
 
 {% endblock %}

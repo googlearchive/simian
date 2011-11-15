@@ -94,6 +94,20 @@ indexes:
   - name: mtime
     direction: desc
 
+- kind: InstallLog
+  properties:
+  - name: applesus
+  - name: success
+  - name: mtime
+    direction: desc
+
+- kind: InstallLog
+  properties:
+  - name: package
+  - name: success
+  - name: mtime
+    direction: desc
+
 - kind: PreflightExitLog
   properties:
   - name: uuid

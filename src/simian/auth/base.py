@@ -590,7 +590,7 @@ class Auth1(AuthBase):
     return Auth1ServerSession
 
   # TODO(user): remove this patch
-  def _PatchTlslite(self, public_key):
+  def _PatchTlslite(self, public_key, hasattr_=hasattr):
     """Patch a bug in tlslite.
 
     _rawPublicKeyOp in PyCrypto_RSAKey and OpenSSL_RSAKey doesn't pad
@@ -606,6 +606,13 @@ class Auth1(AuthBase):
     if not hasattr(public_key, '_rawPublicKeyOp'):
       logging.critical('PatchTlslite: no _rawPublicKeyOp')
       return
+
+    # Python_RSAKey does not have a bug in rawPublicKeyOp to patch.
+    if hasattr_(tlslite.utils, 'Python_RSAKey'):
+      if (not hasattr_(tlslite.utils, 'PyCrypto_RSAKey') and
+          not hasattr_(tlslite.utils, 'OpenSSL_RSAKey')):
+        #logging.debug('PatchTlsLite: Python_RSAkey does not require patch')
+        return
 
     def _new_rawPublicKeyOp(self, c):
       """A copy of tlslite.utils.PyCrypto_RSAKey._rawPublicKeyOp().

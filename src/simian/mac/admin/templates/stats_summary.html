@@ -228,14 +228,16 @@
       <li>Packages:
         <a href="/admin/installs">List</a> |
         <a href="/admin/installs?historical=1">Historical List</a> |
-        <a href="/admin/installs?pkg=all">All Installs</a>
+        <a href="/admin/installs?pkg=all">Installs</a> |
+        <a href="/admin/installs?pkg=all&failures=1">Failures</a> |
+        <a href="/admin/installproblems">Other Install Problems</a>
       </li>
       <li>Apple SUS Updates:
         <a href="/admin/installs?applesus=1">Historical List</a> |
-        <a href="/admin/installs?pkg=all&applesus=1">All Installs</a> |
+        <a href="/admin/installs?pkg=all&applesus=1">Installs</a> |
+        <a href="/admin/installs?pkg=all&applesus=1&failures=1">Failures</a> |
         <a href="/admin/applesus">Admin</a>
       </li>
-      <li><a href="/admin/installproblems">Install Problems</a></li>
       <li><a href="/admin/preflightexits">Preflight Exits</a></li>
       <li><a href="/admin/diskfree">Low Disk Space</a></li>
       <li><a href="/admin/uptime">Long Uptime</a></li>
@@ -244,21 +246,22 @@
 
     <h3>Admin Reports</h3>
     <ul>
-      <li><a href="/admin/brokenclients">Broken Clients</a></li>
-      <li><a href="/admin/applesus">Apple SUS Admin</a></li>
-      <li><a href="/admin/loststolen">Lost/Stolen Computers</a></li>
       <li><a href="/admin/adminlogs">Admin Logs</a></li>
-      <li><a href="/admin/user_settings">UserSettings Knobs</a></li>
-      <li>
-        <a href="/admin/manifest_modifications">Manifest Modifications</a>
+      <li><a href="/admin/applesus">Apple SUS Admin</a></li>
+      <li><a href="/admin/brokenclients">Broken Clients</a></li>
+      <li><a href="/admin/loststolen">Lost/Stolen Computers</a></li>
+      <li>Manifest Modifications:
+        <a href="/admin/manifest_modifications">Admin</a> |
+        <a href="/admin/package_alias">Package Aliases</a>
       </li>
-      <li><a href="/admin/package_alias">Package Aliases</a></li>
       <li>
         MSU log summaries:
         <a href="/admin/msulogsummary">for all time</a> or
       	<a href="/admin/msulogsummary/1">since 1 day</a> or
       	<a href="/admin/msulogsummary/7">since 7 days</a>
       </li>
+      <li><a href="/admin/user_settings">UserSettings Knobs</a></li>
+      <li><a href="/admin/panic/">Toggle Panic Mode</a></li>
     </ul>
   </p>
 </div>

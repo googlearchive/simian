@@ -13,10 +13,18 @@
 {% else %}
   {% if pkg %}
     {% if applesus %}
-      <h2>Apple SUS Installs: {{ pkg }}</h2>
+      {% if failures %}
+        <h2>Failed Apple SUS Installs: {{ pkg }}</h2>
+      {% else %}
+        <h2>Successful Apple SUS Installs: {{ pkg }}</h2>
+      {% endif %}
       <a href="/admin/installs?applesus=1">Back to Apple SUS list</a>
     {% else %}
-      <h2>Installs: {{ pkg }}</h2>
+      {% if failures %}
+        <h2>Failed Installs: {{ pkg }}</h2>
+      {% else %}
+        <h2>Successful Installs: {{ pkg }}</h2>
+      {% endif %}
       <a href="/admin/installs">Back to packages list</a>
     {% endif %}
   {% else %}
@@ -26,38 +34,42 @@
 
 {% if cached_pkgs_list %}
   <table class="stats-table">
-  <tr><th>Package</th><th>Avg Duration Secs</th><th># *</th></tr>
+  <tr><th>Package</th><th>Avg Duration Secs</th><th>Success</th><th>Failed</th></tr>
   {% for pkg in packages %}
     <tr class="{% cycle lbg,dbg %}">
-      <td>
-        <a href="/admin/installs?pkg={{ pkg.name }}{% if applesus %}&applesus=1{% endif %}">{{ pkg.name }}</a>
-      </td>
+      <td>{{ pkg.name }}</td>
       <td>{{ pkg.duration_seconds_avg }}</td>
-      <td>{{ pkg.count }}</td>
+      <td>
+        <a href="/admin/installs?pkg={{ pkg.name }}&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.count }}</a>
+      </td>
+      <td>
+        <a href="/admin/installs?pkg={{ pkg.name }}&failures=1&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.fail_count }}</a>
+      </td>
     </tr>
   {% endfor %}
   </table>
   <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
-  {% if applesus %}
-    <ul><li><a href="/admin/installs?pkg=all&applesus=1"
-        >View all Apple SUS installs</a></li></ul>
-  {% endif %}
 {% else %}
   {% if packages %}
     <a href="javascript:function() { return false; }"
        onclick="simian.togglePkgDescVisibility(this);">Show Descriptions</a>
     <table class="stats-table" id="pkg-table">
-    <tr><th>Package</th><th># *</th><th>Avg Duration Secs</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Unattended</th><th>Force Install Datetime</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+    <tr><th>Package</th><th>Success</th><th>Failed</td><th>Avg Secs</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Unattended</th><th>Force Install Datetime</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
     {% for pkg in packages %}
       <tr class="{% cycle lbg,dbg %}">
+        <td>{{ pkg.munki_name }}</td>
         <td>
           <a href="/admin/installs?pkg={{ pkg.munki_name }}"
-              >{{ pkg.munki_name }}</a>
+             >{{ pkg.count }}</a>
         </td>
-        <td>{{ pkg.count }}</td>
+        <td>
+          <a href="/admin/installs?pkg={{ pkg.munki_name }}&failures=1"
+             >{{ pkg.fail_count }}</a>
+        </td>
         <td>{{ pkg.duration_seconds_avg }}</td>
         <td>
-          <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1">pending</a>
+          <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1"
+             >pending</a>
         </td>
         <td>{{ pkg.filename }}</td>
         <td><a href="/pkgsinfo/{{ pkg.filename }}">pkginfo</a></td>
@@ -75,23 +87,18 @@
     {% endfor %}
     </table>
     <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
-    <ul>
-      <li>
-        <a href="/admin/installs?historical=1"
-            >View all packages (historical)</a>
-      </li>
-      <li>
-        <a href="/admin/installs?pkg=all">View all installs</a>
-      </li>
-    </ul>
   {% endif %}
 {% endif %}
 
 {% if not packages %}
   <p>
-    {{ installs|length }} installs found (limit {{ limit }}).
+    {% if failures %}
+      {{ installs|length }} failed installs found (limit {{ limit }}).
+    {% else %}
+      {{ installs|length }} successful installs found (limit {{ limit }}).
+    {% endif %}
     {% if next_page %}
-      <a href="/admin/installs?pkg={{ pkg }}{% if applesus %}&applesus=1{% endif %}&page={{ next_page }}">Next Page &raquo;</a>
+      <a href="/admin/installs?pkg={{ pkg }}&applesus={{ applesus|yesno:"1,0" }}&failures={{ failures|yesno:"1,0" }}&page={{ next_page }}">Next Page &raquo;</a>
     {% endif %}
   </p>
   
@@ -166,7 +173,7 @@
   {% endif %}
 
   {% if next_page %}
-    <a href="/admin/installs?pkg={{ pkg }}&applesus={{ applesus }}&page={{ next_page }}">Next Page &raquo;</a>
+    <a href="/admin/installs?pkg={{ pkg }}&applesus={{ applesus|yesno:"1,0" }}&failures={{ failures|yesno:"1,0" }}&page={{ next_page }}">Next Page &raquo;</a>
   {% endif %}
 
 {% endif %}

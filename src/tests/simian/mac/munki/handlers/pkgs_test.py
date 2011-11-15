@@ -236,11 +236,11 @@ class PackagesHandlerTest(PackagesTest):
     self.assertRaises(StopTesting, self.c.get, 'anything')
     self.mox.VerifyAll()
 
-  def testSupportStaffAuth(self):
-    """Tests Packages.get() where a support staff user is requesting a pkg."""
+  def testSupportUserAuth(self):
+    """Tests Packages.get() where a support group user is requesting a pkg."""
     self.mox.StubOutWithMock(pkgs.auth, 'DoAnyAuth')
     self.mox.StubOutWithMock(pkgs.auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(pkgs.auth, 'IsSupportStaff')
+    self.mox.StubOutWithMock(pkgs.auth, 'IsSupportUser')
     self.mox.StubOutWithMock(pkgs.urllib, 'unquote')
 
     mock_user = self.mox.CreateMockAnything()
@@ -248,7 +248,7 @@ class PackagesHandlerTest(PackagesTest):
     pkgs.auth.DoAnyAuth().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     pkgs.auth.IsAdminUser(email).AndReturn(False)
-    pkgs.auth.IsSupportStaff(email).AndReturn(True)
+    pkgs.auth.IsSupportUser(email).AndReturn(True)
     class StopTesting(Exception):
       """Class for only testing to a specific point in the code."""
     pkgs.urllib.unquote('anything').AndRaise(StopTesting)
@@ -257,18 +257,18 @@ class PackagesHandlerTest(PackagesTest):
     self.assertRaises(StopTesting, self.c.get, 'anything')
     self.mox.VerifyAll()
 
-  def testUserAuthButNotAdminOrSupportStaff(self):
+  def testUserAuthButNotAdminOrSupportUser(self):
     """Tests Packages.get() where a non-admin user is requesting a pkg."""
     self.mox.StubOutWithMock(pkgs.auth, 'DoAnyAuth')
     self.mox.StubOutWithMock(pkgs.auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(pkgs.auth, 'IsSupportStaff')
+    self.mox.StubOutWithMock(pkgs.auth, 'IsSupportUser')
 
     mock_user = self.mox.CreateMockAnything()
     email = 'fooemail@example.com'
     pkgs.auth.DoAnyAuth().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     pkgs.auth.IsAdminUser(email).AndReturn(False)
-    pkgs.auth.IsSupportStaff(email).AndReturn(False)
+    pkgs.auth.IsSupportUser(email).AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertRaises(pkgs.auth.IsAdminMismatch, self.c.get, 'anything')

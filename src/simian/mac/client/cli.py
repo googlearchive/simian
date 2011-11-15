@@ -32,6 +32,12 @@ from simian.mac.client import client
 from simian.mac.munki import plist
 
 
+# Magic value which can be supplied by the user on the CLI to mean that this
+# list value has no entities, e.g. the resulting value internally should
+# become [].
+LIST_EMPTY = 'none'
+
+
 class Error(Exception):
   """Base Error class."""
 
@@ -48,6 +54,51 @@ class SimianCliClient(cli.SimianCliClient):
   def GetSimianClientInstance(self, *args, **kwargs):
     """Returns an instance of the Simian client to use within this CLI."""
     return client.SimianClient(*args, **kwargs)
+
+  def PackageInfoTemplateHook(self, pkginfo, open_=open):
+    """Allow a template to supply values into the pkginfo.
+
+    The template is loaded and its values are overlaid onto the pkginfo
+    supplied.
+
+    Args:
+      pkginfo: plist.MunkiPackageInfoPlist
+    Returns:
+      a plist.MunkiPackageInfoPlist with potentially new values populated
+    Raises:
+      CliError: an error occurs reading the template
+    """
+    try:
+      plist_xml = open_(self.config['template_pkginfo'], 'r').read()
+      template = plist.ApplePlist(plist_xml)
+      template.Parse()
+    except IOError:
+      raise CliError('I/O error %s' % self.config['template_pkginfo'])
+    except plist.Error, e:
+      raise CliError(
+          'Error parsing %s: %s' % (
+              self.config['template_pkginfo'],
+              str(e)))
+
+    if type(template.GetContents()) is not dict:
+      raise CliError('Template should contain a dictionary at top level')
+
+    logging.debug('Overlaying pkginfo with template')
+
+    changed = False
+
+    for k in template:
+      if k not in pkginfo or pkginfo[k] != template[k]:
+        changed = True
+        pkginfo[k] = template[k]
+        logging.debug('Pkginfo value %s changed by template', k)
+
+    logging.debug('Pkginfo changed as result of template: %s', changed)
+
+    if changed:
+      return pkginfo
+    else:
+      return True
 
   def PackageInfoEditHook(self, pkginfo):
     """Allow an interactive user to edit package info before uploading.
@@ -76,7 +127,8 @@ class SimianCliClient(cli.SimianCliClient):
         break
       except IOError:
         edit = False
-      except plist.Error:
+      except plist.Error, e:
+        print 'Error parsing plist: %s' % str(e)
         yn = raw_input('Resulting plist contains errors. Re-edit? [y/n] ')
         edit = yn.upper() in ['YES', 'Y']
 
@@ -103,7 +155,7 @@ class SimianCliClient(cli.SimianCliClient):
         for catalogs and install_types value if no values are provided.
     Returns:
       tuple of (
-        str filepath, str description, str display_name,
+        str filepath, str description, str display_name, str pkginfo_name,
         list manifests, list catalogs, list install_types,
         bool unattended_install, bool unattended_uninstall
       )
@@ -112,29 +164,38 @@ class SimianCliClient(cli.SimianCliClient):
     """
     # Parse manifests, and verify each is valid.
     manifests = self.config['manifests']
-    if manifests:
-      manifests = manifests.replace(' ', '')  # replace any whitespace
-      manifests = manifests.split(',')  # parse manifest names into list
-      for manifest in manifests:
-        if manifest not in common.TRACKS:
-          raise CliError(
-              'manifest "%s" is not in support manifests: %s' % (
-                  manifest, common.TRACKS))
+    if manifests is not None:
+      if manifests.lower() == LIST_EMPTY:
+        manifests = []
+      else:
+        manifests = manifests.replace(' ', '')  # replace any whitespace
+        manifests = manifests.split(',')  # parse manifest names into list
+        for manifest in manifests:
+          if manifest not in common.TRACKS:
+            raise CliError(
+                'manifest "%s" is not in support manifests: %s' % (
+                    manifest, common.TRACKS))
 
     # Parse catalogs, and verify each is valid.
     if defaults:
-      catalogs = self.config['catalogs'] or 'unstable'
+      if self.config['catalogs'] is None:
+        catalogs = 'unstable'
+      else:
+        catalogs = self.config['catalogs']
     else:
       catalogs = self.config['catalogs']
 
-    if catalogs:
-      catalogs = catalogs.replace(' ', '')  # replace any whitespace
-      catalogs = catalogs.split(',')  # parse catalog names into list
-      for catalog in catalogs:
-        if catalog not in common.TRACKS:
-          raise CliError(
-              'catalog "%s" is not in support catalogs: %s' % (
-                  catalog, common.TRACKS))
+    if catalogs is not None:
+      if catalogs.lower() == LIST_EMPTY:
+        catalogs = []
+      else:
+        catalogs = catalogs.replace(' ', '')  # replace any whitespace
+        catalogs = catalogs.split(',')  # parse catalog names into list
+        for catalog in catalogs:
+          if catalog not in common.TRACKS:
+            raise CliError(
+                'catalog "%s" is not in support catalogs: %s' % (
+                    catalog, common.TRACKS))
 
     # Verify all manifests have associated catalogs.
     if manifests:
@@ -157,6 +218,11 @@ class SimianCliClient(cli.SimianCliClient):
           raise CliError(
               'install_type "%s" is not in supported types: %s' % (
                   install_type, common.INSTALL_TYPES))
+      if (common.MANAGED_INSTALLS in install_types and
+          common.MANAGED_UPDATES in install_types):
+        raise CliError(
+            'install_types must not contain both %s and %s.' % (
+                common.MANAGED_INSTALLS, common.MANAGED_UPDATES))
 
     filepath = self.config['package']
     if not filepath:
@@ -164,6 +230,7 @@ class SimianCliClient(cli.SimianCliClient):
 
     description = self.config['description']
     display_name = self.config['display_name']
+    pkginfo_name = self.config['name']
 
     if defaults:
       # default, off
@@ -181,7 +248,7 @@ class SimianCliClient(cli.SimianCliClient):
         unattended_uninstall = self.config['unattended_uninstall'] in ['', True]
 
     return (
-      filepath, description, display_name,
+      filepath, description, display_name, pkginfo_name,
       manifests, catalogs, install_types, unattended_install,
       unattended_uninstall
     )
@@ -191,7 +258,7 @@ class SimianCliClient(cli.SimianCliClient):
 
     print 'Uploading package ...'
 
-    (filename, description, display_name,
+    (filename, description, display_name, pkginfo_name,
     manifests, catalogs, install_types,
     unattended_install, unattended_uninstall) = self.ValidatePackageConfig()
 
@@ -203,12 +270,17 @@ class SimianCliClient(cli.SimianCliClient):
       raise CliError('Package must be a file')
 
     opts = {}
+    opts['pkginfo_hooks'] = []
+    if self.config['template_pkginfo'] is not None:
+      opts['pkginfo_hooks'].append(self.PackageInfoTemplateHook)
     if self.config['edit_pkginfo'] is not None:
-      opts['pkginfo_hook'] = self.PackageInfoEditHook
+      opts['pkginfo_hooks'].append(self.PackageInfoEditHook)
     if unattended_install:
       opts['unattended_install'] = True
     if unattended_uninstall:
       opts['unattended_uninstall'] = True
+    if pkginfo_name:
+      opts['pkginfo_name'] = pkginfo_name
 
     (response, filename, name,
     catalogs, manifests, size_kbytes, sha256_hash) = (
@@ -232,7 +304,7 @@ class SimianCliClient(cli.SimianCliClient):
     Raises:
       CliError: if package info is malformed
     """
-    (filepath, description, display_name,
+    (filepath, description, display_name, pkginfo_name,
     manifests, catalogs, install_types,
     unattended_install, unattended_uninstall) = (
         self.ValidatePackageConfig(defaults=False))
@@ -259,6 +331,9 @@ class SimianCliClient(cli.SimianCliClient):
     if display_name is not None:
       pkginfo.SetDisplayName(display_name)
       changes.append('Display name: %s' % display_name)
+    if pkginfo_name is not None:
+      pkginfo['name'] = pkginfo_name
+      changes.append('Pkginfo name: %s' % pkginfo_name)
     if unattended_install is not None:
       pkginfo.SetUnattendedInstall(unattended_install)
       changes.append('Unattended install: %s' % unattended_install)
@@ -276,21 +351,30 @@ class SimianCliClient(cli.SimianCliClient):
       kwargs['install_types'] = install_types
       changes.append('Install types: %s' % install_types)
 
+    edit_hooks = []
+
+    if self.config['template_pkginfo'] is not None:
+      edit_hooks.append(self.PackageInfoTemplateHook)
     if self.config['edit_pkginfo'] is not None:
-      new_pkginfo = self.PackageInfoEditHook(pkginfo)
-      if new_pkginfo:
-        if new_pkginfo is not True:
-          pkginfo = new_pkginfo  # changed and valid
-          pkginfo.SetChanged()
-          # populate catalogs and manifests value back into our properties
-          catalogs = pkginfo.GetContents().get('catalogs', [])
-          kwargs['catalogs'] = catalogs
-          manifests = pkginfo.GetContents().get('manifests', [])
-          kwargs['manifests'] = manifests
+      edit_hooks.append(self.PackageInfoEditHook)
+
+    # TODO(user): Refactor so that this code block and
+    # mac.client.UploadMunkiPackage share the same pkginfo_hooks iteration
+    # code.
+    for edit_hook in edit_hooks:
+      if edit_hook is not None:
+        new_pkginfo = edit_hook(pkginfo)
+        if new_pkginfo:
+          if new_pkginfo is not True:
+            pkginfo = new_pkginfo  # changed and valid
+            pkginfo.SetChanged()
+            # populate catalogs value back into our properties
+            catalogs = pkginfo.GetContents().get('catalogs', [])
+            kwargs['catalogs'] = catalogs
+          else:
+            pass # no change at all
         else:
-          pass # no change at all
-      else:
-        raise CliError('Invalid package info')  # changed but invalid now
+          raise CliError('Invalid package info')  # changed but invalid now
 
     if not kwargs and not pkginfo.HasChanged():
       print 'Package info unchanged.'

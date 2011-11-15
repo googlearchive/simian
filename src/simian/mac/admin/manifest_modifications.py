@@ -27,6 +27,7 @@ from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext import db
 from google.appengine.ext.webapp import template
+from simian import settings
 from simian.mac import models
 from simian.mac import common
 from simian.mac.common import auth
@@ -38,29 +39,44 @@ class ManifestModifications(webapp.RequestHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
-      self.response.set_status(403)
-      return
-
     if self.request.get('add_manifest_mod'):
+      if not auth.IsAdminUser() and not auth.IsSecurityUser():
+        self.response.set_status(403)
+        return
       self._AddManifestModification()
     elif self.request.get('enabled'):
+      if not auth.IsAdminUser():
+        self.response.set_status(403)
+        return
       self._ToggleManifestModification()
     else:
+      if not auth.IsAdminUser():
+        self.response.set_status(403)
+        return
       self.response.set_status(404)
 
   def _AddManifestModification(self):
     """Adds a new manifest modification to Datastore."""
     # TODO(user): add support for other types of manifest modifications.
-    owner = self.request.get('owner').strip()
+    mod_type = self.request.get('mod_type')
+    mod_value = self.request.get('mod_value').strip()
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
     manifests = self.request.get_all('manifests')
     install_types = self.request.get_all('install_types')
 
+    # Security users are only able to inject specific packages.
+    if auth.IsSecurityUser() and not auth.IsAdminUser():
+      if munki_pkg_name not in settings.SECURITY_USERS_MANIFEST_MOD_PKGS:
+        self.response.out.write(
+            'Security team is not allowed to inject: %s' % munki_pkg_name)
+        self.response.set_status(403)
+        return
+
     # Validation.
     error_msg = None
-    if not owner or not munki_pkg_name or not install_types:
-      error_msg = 'owner, munki_pkg_name, and install_types are all required'
+    if not mod_value or not munki_pkg_name or not install_types:
+      error_msg = (
+          'mod_value, munki_pkg_name, and install_types are all required')
     if not error_msg:
       for manifest in manifests:
         if manifest not in common.TRACKS:
@@ -77,12 +93,11 @@ class ManifestModifications(webapp.RequestHandler):
       self.redirect('/admin/manifest_modifications?error=%s' % error_msg)
       return
 
-    mod = models.OwnerManifestModification(
-        key_name='%s##%s' % (owner, munki_pkg_name),
-        owner=owner, value=munki_pkg_name, manifests=manifests,
+    mod = models.BaseManifestModification.GenerateInstance(
+        mod_type, mod_value, munki_pkg_name, manifests=manifests,
         install_types=install_types, user=users.get_current_user())
     mod.put()
-    self.redirect('/admin/manifest_modifications')
+    self.redirect('/admin/manifest_modifications?mod_type=%s' % mod_type)
 
   def _ToggleManifestModification(self):
     """Toggles manifest modifications between enabled and disabled."""
@@ -100,27 +115,57 @@ class ManifestModifications(webapp.RequestHandler):
     auth.DoUserAuth()
     self._DisplayMain()
 
+  def _Paginate(self, query, limit):
+    """Returns a list of entities limited to limit, with a next_page cursor."""
+    if self.request.get('page', ''):
+      query.with_cursor(self.request.get('page'))
+    entities = list(query.fetch(limit))
+    if len(entities) == limit:
+      next_page = query.cursor()
+    else:
+      next_page = None
+    return entities, next_page
+
   def _DisplayMain(self):
     """Displays the main Manifest Modification report."""
-    # TODO(user): Allow for ?mod_type=foo for owner/site/os_version/etc mods.
-    mods = models.OwnerManifestModification.all().order('-mtime')
+    limit = 1000
     error = self.request.get('error')
+
+    mod_type = self.request.get('mod_type')
+    model = models.MANIFEST_MOD_MODELS.get(mod_type)
+    if mod_type and not model:
+      raise ValueError('Invalid mod_type: %s' % mod_type)
+    elif mod_type:
+      mods_query = model.all().order('-mtime')
+      mods, next_page = self._Paginate(mods_query, limit)
+    else:
+      mods = None
+      next_page = None
+
     is_admin = auth.IsAdminUser()
+    is_security = False
+    if not is_admin:
+      is_security = auth.IsSecurityUser()
     # TODO(user): generate PackageInfo dict so admin select box can use display
     #             names, munki package names can link to installs, etc.
     if is_admin:
       munki_pkg_names = [e.name for e in models.PackageInfo.all()]
+    elif is_security:
+      munki_pkg_names = settings.SECURITY_USERS_MANIFEST_MOD_PKGS
     else:
       munki_pkg_names = None
 
-
     data = {
+      'mod_type': mod_type,
       'mods': mods,
       'error': error,
       'is_admin': is_admin,
+      'is_security': is_security,
       'munki_pkg_names': munki_pkg_names,
       'install_types': common.INSTALL_TYPES,
       'manifests': common.TRACKS,
+      'next_page': next_page,
+      'limit': limit,
     }
     self.response.out.write(
         RenderTemplate('templates/manifest_modifications.html', data))

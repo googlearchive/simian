@@ -479,7 +479,7 @@ class SimianClient(mox.MoxTestBase):
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = None
+    pkginfo_hooks = None
     pkginfo_dict = {
       'installer_item_size': 'size',
       'installer_item_hash': 'hash',
@@ -497,7 +497,7 @@ class SimianClient(mox.MoxTestBase):
         client.client.SimianClientError,
         self.client.UploadMunkiPackage,
         filename, description, display_name, catalogs, manifests,
-        install_types, pkginfo_hook=pkginfo_hook)
+        install_types, pkginfo_hooks=pkginfo_hooks)
     self.mox.VerifyAll()
 
   def testUploadMunkiPackageWhenInstaller(self):
@@ -505,11 +505,12 @@ class SimianClient(mox.MoxTestBase):
     filename = '/tmp/filename'
     description = 'desc'
     display_name = 'dn'
+    pkginfo_name = 'fooname'
     catalogs = 'catalogs'
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = None
+    pkginfo_hooks = None
     pkginfo_dict = {
       'installer_item_size': 'size',
       'installer_item_hash': 'hash',
@@ -523,6 +524,9 @@ class SimianClient(mox.MoxTestBase):
     self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
+    pkginfo.__setitem__('unattended_install', True).AndReturn(None)
+    pkginfo.__setitem__('forced_install', True).AndReturn(None)
+    pkginfo.__setitem__('name', pkginfo_name).AndReturn(None)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -539,7 +543,8 @@ class SimianClient(mox.MoxTestBase):
         (response, filename, 'pkg name', catalogs, manifests, 'size', 'hash'),
         self.client.UploadMunkiPackage(
             filename, description, display_name, catalogs, manifests,
-            install_types, pkginfo_hook=pkginfo_hook))
+            install_types, pkginfo_hooks=pkginfo_hooks, unattended_install=True,
+            pkginfo_name=pkginfo_name))
     self.mox.VerifyAll()
 
   def testUploadMunkiPackageWhenUninstaller(self):
@@ -551,7 +556,7 @@ class SimianClient(mox.MoxTestBase):
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = None
+    pkginfo_hooks = None
     pkginfo_dict = {
       'uninstaller_item_size': 'size',
       'uninstaller_item_hash': 'hash',
@@ -565,6 +570,8 @@ class SimianClient(mox.MoxTestBase):
     self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
+    pkginfo.__setitem__('unattended_uninstall', True).AndReturn(None)
+    pkginfo.__setitem__('forced_uninstall', True).AndReturn(None)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -581,7 +588,8 @@ class SimianClient(mox.MoxTestBase):
         (response, filename, 'pkg name', catalogs, manifests, 'size', 'hash'),
         self.client.UploadMunkiPackage(
             filename, description, display_name, catalogs, manifests,
-            install_types, pkginfo_hook=pkginfo_hook))
+            install_types, pkginfo_hooks=pkginfo_hooks,
+            unattended_uninstall=True))
     self.mox.VerifyAll()
 
   def testUploadMunkiPackageWhenHookTrue(self):
@@ -593,7 +601,7 @@ class SimianClient(mox.MoxTestBase):
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = self.mox.CreateMockAnything()
+    pkginfo_hooks = [self.mox.CreateMockAnything()]
     pkginfo_dict = {
       'installer_item_size': 'size',
       'installer_item_hash': 'hash',
@@ -607,7 +615,7 @@ class SimianClient(mox.MoxTestBase):
     self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
-    pkginfo_hook(pkginfo).AndReturn(True)
+    pkginfo_hooks[0](pkginfo).AndReturn(True)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -624,7 +632,7 @@ class SimianClient(mox.MoxTestBase):
         (response, filename, 'pkg name', catalogs, manifests, 'size', 'hash'),
         self.client.UploadMunkiPackage(
             filename, description, display_name, catalogs, manifests,
-            install_types, pkginfo_hook=pkginfo_hook))
+            install_types, pkginfo_hooks=pkginfo_hooks))
     self.mox.VerifyAll()
 
   def testUploadMunkiPackageWhenHookFalse(self):
@@ -636,7 +644,7 @@ class SimianClient(mox.MoxTestBase):
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = self.mox.CreateMockAnything()
+    pkginfo_hooks = [self.mox.CreateMockAnything()]
     pkginfo_dict = {
       'installer_item_size': 'size',
       'installer_item_hash': 'hash',
@@ -650,14 +658,14 @@ class SimianClient(mox.MoxTestBase):
     self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
-    pkginfo_hook(pkginfo).AndReturn(False)
+    pkginfo_hooks[0](pkginfo).AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertRaises(
         client.client.SimianClientError,
         self.client.UploadMunkiPackage,
         filename, description, display_name, catalogs, manifests, install_types,
-        pkginfo_hook=pkginfo_hook)
+        pkginfo_hooks=pkginfo_hooks)
     self.mox.VerifyAll()
 
   def testUploadMunkiPackageWhenHookObject(self):
@@ -669,7 +677,7 @@ class SimianClient(mox.MoxTestBase):
     manifests = 'manifests'
     install_types = 'install_types'
     pkginfo = self.mox.CreateMockAnything()
-    pkginfo_hook = self.mox.CreateMockAnything()
+    pkginfo_hooks = [self.mox.CreateMockAnything()]
     pkginfo_dict = {
       'installer_item_size': 'size',
       'installer_item_hash': 'hash',
@@ -683,7 +691,7 @@ class SimianClient(mox.MoxTestBase):
     self.client._IsDiskImageReadOnly(filename).AndReturn(True)
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
-    pkginfo_hook(pkginfo).AndReturn(pkginfo)
+    pkginfo_hooks[0](pkginfo).AndReturn(pkginfo)
     pkginfo.Parse().AndReturn(True)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
@@ -701,7 +709,7 @@ class SimianClient(mox.MoxTestBase):
         (response, filename, 'pkg name', catalogs, manifests, 'size', 'hash'),
         self.client.UploadMunkiPackage(
             filename, description, display_name, catalogs, manifests,
-            install_types, pkginfo_hook=pkginfo_hook))
+            install_types, pkginfo_hooks=pkginfo_hooks))
     self.mox.VerifyAll()
 
 

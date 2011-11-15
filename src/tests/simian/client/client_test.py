@@ -1487,11 +1487,12 @@ class SimianClientTest(mox.MoxTestBase):
   def testSimianFormUpload(self):
     """Test _SimianFormUpload()."""
     user = 'foouser'
+    fqdn_user = '%s@%s' % (user, client.AUTH_DOMAIN)
     name = u'hebrew \u05d7'
     name_utf8_str = 'hebrew \xd7\x97'
     params = {'pkginfo': u'fooinfo \u05d7'}
     updated_params = {
-        'name': name_utf8_str, 'pkginfo': 'fooinfo \xd7\x97', 'user': user}
+        'name': name_utf8_str, 'pkginfo': 'fooinfo \xd7\x97', 'user': fqdn_user}
     self.client._user = user
     mock_response = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(self.client, 'DoMultipart')
@@ -1619,6 +1620,26 @@ class SimianClientTest(mox.MoxTestBase):
 
     url = '/pkgsinfo/%s?catalogs=%s&manifests=%s&install_types=%s&hash=%s' % (
         quoted_name, ','.join(catalogs), ','.join(manifests),
+        ','.join(install_types), got_hash)
+
+    self.GenericStubTest(
+        self.client.PutPackageInfo,
+        [filename, pkginfo, catalogs, manifests, install_types, got_hash],
+        '_SimianRequest', 'PUT', url, pkginfo_utf8)
+
+  def testPutPackageInfoWhenSetNoManifests(self):
+    """Test PutPackageInfo()."""
+    filename = 'some pkg.dmg'
+    quoted_name = 'some%20pkg.dmg'
+    catalogs = ['catalog1', 'catalog2']
+    manifests = ''
+    install_types = ['type1', 'type2']
+    pkginfo = u'<plist>etc\u2665</plist>'
+    pkginfo_utf8 = pkginfo.encode('utf-8')
+    got_hash = 'hash'
+
+    url = '/pkgsinfo/%s?catalogs=%s&manifests=%s&install_types=%s&hash=%s' % (
+        quoted_name, ','.join(catalogs), manifests,
         ','.join(install_types), got_hash)
 
     self.GenericStubTest(

@@ -241,8 +241,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.request.body = body
 
     self.request.get('hash').AndReturn(None)
-    self.request.get('catalogs').AndReturn('anything')
-    self.request.get('manifests').AndReturn('anything')
+    self.request.get('catalogs', None).AndReturn('anything')
+    self.request.get('manifests', None).AndReturn('anything')
     self.request.get('install_types').AndReturn('anything')
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -265,8 +265,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     parsed_dict = {'missing': 'the required values'}
 
     self.request.get('hash').AndReturn(None)
-    self.request.get('catalogs').AndReturn('anything')
-    self.request.get('manifests').AndReturn('anything')
+    self.request.get('catalogs', None).AndReturn('anything')
+    self.request.get('manifests', None).AndReturn('anything')
     self.request.get('install_types').AndReturn('anything')
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -289,8 +289,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.request.body = body
 
     self.request.get('hash').AndReturn(None)
-    self.request.get('catalogs').AndReturn('anything')
-    self.request.get('manifests').AndReturn('anything')
+    self.request.get('catalogs', None).AndReturn('anything')
+    self.request.get('manifests', None).AndReturn('anything')
     self.request.get('install_types').AndReturn('anything')
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -317,8 +317,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     install_types = ['type1', 'type2']
 
     self.request.get('hash').AndReturn(None)
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -352,8 +352,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     user = 'foouser'
 
     self.request.get('hash').AndReturn(None)
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     session = self.mox.CreateMockAnything()
@@ -391,6 +391,116 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.assertEqual(pkginfo.install_types, install_types)
     self.mox.VerifyAll()
 
+  def testPutSuccessWhenManifestsIsIntentionalEmptyList(self):
+    """Test put() with a manifest value that sets the manifest list to []."""
+    filename = 'pkg name.dmg'
+    filename_quoted = 'pkg%20name.dmg'
+    name = 'foo pkg name'
+    body = '<fakexml>blabla</fakexml>'
+    pkgloc = '/package/location.pkg'
+    pkgdict = {'installer_item_location': pkgloc}
+    self.request.body = body
+    catalogs = ['catalog1', 'catalog2']
+    manifests = []  # this pkg is in no manifests
+    install_types = ['type1', 'type2']
+    user = 'foouser'
+
+    self.request.get('hash').AndReturn(None)
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn('')  # == NO manifests
+    self.request.get('install_types').AndReturn(','.join(install_types))
+    mock_mpl = self.mox.CreateMockAnything()
+    session = self.mox.CreateMockAnything()
+    session.uuid = user
+    self.MockDoMunkiAuth(
+        require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG, and_return=session)
+    self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
+    pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
+    mock_mpl.Parse().AndReturn(None)
+    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
+    pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+
+    pkginfo.IsSafeToModify().AndReturn(True)
+    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
+    pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
+    pkginfo.put()
+    self._MockReleaseLock('pkgsinfo_%s' % filename)
+
+    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    for catalog in catalogs:
+      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+
+    mock_log = self.MockModel(
+        'AdminPackageLog', user=user, action='pkginfo', filename=filename,
+        catalogs=catalogs, manifests=manifests, install_types=install_types,
+        plist=body)
+    mock_log.put().AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.put(filename_quoted)
+    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.name, name)
+    self.assertEqual(pkginfo.catalogs, catalogs)
+    self.assertEqual(pkginfo.manifests, manifests)
+    self.assertEqual(pkginfo.install_types, install_types)
+    self.mox.VerifyAll()
+
+  def testPutSuccessWhenNoManifestsValueSpecified(self):
+    """Test put() with no manifest value specified, resulting in no change."""
+    filename = 'pkg name.dmg'
+    filename_quoted = 'pkg%20name.dmg'
+    name = 'foo pkg name'
+    body = '<fakexml>blabla</fakexml>'
+    pkgloc = '/package/location.pkg'
+    pkgdict = {'installer_item_location': pkgloc}
+    self.request.body = body
+    catalogs = ['catalog1', 'catalog2']
+    manifests = None
+    install_types = ['type1', 'type2']
+    user = 'foouser'
+
+    self.request.get('hash').AndReturn(None)
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(None) # == no value provided
+    self.request.get('install_types').AndReturn(','.join(install_types))
+    mock_mpl = self.mox.CreateMockAnything()
+    session = self.mox.CreateMockAnything()
+    session.uuid = user
+    self.MockDoMunkiAuth(
+        require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG, and_return=session)
+    self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
+    pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
+    mock_mpl.Parse().AndReturn(None)
+    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
+    pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
+
+    pkginfo.IsSafeToModify().AndReturn(True)
+    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
+    pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
+    pkginfo.put()
+    self._MockReleaseLock('pkgsinfo_%s' % filename)
+
+    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    for catalog in catalogs:
+      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+
+    mock_log = self.MockModel(
+        'AdminPackageLog', user=user, action='pkginfo', filename=filename,
+        catalogs=catalogs, manifests=pkginfo.manifests,
+        install_types=install_types, plist=body)
+    mock_log.put().AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.put(filename_quoted)
+    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.name, name)
+    self.assertEqual(pkginfo.catalogs, catalogs)
+    # since the tested function did not set a pkginfo.manifests value
+    # then this value is still MockMethod since pkginfo is a mock.
+    self.assertNotEqual(pkginfo.manifests, manifests)
+    self.assertEqual(pkginfo.install_types, install_types)
+    self.mox.VerifyAll()
+
   def testPutSuccessWhenHash(self):
     """Test put() with valid input params, giving success."""
     filename = 'pkg name.dmg'
@@ -406,8 +516,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     user = 'foouser'
 
     self.request.get('hash').AndReturn('goodhash')
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     session = self.mox.CreateMockAnything()
@@ -460,8 +570,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     install_types = ['type1', 'type2']
 
     self.request.get('hash').AndReturn('goodhash')
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -496,8 +606,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     install_types = ['type1', 'type2']
 
     self.request.get('hash').AndReturn('goodhash')
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
@@ -538,8 +648,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     install_types = ['type1', 'type2']
 
     self.request.get('hash').AndReturn('goodhash')
-    self.request.get('catalogs').AndReturn(','.join(catalogs))
-    self.request.get('manifests').AndReturn(','.join(manifests))
+    self.request.get('catalogs', None).AndReturn(','.join(catalogs))
+    self.request.get('manifests', None).AndReturn(','.join(manifests))
     self.request.get('install_types').AndReturn(','.join(install_types))
     mock_mpl = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)

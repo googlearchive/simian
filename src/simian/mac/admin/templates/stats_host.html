@@ -100,7 +100,11 @@
         </td>
         <td>{{ computer.last_on_corp_preflight_datetime }}
             ({{ computer.last_on_corp_preflight_datetime|timesince }})</td>
-        <td>{{ computer.ip_address }}</td>
+        {% if is_admin or is_security_user %}
+          <td>{{ computer.ip_address }}</td>
+        {% else %}
+          <td>--redacted--</td>
+        {% endif %}
       </tr>
     </table>
     <h4>Connection Dates</h4>
@@ -221,7 +225,7 @@
   </div>
 </div>
 
-{% if is_admin or is_support_staff %}
+{% if is_admin or is_support_user %}
 <div class="box collapsible">
   <div class="box-header">Misc Admin Actions</div>
   <div class="box-content collapsed">

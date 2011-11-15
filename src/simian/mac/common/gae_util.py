@@ -26,6 +26,19 @@ from google.appengine.api import memcache
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 
+
+def BatchDatastoreOp(op, entities_or_keys, batch_size=25):
+  """Performs a batch Datastore operation on a sequence of keys or entities.
+
+  Args:
+    op: func, Datastore operation to perform, i.e. db.put or db.delete.
+    entities_or_keys: sequence, db.Key or db.Model instances.
+    batch_size: int, number of keys or entities to batch per operation.
+  """
+  for i in xrange(0, len(entities_or_keys), batch_size):
+    op(entities_or_keys[i:i + batch_size])
+
+
 def SafeBlobDel(blobstore_key):
   """Helper method to delete a blob by its key.
 

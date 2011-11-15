@@ -68,22 +68,32 @@ class UploadFile(handlers.AuthenticationHandler, webapp.RequestHandler):
       # c.upload_logs_and_notify may be None from a previous upload, as multiple
       # files may be uploaded in different requests per execution.
       if recipients:
-        deferred.defer(SendNotificationEmail, recipients.split(','), uuid)
+        recipients = recipients.split(',')
+        deferred.defer(SendNotificationEmail, recipients, c)
     else:
       self.error(404)
 
 
-def SendNotificationEmail(recipients, uuid):
+def SendNotificationEmail(recipients, c):
   """Sends a log upload notification email to passed recipients.
 
   Args:
     recipients: list, str email addresses to email.
-    uuid: str, uuid of the host that uploaded the logs.
+    c: models.Computer entity.
   """
-  body = 'https://%s/admin/host/%s' % (settings.SERVER_HOSTNAME, uuid)
+  body = []
+  body.append('https://%s/admin/host/%s\n' % (settings.SERVER_HOSTNAME, c.uuid))
+  body.append('Owner: %s' % c.owner)
+  body.append('Hostname: %s' % c.hostname)
+  body.append('Client Version: %s' % c.client_version)
+  body.append('OS Version: %s' % c.os_version)
+  body.append('Site / Office: %s / %s' % (c.site, c.office))
+  body.append('Track / Config Track: %s / %s' % (c.track, c.config_track))
+  body.append('Serial Number: %s' % c.serial)
+  body.append('Last postflight: %s' % c.postflight_datetime)
+  body = '\n'.join(body)
+  subject = 'Logs you requested have been uploaded for %s' % c.hostname
   message = mail.EmailMessage(
-      to=recipients,
-      sender=settings.EMAIL_SENDER,
-      subject='Logs you requested have been uploaded: %s' % uuid,
+      to=recipients, sender=settings.EMAIL_SENDER, subject=subject,
       body=body)
   message.send()

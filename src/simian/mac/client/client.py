@@ -282,7 +282,7 @@ class SimianClient(BaseSimianClient, client.SimianClient):
   def UploadMunkiPackage(
       self, filename, description, display_name, catalogs, manifests,
       install_types, unattended_install=False, unattended_uninstall=False,
-      pkginfo_hook=None):
+      pkginfo_hooks=None, pkginfo_name=None):
     """Uploads a Munki PackageInfo plist along with a Package.
 
     Args:
@@ -296,8 +296,9 @@ class SimianClient(BaseSimianClient, client.SimianClient):
               plist XML.
       unattended_uninstall: bool, if True inject "unattended_uninstall" bool
               into plist XML.
-      pkginfo_hook: optional, function to call with package info after
+      pkginfo_hooks: optional, function to call with package info after
               generated
+      pkginfo_name: optional, str name to override the pkginfo name.
     Returns:
       Tuple. (Str response body from upload, filename, name of the package,
               list of manifests, file size in kilobytes, SHA-256 hash of file)
@@ -319,21 +320,26 @@ class SimianClient(BaseSimianClient, client.SimianClient):
       pkginfo['unattended_uninstall'] = True
       # TODO(user): remove backwards compatibility after a while...
       pkginfo['forced_uninstall'] = True
+    if pkginfo_name:
+      pkginfo['name'] = pkginfo_name
 
-    if pkginfo_hook is not None:
-      while 1:
-        output = pkginfo_hook(pkginfo)
-        if output is True:
-          break
-        elif output is False:
-          raise client.SimianClientError('Aborting upload by request.')
+    # TODO(user): Refactor so that this code block and cli.EditPackageInfo
+    # share the same pkginfo_hooks iteration code.
+    if pkginfo_hooks:
+      for pkginfo_hook in pkginfo_hooks:
+        while 1:
+          output = pkginfo_hook(pkginfo)
+          if output is True:
+            break
+          elif output is False:
+            raise client.SimianClientError('Aborting upload by request.')
 
-        try:
-          output.Parse()
-          pkginfo = output
-          break
-        except plist.Error:
-          pass
+          try:
+            output.Parse()
+            pkginfo = output
+            break
+          except plist.Error:
+            pass
 
     response, unused_filename, catalogs, manifests = self.UploadPackage(
         filename, description, display_name, catalogs, manifests, install_types,

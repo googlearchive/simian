@@ -37,6 +37,7 @@ from simian.mac.common import util
 from simian.mac.munki import plist
 from simian.mac.munki import common
 
+
 COMPUTER_FETCH_LIMIT = 1000
 USER_SETTINGS_FETCH_LIMIT = 500
 ADMIN_LOG_FETCH_LIMIT = 2000
@@ -67,7 +68,7 @@ class Stats(webapp.RequestHandler):
   def post(self, report=None, uuid=None):
     """Stats post handler."""
     #logging.debug('POST called: report=%s, uuid=%s', report, uuid)
-    if not auth.IsAdminUser() and not auth.IsSupportStaff():
+    if not auth.IsAdminUser() and not auth.IsSupportUser():
       self.response.set_status(403)
       return
 
@@ -172,6 +173,20 @@ class Stats(webapp.RequestHandler):
         self.response.out.write(l.log_file)
       else:
         self.response.out.write('Log not found')
+        self.response.set_status(404)
+    elif report == 'maintenance':
+      if not auth.IsAdminUser():
+        self.response.set_status(403)
+        return
+      from simian.mac.admin import maintenance
+      action = uuid
+      if action == 'update_installs_schema':
+        maintenance.UpdateInstallLogSchema()
+      elif action == 'update_legacy_apple_updates':
+        maintenance.ConvertLegacyAppleUpdateInstallLogEntities()
+      elif action == 'rebuild_install_counts':
+        maintenance.RebuildInstallCounts()
+      else:
         self.response.set_status(404)
     else:
       self.response.set_status(404)
@@ -393,7 +408,8 @@ class Stats(webapp.RequestHandler):
         'host_report': True,
         'limit': SINGLE_HOST_DATA_FETCH_LIMIT,
         'is_admin': auth.IsAdminUser(),
-        'is_support_staff': auth.IsSupportStaff(),
+        'is_support_user': auth.IsSupportUser(),
+        'is_security_user': auth.IsSecurityUser(),
     }
     self.response.out.write(RenderTemplate('templates/stats_host.html', values))
 
@@ -407,6 +423,8 @@ class Stats(webapp.RequestHandler):
 
       pkg = {}
       pkg['count'] = installs.get(p.munki_name, {}).get('install_count', 'N/A')
+      pkg['fail_count'] = installs.get(p.munki_name, {}).get(
+          'install_fail_count', 'N/A')
       pkg['duration_seconds_avg'] = installs.get(p.munki_name, {}).get(
           'duration_seconds_avg', None) or 'N/A'
       pkg['unattended'] = pl.get('unattended_install', False)
@@ -436,12 +454,14 @@ class Stats(webapp.RequestHandler):
       if applesus and install['applesus']:
         d = {'name': name,
              'count': install['install_count'],
+             'fail_count': install['install_fail_count'],
              'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')
         }
         pkgs.append(d)
       elif not applesus and not install['applesus']:
         d = {'name': name,
              'count': install['install_count'],
+             'fail_count': install['install_fail_count'],
              'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')
         }
         pkgs.append(d)
@@ -453,19 +473,27 @@ class Stats(webapp.RequestHandler):
   def _DisplayInstallsForPackage(self, pkg):
     """Displays a list of installs of a particular package."""
     applesus = self.request.get('applesus') == '1'
-    if pkg == 'all':
-      if applesus:
-        query = models.InstallLog.all().filter(
-            'applesus =', True).order('-mtime')
-      else:
-        query = models.InstallLog.all().filter(
-            'applesus =', False).order('-mtime')
+    failures = self.request.get('failures') == '1'
+
+    query = models.InstallLog.all()
+
+    if failures:
+      query.filter('success =', False)
     else:
-      query = models.InstallLog.all().filter('package =', pkg).order(
-          '-mtime')
+      query.filter('success =', True)
+
+    if pkg == 'all':
+      query.filter('applesus =', applesus)
+    else:
+      query.filter('package =', pkg)
+
+    query.order('-mtime')
+
     installs, next_page = self._Paginate(query, INSTALL_LOG_FETCH_LIMIT)
+
     values = {'installs': installs, 'pkg': pkg, 'next_page': next_page,
-              'limit': INSTALL_LOG_FETCH_LIMIT, 'applesus': applesus}
+              'limit': INSTALL_LOG_FETCH_LIMIT, 'applesus': applesus,
+              'failures': failures}
     self.response.out.write(
         RenderTemplate('templates/stats_installs.html', values))
 
@@ -566,7 +594,10 @@ class Stats(webapp.RequestHandler):
         'templates/stats_brokenclients.html',
         {'py_computers': py_computers,
          'zero_conn_computers': zero_conn_computers,
-         'pf_computers': pf_computers}))
+         'pf_computers': pf_computers,
+         'is_admin': auth.IsAdminUser(),
+         'is_security_user': auth.IsSecurityUser(),
+        }))
 
   def _DisplayMsuLogSummary(self, since_days=None):
     """Displays a summary of MSU logs."""

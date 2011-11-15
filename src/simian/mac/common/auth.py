@@ -23,6 +23,7 @@
 import logging
 from google.appengine.api import users
 from google.appengine.api import oauth
+from google.appengine.api import memcache
 from google.appengine.ext import db
 from simian import settings
 from simian.auth import gaeserver
@@ -138,6 +139,38 @@ def DoAnyAuth(is_admin=None, require_level=None):
 
 
 
+def IsGroupMember(email=None, group_name=None, remote_group_lookup=False):
+  """Returns True if email is a member of the group.
+
+  Args:
+    email: str, optional, default current user, fully qualified email address
+        e.g. "user@example.com".
+    group_name: str, group name to check for membership of.
+    remote_group_lookup: str, optional, default False, True to use lookup group
+        membership in remote group system.
+  Returns:
+    True if user is part of the group_name, False if not.
+  """
+  if not email:
+    email = users.get_current_user().email()
+
+
+  if email in getattr(settings, group_name.upper(), []):
+    return True
+
+  try:
+    group_members = models.KeyValueCache.MemcacheWrappedGet(
+        group_name, 'text_value')
+    if group_members:
+      group_members = util.Deserialize(group_members)
+      if email in group_members:
+        return True
+  except (db.Error, util.DeserializeError):
+    pass
+
+  return False
+
+
 def IsAdminUser(email=None):
   """Returns True if email is a Simian admin.
 
@@ -152,48 +185,35 @@ def IsAdminUser(email=None):
     user = users.get_current_user()
     email = user.email()
 
-  if email in settings.ADMINS:
-    return True
-
   if not user:
     user = users.get_current_user()
   if user and user.email() == email and users.is_current_user_admin():
     return True
 
-  try:
-    admins = models.KeyValueCache.MemcacheWrappedGet('admins', 'text_value')
-    if admins:
-      admins = util.Deserialize(admins)
-      if email in admins:
-        return True
-  except (db.Error, util.DeserializeError):
-    pass
+  return IsGroupMember(email=email, group_name='admins')
 
-  return False
 
-def IsSupportStaff(email=None):
-  """Returns True if email is part of support staff.
+def IsSupportUser(email=None):
+  """Returns True if email is part of the support group.
 
   Args:
     email: str, fully qualified, e.g. "user@example.com". If not provided then
-        then current authenticated user is used.
+           then current authenticated user is used.
   Returns:
-    True if user is part of support staff, False if not
+    True if user is part of the support group, False if not.
   """
-  if not email:
-    email = users.get_current_user().email()
+  return IsGroupMember(
+      email=email, group_name='support_users', remote_group_lookup=True)
 
-  if email in settings.SUPPORT_STAFF:
-    return True
 
-  try:
-    support_staff = models.KeyValueCache.MemcacheWrappedGet(
-        'support_staff', 'text_value')
-    if support_staff:
-      support_staff = util.Deserialize(support_staff)
-      if email in support_staff:
-        return True
-  except (db.Error, util.DeserializeError):
-    pass
+def IsSecurityUser(email=None):
+  """Returns True if email is part of the security group.
 
-  return False
+  Args:
+    email: str, fully qualified, e.g. "user@example.com". If not provided then
+           then current authenticated user is used.
+  Returns:
+    True if user is part of security group, False if not.
+  """
+  return IsGroupMember(
+      email=email, group_name='security_users', remote_group_lookup=True)

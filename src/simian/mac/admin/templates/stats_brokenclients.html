@@ -68,7 +68,11 @@
     <td>{{ c.office }}</td>
     <td>{{ c.preflight_datetime|timesince }}</td>
     <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
-    <td>{{ c.ip_address }}</td>
+    {% if is_admin or is_security_user %}
+      <td>{{ c.ip_address }}</td>
+    {% else %}
+      <td>--redacted--</td>
+    {% endif %}
     <td>
       {% if c.upload_logs_and_notify %}
         Email: {{ c.upload_logs_and_notify }}
@@ -111,7 +115,11 @@
     <td>{{ c.preflight_datetime|timesince }}</td>
     <td>{{ c.postflight_datetime|timesince }}</td>
     <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
-    <td>{{ c.ip_address }}</td>
+    {% if is_admin or is_security_user %}
+      <td>{{ c.ip_address }}</td>
+    {% else %}
+      <td>--redacted--</td>
+    {% endif %}
     <td>
       {% if c.upload_logs_and_notify %}
         Email: {{ c.upload_logs_and_notify }}

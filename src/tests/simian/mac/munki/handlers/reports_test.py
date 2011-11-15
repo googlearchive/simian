@@ -37,6 +37,38 @@ class HandlersTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return reports
 
+  def _MockIsPanicModeNoPackages(self, panic_mode=False):
+    """Utility method to mock common.IsPanicModeNoPackages().
+
+    Args:
+      panic_mode: bool, optional, True if panic mode should be returned
+    """
+    self.mox.StubOutWithMock(reports.common, 'IsPanicModeNoPackages')
+    reports.common.IsPanicModeNoPackages().AndReturn(panic_mode)
+
+  def _MockIsExitFeedbackIpAddress(self, ip_address=None, match=False):
+    """Utility method to mock _IsExitFeedbackIpAddress() calls.
+
+    Args:
+      ip_address: str, optional, IP like '1.2.3.4'
+      match: bool, optional, True if the ip_address matches the exit list
+    """
+    self.mox.StubOutWithMock(self.c, '_IsExitFeedbackIpAddress')
+    self.c._IsExitFeedbackIpAddress(ip_address).AndReturn(match)
+
+  def testIsExitFeedbackIpAddress(self):
+    """Tests _IsExitFeedbackIpAddress()."""
+    self.mox.StubOutWithMock(reports.models.KeyValueCache, 'IpInList')
+
+    ip_address = '1.2.3.4'
+    reports.models.KeyValueCache.IpInList(
+        'client_exit_ip_blocks', ip_address).AndReturn(True)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._IsExitFeedbackIpAddress(None))
+    self.assertTrue(self.c._IsExitFeedbackIpAddress(ip_address))
+    self.mox.VerifyAll()
+
   def testGetReportFeedbackWithPassedComputer(self):
     """Tests GetReportFeedback() with a passed Computer object."""
     report_type = 'preflight_exit'
@@ -112,6 +144,8 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) with OK postflight datetime."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     dt = datetime.datetime.utcnow() - datetime.timedelta(days=14)
     computer = self.mox.CreateMockAnything()
     computer.preflight_datetime = dt
@@ -127,6 +161,8 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) with computer=None."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     self.mox.ReplayAll()
     self.assertEqual(
         reports.ReportFeedback.FORCE_CONTINUE,
@@ -137,6 +173,8 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) where preflight_datetime=None."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     computer = self.mox.CreateMockAnything()
     computer.preflight_datetime = None
     computer.upload_logs_and_notify = None
@@ -150,6 +188,8 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) where postflight_dateime=None."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     computer = self.mox.CreateMockAnything()
     computer.postflight_datetime = None
     computer.upload_logs_and_notify = None
@@ -163,6 +203,8 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) where postflight_datetime is old."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     dt = datetime.datetime.utcnow() - datetime.timedelta(days=3)
     computer = self.mox.CreateMockAnything()
     computer.upload_logs_and_notify = None
@@ -178,12 +220,43 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetReportFeedback(preflight) where upload_logs == True."""
     report_type = 'preflight'
     uuid = 'foouuid'
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages()
     computer = self.mox.CreateMockAnything()
     computer.preflight_datetime = True
     computer.upload_logs_and_notify = 'user@example.com'
     self.mox.ReplayAll()
     self.assertEqual(
         reports.ReportFeedback.UPLOAD_LOGS,
+        self.c.GetReportFeedback(uuid, report_type, computer=computer))
+    self.mox.VerifyAll()
+
+  def testGetReportFeedbackWhenIsExitFeedbackIpAddress(self):
+    """Tests GetReportFeedback(preflight) when the IsExitFeedbackIpAddress."""
+    report_type = 'preflight'
+    uuid = 'foouuid'
+    ip_address = '1.2.3.4'
+    computer = self.mox.CreateMockAnything()
+    self._MockIsExitFeedbackIpAddress(ip_address=ip_address, match=True)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        reports.ReportFeedback.EXIT,
+        self.c.GetReportFeedback(
+            uuid, report_type, computer=computer, ip_address=ip_address))
+    self.mox.VerifyAll()
+
+  def testGetReportFeedbackWhenIsPanicModeNoPackages(self):
+    """Tests GetReportFeedback(preflight) when IsPanicModeNoPackages."""
+    report_type = 'preflight'
+    uuid = 'foouuid'
+    computer = self.mox.CreateMockAnything()
+    self._MockIsExitFeedbackIpAddress()
+    self._MockIsPanicModeNoPackages(True)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        reports.ReportFeedback.EXIT,
         self.c.GetReportFeedback(uuid, report_type, computer=computer))
     self.mox.VerifyAll()
 
@@ -218,7 +291,8 @@ class HandlersTest(test.RequestHandlerTest):
           reports.models.ComputerLostStolen, 'IsLostStolen')
       reports.models.ComputerLostStolen.IsLostStolen(uuid).AndReturn(False)
       self.c.GetReportFeedback(
-          uuid, report_type, computer=mock_computer).AndReturn('preflight_only')
+          uuid, report_type, computer=mock_computer,
+          ip_address=ip_address).AndReturn('preflight_only')
       self.response.out.write('preflight_only')
 
     self.PostSetup(uuid=uuid, report_type=report_type, feedback=feedback)

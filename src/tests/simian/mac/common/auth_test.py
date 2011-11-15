@@ -27,6 +27,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+from simian import settings
 from simian.mac.common import auth
 
 
@@ -187,36 +188,12 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
-# Unit test for AdminUser
-  def testIsAdminUserWhenSettings(self):
-    """Test IsAdminUser()."""
-    admins_list = ['admin1@example.com', 'admin2@example.com']
-    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
-    self.mox.ReplayAll()
-    self.assertTrue(auth.IsAdminUser(admins_list[0]))
-    self.mox.VerifyAll()
-
-  def testIsAdminUserWhenSettingsWithNoPassedEmail(self):
-    """Test IsAdminUser()."""
-    email = 'foouser@example.com'
-    admins_list = [email, 'admin2@example.com']
-    mock_user = self.mox.CreateMockAnything()
+  def testIsAdminUserWhenAppEngineAdminUser(self):
+    """Test IsAdminUser() when a user is an App Engine admin."""
     self.mox.StubOutWithMock(auth, 'users')
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
-    self.mox.ReplayAll()
-    self.assertTrue(auth.IsAdminUser())
-    self.mox.VerifyAll()
-
-  def testIsAdminUserWhenAEAdminUser(self):
-    """Test IsAdminUser()."""
     admin_user = 'admin3@example.com'
-    admins_list = ['admin1@example.com', 'admin2@example.com']
 
-    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
     mock_user = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(auth, 'users')
     auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(admin_user)
     auth.users.is_current_user_admin().AndReturn(True)
@@ -225,95 +202,100 @@ class AuthModuleTest(mox.MoxTestBase):
     self.assertTrue(auth.IsAdminUser(admin_user))
     self.mox.VerifyAll()
 
-  def testIsAdminUserWhenLiveConfigAdminUser(self):
-    """Test IsAdminUser()."""
+  def testIsAdminUserWhenNotAppEngineAdminUser(self):
+    """Test IsAdminUser() when a user is not an App Engine admin."""
+    self.mox.StubOutWithMock(auth, 'users')
+    self.mox.StubOutWithMock(auth, 'IsGroupMember')
+
     admin_user = 'admin4@example.com'
-    admins_list = ['admin1@example.com', 'admin2@example.com']
 
-    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
-    self.mox.StubOutWithMock(auth, 'users')
-    auth.users.get_current_user().AndReturn(None)
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    self.mox.StubOutWithMock(auth.util, 'Deserialize')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        'admins', 'text_value').AndReturn('admins serialized')
-    auth.util.Deserialize('admins serialized').AndReturn([admin_user])
-
-    self.mox.ReplayAll()
-    self.assertTrue(auth.IsAdminUser(admin_user))
-    self.mox.VerifyAll()
-
-  def testIsAdminUserWhenNotAdmin(self):
-    """Test IsAdminUser()."""
-    admin_user = 'admin5@example.com'
-    admins_list = ['admin1@example.com', 'admin2@example.com']
-
-    self.stubs.Set(auth.settings, 'ADMINS', admins_list)
-    self.mox.StubOutWithMock(auth, 'users')
-    auth.users.get_current_user().AndReturn(None)
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    self.mox.StubOutWithMock(auth.util, 'Deserialize')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        'admins', 'text_value').AndReturn('admins serialized')
-    auth.util.Deserialize('admins serialized').AndReturn(admins_list)
+    mock_user = self.mox.CreateMockAnything()
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(admin_user)
+    auth.users.is_current_user_admin().AndReturn(False)
+    auth.IsGroupMember(email=admin_user, group_name='admins').AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertFalse(auth.IsAdminUser(admin_user))
     self.mox.VerifyAll()
 
-# Unit test for SupportStaff
-  def testIsSupportStaffWhenSettings(self):
-    """Test IsSupportStaff()."""
-    support_list = ['support1@example.com', 'support2@example.com']
-    self.stubs.Set(auth.settings, 'SUPPORT_STAFF', support_list)
+  def testIsAdminUserWithNoPassedEmail(self):
+    """Test IsAdminUser() with no passed email address."""
+    self.mox.StubOutWithMock(auth, 'users')
+    self.mox.StubOutWithMock(auth, 'IsGroupMember')
+
+    admin_user = 'admin5@example.com'
+
+    mock_user = self.mox.CreateMockAnything()
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(admin_user)
+    mock_user.email().AndReturn(admin_user)
+    auth.users.is_current_user_admin().AndReturn(False)
+    auth.IsGroupMember(email=admin_user, group_name='admins').AndReturn(False)
+
     self.mox.ReplayAll()
-    self.assertTrue(auth.IsSupportStaff(support_list[0]))
+    self.assertFalse(auth.IsAdminUser())
     self.mox.VerifyAll()
 
-  def testIsSupportStaffWhenSettingsWithNoPassedEmail(self):
-    """Test IsSupportStaff()."""
+  def testIsGroupMemberWhenSettings(self):
+    """Test IsGroupMember()."""
+    group_members = ['support1@example.com', 'support2@example.com']
+    group_name = 'foo_group'
+    setattr(auth.settings, group_name.upper(), group_members)
+
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsGroupMember(group_members[0], group_name=group_name))
+    self.mox.VerifyAll()
+
+  def testIsGroupMemberWhenSettingsWithNoPassedEmail(self):
+    """Test IsGroupMember()."""
     email = 'foouser@example.com'
-    support_list = [email, 'support2@example.com']
+    group_members = [email, 'support2@example.com']
     mock_user = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(auth, 'users')
     auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
-    self.stubs.Set(auth.settings, 'SUPPORT_STAFF', support_list)
+    group_name = 'foo_group_two'
+    setattr(auth.settings, group_name.upper(), group_members)
+
     self.mox.ReplayAll()
-    self.assertTrue(auth.IsSupportStaff())
+    self.assertTrue(auth.IsGroupMember(group_name=group_name))
     self.mox.VerifyAll()
 
-  def testIsSupportStaffWhenLiveConfigAdminUser(self):
-    """Test IsSupportStaff()."""
-    support_user = 'support4@example.com'
-    support_list = ['support1@example.com', 'support2@example.com']
+  def testIsGroupMemberWhenLiveConfigAdminUser(self):
+    """Test IsGroupMember()."""
+    email = 'support4@example.com'
+    group_members = ['support1@example.com', 'support2@example.com']
+    group_name = 'foo_group'
 
     self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
     self.mox.StubOutWithMock(auth.util, 'Deserialize')
     auth.models.KeyValueCache.MemcacheWrappedGet(
-        'support_staff', 'text_value').AndReturn('support staff serialized')
-    auth.util.Deserialize('support staff serialized').AndReturn([support_user])
+        group_name, 'text_value').AndReturn('serialized group')
+    auth.util.Deserialize('serialized group').AndReturn([email])
 
     self.mox.ReplayAll()
-    self.assertTrue(auth.IsSupportStaff(support_user))
+    self.assertTrue(auth.IsGroupMember(email, group_name=group_name))
     self.mox.VerifyAll()
 
-  def testIsSupportStaffWhenNotAdmin(self):
-    """Test IsSupportStaff()."""
-    support_user = 'support5@example.com'
-    support_list = ['support1@example.com', 'support2@example.com']
+  def testIsGroupMemberWhenNotAdmin(self):
+    """Test IsGroupMember()."""
+    email = 'support5@example.com'
+    group_members = ['support1@example.com', 'support2@example.com']
+    group_name = 'support_users'
 
     self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
     self.mox.StubOutWithMock(auth.util, 'Deserialize')
     auth.models.KeyValueCache.MemcacheWrappedGet(
-        'support_staff', 'text_value').AndReturn('support staff serialized')
-    auth.util.Deserialize('support staff serialized').AndReturn(support_list)
+        group_name, 'text_value').AndReturn('serialized group')
+    auth.util.Deserialize('serialized group').AndReturn(group_members)
 
     self.mox.ReplayAll()
-    self.assertFalse(auth.IsSupportStaff(support_user))
+    self.assertFalse(auth.IsGroupMember(email, group_name=group_name))
     self.mox.VerifyAll()
+
 
 
 def main(unused_argv):

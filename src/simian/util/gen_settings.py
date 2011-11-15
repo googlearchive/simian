@@ -126,7 +126,10 @@ CONFIG_NAME_VALIDATION = {
   'admins': {
       REQUIRED: [CONFIG_TYPE_SERVER],
   },
-  'support_staff': {
+  'security_users': {
+      REQUIRED: [CONFIG_TYPE_SERVER],
+  },
+  'support_users': {
       REQUIRED: [CONFIG_TYPE_SERVER],
   },
   'api_info_key': {

@@ -207,8 +207,13 @@ class ApplePlistTest(mox.MoxTestBase):
     """Test a basic broken plist doc."""
     self.PlistTest(
         '<key>omg</key>',
-        exc=plist.MalformedPlistError
-        )
+        exc=plist.MalformedPlistError)
+
+  def testBasicBrokenKey(self):
+    """Test another type of broken plist, dict with value but no key."""
+    self.PlistTest(
+        '<string>omg no key</string>',
+        exc=plist.MalformedPlistError)
 
   def testTypicalEmptyPlist(self):
     """Test an empty plist as it usually appears -- a dict item exists."""
@@ -954,6 +959,16 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
         '</dict></plist>')
     self.assertRaises(
         plist.InvalidPlistError, self.munki.Parse)
+
+  def testValidateName(self):
+    """Tests _ValidateName() with a valid name."""
+    self.munki._plist = {'name': 'fooname'}
+    self.munki._ValidateName()
+
+  def testValidateNameWithDash(self):
+    """Tests _ValidateName() with a dash in the name."""
+    self.munki._plist = {'name': 'fooname-zomg'}
+    self.assertRaises(plist.InvalidPlistError, self.munki._ValidateName)
 
   def testValidateInstallsFilePath(self):
     """Tests _ValidateInstallsFilePath() with valid file path."""

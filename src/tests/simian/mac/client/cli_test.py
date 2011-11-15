@@ -61,6 +61,58 @@ class SimianCliClient(mox.MoxTestBase):
 
   # TODO(user): This module needs a lot more tests.
 
+  def testPackageInfoTemplateHook(self):
+    """Test PackageInfoTemplateHook()."""
+
+    # This looks ugly, but it actually makes this test way simpler.
+    # We create a new dict class with the extra methods we need to add
+    # to simulate a plist.ApplePlist in the class. This avoids mocking out
+    # a bunch of __contains__ __getitem__ __setitem__ calls below after
+    # mock_template.GetContents(). It is just dictionary ops anyway.
+
+    class EasyTestDict(dict):
+      def Parse(self):
+        raise NotImplementedError
+      def GetContents(self):
+        raise NotImplementedError
+
+    self.mox.StubOutWithMock(cli.plist, 'ApplePlist')
+    mock_open = self.mox.CreateMockAnything()
+    mock_template = EasyTestDict()
+    self.mox.StubOutWithMock(mock_template, 'Parse')
+    self.mox.StubOutWithMock(mock_template, 'GetContents')
+    pkginfo = {
+      'foo': 1,
+      'zoo': 9,
+    }
+    template = {
+      'foo': 2,
+      'bar': 3,
+    }
+    combined = {
+      'foo': 2,
+      'zoo': 9,
+      'bar': 3,
+    }
+    for k in template:
+      mock_template[k] = template[k]
+    mock_pkginfo = pkginfo  # See above re: ease of test creation
+
+    self.mpcc.config['template_pkginfo'] = 'filename'
+
+    mock_open('filename', 'r').AndReturn(mock_open)
+    mock_open.read().AndReturn('plist_xml')
+    cli.plist.ApplePlist('plist_xml').AndReturn(mock_template)
+    mock_template.Parse().AndReturn(None)
+    mock_template.GetContents().AndReturn(pkginfo)
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        self.mpcc.PackageInfoTemplateHook(mock_pkginfo, open_=mock_open),
+        mock_pkginfo)
+    self.assertEqual(mock_pkginfo, combined)
+    self.mox.VerifyAll()
+
   def testEditPackageInfoWhenUpdatingManifests(self):
     """Test EditPackageInfo() when updating manifests value."""
     self.mox.StubOutWithMock(self.mpcc, 'ValidatePackageConfig')
@@ -71,6 +123,7 @@ class SimianCliClient(mox.MoxTestBase):
     filepath = '/path/to/%s' % filename
     description = 'snark!'
     display_name = None
+    pkginfo_name = None
     manifests = ['unstable', 'testing', 'stable']
     # catalogs this package is already in
     pkg_catalogs = ['unstable', 'testing', 'stable']
@@ -85,10 +138,11 @@ class SimianCliClient(mox.MoxTestBase):
 
     self.mpcc.config = {
         'edit_pkginfo': None,
+        'template_pkginfo': None,
     }
 
     self.mpcc.ValidatePackageConfig(defaults=False).AndReturn((
-        filepath, description, display_name, manifests, catalogs,
+        filepath, description, display_name, pkginfo_name, manifests, catalogs,
         install_types, unattended_install, unattended_uninstall))
     self.mpcc.client.GetPackageInfo(filename, get_hash=True).AndReturn((
         sha256_hash, pkginfo_xml))
@@ -127,6 +181,7 @@ class SimianCliClient(mox.MoxTestBase):
     filepath = '/path/to/%s' % filename
     description = 'snark!'
     display_name = None
+    pkginfo_name = None
     manifests = ['stable']
     # catalogs this package is already in
     pkg_catalogs = ['unstable']
@@ -141,10 +196,11 @@ class SimianCliClient(mox.MoxTestBase):
 
     self.mpcc.config = {
         'edit_pkginfo': None,
+        'template_pkginfo': None,
     }
 
     self.mpcc.ValidatePackageConfig(defaults=False).AndReturn((
-        filepath, description, display_name, manifests, catalogs,
+        filepath, description, display_name, pkginfo_name, manifests, catalogs,
         install_types, unattended_install, unattended_uninstall))
     self.mpcc.client.GetPackageInfo(filename, get_hash=True).AndReturn((
         sha256_hash, pkginfo_xml))
@@ -158,6 +214,87 @@ class SimianCliClient(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertRaises(cli.CliError, self.mpcc.EditPackageInfo)
+    self.mox.VerifyAll()
+
+  def testValidatePackageConfig(self):
+    """Test ValidatePackageConfig()."""
+    self.mpcc.config = {
+      'manifests': 'stable,testing',
+      'catalogs': 'testing,unstable',
+      'install_types': 'managed_installs',
+      'package': 'p',
+      'description': 'd',
+      'display_name': 'dn',
+      'name': None,
+      'unattended_install': None,
+      'unattended_uninstall': None,
+    }
+    self.mox.ReplayAll()
+    self.assertEqual(
+        (
+            'p', 'd', 'dn', None,
+            ['stable', 'testing'], ['testing', 'unstable'],
+            ['managed_installs'],
+            False, False
+        ),
+        self.mpcc.ValidatePackageConfig())
+    self.mox.VerifyAll()
+
+  def testValidatePackageConfigWhenNoCatalogsSpecified(self):
+    """Test ValidatePackageConfig().
+
+    In this test we are verifying that ValidatePackageConfig() will auto
+    supply a default catalogs value "unstable" when no value is supplied.
+
+    Less importantly, we are also verifying that when no manifests value
+    is supplied, none is created.
+    """
+    self.mpcc.config = {
+      'manifests': None,
+      'catalogs': None,
+      'install_types': 'managed_installs',
+      'package': 'p',
+      'description': 'd',
+      'display_name': 'dn',
+      'name': None,
+      'unattended_install': None,
+      'unattended_uninstall': None,
+    }
+    self.mox.ReplayAll()
+    self.assertEqual(
+        (
+            'p', 'd', 'dn', None,
+            None, ['unstable'], ['managed_installs'],
+            False, False
+        ),
+        self.mpcc.ValidatePackageConfig())
+    self.mox.VerifyAll()
+
+  def testValidatePackageConfigWhenEmptyManifestsSpecified(self):
+    """Test ValidatePackageConfig().
+
+    In this test we are verifying that when the manifests value is
+    set to empty/none, the manifest list output is [].
+    """
+    self.mpcc.config = {
+      'manifests': cli.LIST_EMPTY,
+      'catalogs': 'unstable',
+      'install_types': 'managed_installs',
+      'package': 'p',
+      'description': 'd',
+      'display_name': 'dn',
+      'name': 'fooname',
+      'unattended_install': None,
+      'unattended_uninstall': None,
+    }
+    self.mox.ReplayAll()
+    self.assertEqual(
+        (
+            'p', 'd', 'dn', 'fooname',
+            [], ['unstable'], ['managed_installs'],
+            None, None
+        ),
+        self.mpcc.ValidatePackageConfig(defaults=False))
     self.mox.VerifyAll()
 
 

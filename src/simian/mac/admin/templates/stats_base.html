@@ -11,10 +11,10 @@
     <header>
       <span class="title"><a href="/admin">Simian Statistics Dashboard</a></span>
       <form class="search" action="/admin" method="GET">
-        <label for="owner">Username:<input type="radio" name="type" value="owner" id="owner" checked="checked" /></label> |
-        <label for="hostname">Hostname:<input type="radio" name="type" value="hostname" id="hostname" /></label> |
-        <label for="serial">Serial:<input type="radio" name="type" value="serial" id="serial" /></label> |
-        <label for="uuid">UUID:<input type="radio" name="type" value="uuid" id="uuid" /></label>
+        <label for="search-owner">Username:</label><input type="radio" name="type" value="owner" id="search-owner" checked="checked" /> |
+        <label for="search-hostname">Hostname:</label><input type="radio" name="type" value="hostname" id="search-hostname" /> |
+        <label for="search-serial">Serial:</label><input type="radio" name="type" value="serial" id="search-serial" /> |
+        <label for="search-uuid">UUID:</label><input type="radio" name="type" value="uuid" id="search-uuid" />
         Value: <input type="text" name="filter" id="search-box" />
         <input type="submit" value="Search" />
       </form>

@@ -22,9 +22,11 @@
 import datetime
 import gc
 import logging
+from google.appengine import runtime
 from google.appengine.ext import db
 from google.appengine.ext import deferred
 from google.appengine.api import memcache
+from google.appengine.runtime import apiproxy_errors
 from simian.mac import zip
 from simian.mac import common
 from simian.mac.common import util
@@ -255,12 +257,16 @@ class BaseModel(db.Model):
           _countdown=10)
       return
 
-    query = cls.all()
     map_data = {}
-    for entity in query:
-      a = getattr(entity, prop_name, None)
-      if a:
-        map_data.setdefault(a, []).append(entity.key())
+    try:
+      query = cls.all()
+      for entity in query:
+        a = getattr(entity, prop_name, None)
+        if a:
+          map_data.setdefault(a, []).append(entity.key())
+    except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
+      gae_util.ReleaseLock(lock_name)
+      return
     memcache_key = 'mwpm_%s_%s' % (cls.kind(), prop_name)
     memcache.set(memcache_key, map_data, memcache_secs)
     gae_util.ReleaseLock(lock_name)
@@ -288,7 +294,11 @@ class BaseModel(db.Model):
       # TODO(user): since this isn't locked before deferral, every 5 mins we
       #   have tons of deferred calls until the map is regenerated. think about
       #   locking before calling deferred.
-      deferred.defer(cls.MemcacheWrappedPropMapGenerate, prop_name)
+      try:
+        deferred.defer(cls.MemcacheWrappedPropMapGenerate, prop_name)
+      except deferred.taskqueue.TransientError:
+        logging.exception(
+            'TransientError deferring MemcacheWrappedPropMapGenerate.')
       entities = cls.MemcacheWrappedGetAllFilter(
           (('%s =' % prop_name, value),))
     elif value in map_data:
@@ -580,12 +590,21 @@ class InstallLog(ClientLogBase):
   """Model for all client installs."""
 
   package = db.StringProperty()  # Firefox, Munkitools, etc.
-  # TODO(user): convert existing SUCCESSFUL/FAILED status to just ints and
-  #             change status to db.IntegerProperty()
+  # TODO(user): change status to db.IntegerProperty(), convert all entities.
   status = db.StringProperty()  # return code; 0, 1, 2 etc.
   on_corp = db.BooleanProperty()  # True for install on corp, False otherwise.
   applesus = db.BooleanProperty(default=False)
   duration_seconds = db.IntegerProperty()
+  success = db.BooleanProperty()
+
+  def IsSuccess(self):
+    """Returns True if the install was a success, False otherwise."""
+    return self.status == '0'
+
+  def put(self):
+    """Perform datastore put operation, forcefully setting success boolean."""
+    self.success = self.IsSuccess()
+    return super(InstallLog, self).put()
 
 
 class AdminLogBase(Log):
@@ -617,6 +636,60 @@ class KeyValueCache(BaseModel):
 
   text_value = db.TextProperty()
   mtime = db.DateTimeProperty(auto_now=True)
+
+  @classmethod
+  def IpInList(cls, key_name, ip):
+    """Check whether IP is in serialized IP/mask list in key_name.
+
+    The KeyValueCache entity at key_name is expected to have a text_value
+    which is in util.Serialize() form. The deserialized structure looks like
+
+    [ "200.0.0.0/24",
+      "10.0.0.0/8",
+      etc ...
+    ]
+
+    Note that this function is not IPv6 safe and will always return False
+    if the input ip is IPv6 format.
+
+    Args:
+      key_name: str, like 'auth_bad_ip_blocks'
+      ip: str, like '127.0.0.1'
+    Returns:
+      True if the ip is inside a mask in the list, False if not
+    """
+    if not ip:
+      return False  # lenient response
+
+    if ip.find(':') > -1:  # ipv6
+      return False
+
+    try:
+      ip_blocks_str = cls.MemcacheWrappedGet(key_name, 'text_value')
+      if not ip_blocks_str:
+        return False
+      ip_blocks = util.Deserialize(ip_blocks_str)
+    except (util.DeserializeError, db.Error), e:
+      logging.exception('IpInList(%s)' % ip)
+      return False  # lenient response
+
+    # Note: The method below, parsing a serialized list of networks
+    # expressed as strings, might seem silly. But the total time to
+    # deserialize and translate the strings back into IP network/mask
+    # integers is actually faster than storing them already split, e.g. a
+    # list of 2 item lists (network,mask). Apparently JSON isn't as
+    # efficient at parsing ints or nested lists.
+    #
+    # (pickle is 2X+ faster but not secure & deprecated inside util module)
+
+    ip_int = util.IpToInt(ip)
+
+    for ip_mask_str in ip_blocks:
+      ip_mask = util.IpMaskToInts(ip_mask_str)
+      if (ip_int & ip_mask[1]) == ip_mask[0]:
+        return True
+
+    return False
 
 
 class ReportsCache(KeyValueCache):
@@ -862,6 +935,8 @@ class PackageInfo(BaseMunkiModel):
   # munki name in the form of pkginfo '%s-%s' % (display_name, version)
   # this property is automatically updated on put()
   munki_name = db.StringProperty()
+  # datetime when the PackageInfo was initially created.
+  created = db.DateTimeProperty(auto_now_add=True)
 
   def IsSafeToModify(self):
     """Returns True if the pkginfo is modifiable, False otherwise."""
@@ -913,6 +988,30 @@ class BaseManifestModification(BaseModel):
         d[p] = str(d[p])
     return util.Serialize(d)
 
+  @classmethod
+  def GenerateInstance(cls, mod_type, mod_value, munki_pkg_name, **kwargs):
+    """Returns a model instance for the passed mod_type.
+
+    Args:
+      mod_type: str, modification type like 'site', 'owner', etc.
+      mod_value: str, modification key value, like 'foouser', or 'foouuid'.
+      munki_pkg_name: str, name of the munki package to inject, like Firefox.
+      kwargs: any other properties to set on the model instance.
+    Returns:
+      A model instance with key_name, value and the model-specific mod key value
+      properties already set.
+    """
+    key_name = '%s##%s' % (mod_value, munki_pkg_name)
+    model = MANIFEST_MOD_MODELS.get(mod_type, None)
+    if not model:
+      raise ValueError
+    m = model(key_name=key_name)
+    setattr(m, mod_type, mod_value)
+    m.value = munki_pkg_name
+    for kw in kwargs:
+      setattr(m, kw, kwargs[kw])
+    return m
+
 
 class SiteManifestModification(BaseManifestModification):
   """Manifest modifications for dynamic manifest generation by site."""
@@ -942,6 +1041,14 @@ class UuidManifestModification(BaseManifestModification):
 
 UuidManifestModification.MemcacheAddAutoUpdateTask(
     'MemcacheWrappedPropMapGenerate', 'uuid', defer_if_locked=True)
+
+
+MANIFEST_MOD_MODELS = {
+    'owner': OwnerManifestModification,
+    'uuid': UuidManifestModification,
+    'site': SiteManifestModification,
+    'os_version': OSVersionManifestModification,
+}
 
 
 class PackageAlias(BaseModel):
