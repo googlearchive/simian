@@ -321,29 +321,41 @@ class SimianClient(BaseSimianClient, client.SimianClient):
       # TODO(user): remove backwards compatibility after a while...
       pkginfo['forced_uninstall'] = True
     if pkginfo_name:
-      pkginfo['name'] = pkginfo_name
+      pkginfo['name'] = unicode(pkginfo_name)
+
+    try:
+      pkginfo.Validate()
+    except plist.Error, e:
+      raise client.SimianClientError((
+        'Internal sanity check, plist error: %s' % str(e)))
 
     # TODO(user): Refactor so that this code block and cli.EditPackageInfo
     # share the same pkginfo_hooks iteration code.
-    if pkginfo_hooks:
-      for pkginfo_hook in pkginfo_hooks:
-        while 1:
-          output = pkginfo_hook(pkginfo)
-          if output is True:
-            break
-          elif output is False:
-            raise client.SimianClientError('Aborting upload by request.')
 
-          try:
-            output.Parse()
-            pkginfo = output
-            break
-          except plist.Error:
-            pass
+    if pkginfo_hooks:
+      changes = False
+      for pkginfo_hook in pkginfo_hooks:
+        output = pkginfo_hook(pkginfo)
+        if output is True:
+          logging.debug('pkginfo_hook resulted in no change')
+        elif output is False:
+          raise client.SimianClientError('Aborting upload by request.')
+        else:
+          pkginfo = output
+          changes = True
+          logging.debug('pkginfo_hook resulted in new pkginfo')
+
+      # TODO(user): As part of the refactor suggestd above, these 1-off
+      # copy steps to bring changes back from the plist into the option args
+      # should be handled in a standard way.
+      if changes:
+        description = pkginfo['description']
+        display_name = pkginfo['display_name']
+        catalogs = pkginfo['catalogs']
 
     response, unused_filename, catalogs, manifests = self.UploadPackage(
-        filename, description, display_name, catalogs, manifests, install_types,
-        pkginfo.GetXml())
+        filename, description, display_name, catalogs, manifests,
+        install_types, pkginfo.GetXml())
 
     name = pkginfo.GetPackageName()
 

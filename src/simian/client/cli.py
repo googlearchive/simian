@@ -68,7 +68,6 @@ class SimianCliClient(object):
       'download',
       'delete',
       'edit',
-      'print',
       'server=',
       'user_auth=',
       'package=',
@@ -84,7 +83,8 @@ class SimianCliClient(object):
       'nounattended_install',
       'unattended_uninstall',
       'nounattended_uninstall',
-      'list_packages',
+      'print_package_metadata',
+      'print_pkginfo',
   ]
 
   # no short options
@@ -112,14 +112,14 @@ class SimianCliClient(object):
           'method': 'EditPackageInfo',
           'auth': 'userauth',
       },
-      'list_packages': {
+      'print_package_metadata': {
           'require': [],
-          'method': 'ListPackages',
+          'method': 'PrintPackageMetadata',
           'auth': 'userauth',
       },
-      'print': {
+      'print_pkginfo': {
           'require': [ 'package' ],
-          'method': 'PrintPackage',
+          'method': 'PrintPackageInfo',
           'auth': 'userauth',
       },
       'help': {
@@ -146,11 +146,11 @@ class SimianCliClient(object):
         delete a software package
     --edit
         edit an already uploaded software package
-    --list_packages
-        lists all packages of given --install_types and --catalogs.
-    --print
-        print information about a software package. currently just
-        prints the pkginfo XML.
+    --print_package_metdata
+        prints all package metadata of given --install_types and --catalogs, or
+        of a given --package filename.
+    --print_pkginfo
+        print pkginfo for a software package.
 
     options:
 
@@ -213,8 +213,8 @@ class SimianCliClient(object):
       'template_pkginfo': None,
       'unattended_install': None,
       'unattended_uninstall': None,
-      'list_packages': None,
-      'print': None,
+      'print_package_metadata': None,
+      'print_pkginfo': None,
     }
     self.command = None
 
@@ -391,16 +391,17 @@ class SimianCliClient(object):
     self.client.DeletePackage(filename)
     print 'Package succesfully deleted!'
 
-  def ListPackages(self):
-    """Deletes a package and associated pkginfo from Simian."""
+  def PrintPackageMetadata(self):
+    """Prints package metadata, minus pkginfo, matching the desired params."""
     print 'List packages on Simian....'
     install_types = self.config['install_types']
     catalogs = self.config['catalogs']
-    print self.client.ListPackages(install_types, catalogs)
+    filename = self.config['package']
+    print self.client.GetPackageMetadata(install_types, catalogs, filename)
     print 'Complete!'
 
-  def PrintPackage(self):
-    """Prints information about the package from Simian."""
+  def PrintPackageInfo(self):
+    """Prints the pkginfo for a particular package from Simian."""
     print self.client.GetPackageInfo(self.config['package'])
 
   def EditPackageInfo(self):

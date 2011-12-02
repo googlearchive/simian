@@ -4,7 +4,7 @@
 
 ARCH=i386
 OSX_VERSION=$(shell sw_vers -productVersion | cut -d. -f1-2)
-SIMIAN_VERSION=1.5.1
+SIMIAN_VERSION=1.5.2
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz

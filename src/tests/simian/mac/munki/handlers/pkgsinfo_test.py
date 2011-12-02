@@ -112,11 +112,12 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.assertEqual(self.c._Hash(s), 'hexfoo')
     self.mox.VerifyAll()
 
-  def testGetSuccess(self):
-    """Test get() with success."""
+  def testGetSuccessWithFilenameAndNoHash(self):
+    """Test get() with success with a filename but no hash."""
     filename = 'pkg name.dmg'
     filename_quoted = 'pkg%20name.dmg'
     self.MockDoAnyAuth()
+    self.request.get('hash').AndReturn('')
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.plist = 'plist'
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
@@ -126,7 +127,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.c.get(filename_quoted)
     self.mox.VerifyAll()
 
-  def testGetSuccessWhenHash(self):
+  def testGetSuccessWithFilenameAndHash(self):
     """Test get() with success when hash header is requested."""
     filename = 'pkg name.dmg'
     filename_quoted = 'pkg%20name.dmg'
@@ -196,9 +197,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
         'x')
     self.mox.VerifyAll()
 
-  def testGetSuccess(self):
+  def testGetSuccessWithQueryParams(self):
     """Test get() pkg list with success."""
-    filename = None
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['stable', 'testing']
     mock_pkg = self.mox.CreateMockAnything()
@@ -209,9 +209,16 @@ class PackagesInfoTest(test.RequestHandlerTest):
 
     self.mox.StubOutWithMock(pkgsinfo.plist, 'GetXmlStr')
 
-    self.MockDoMunkiAuth(require_level=pkgsinfo.gaeserver.LEVEL_UPLOADPKG)
+    mock_user = self.mox.CreateMockAnything()
+    self.MockDoAnyAuth(and_return=mock_user)
+    mock_user.email().AndReturn('foo@example.com')
+    self.mox.StubOutWithMock(pkgsinfo.auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(pkgsinfo.auth, 'IsSupportUser')
+    pkgsinfo.auth.IsAdminUser('foo@example.com').AndReturn(False)
+    pkgsinfo.auth.IsSupportUser('foo@example.com').AndReturn(True)
 
     mock_query = self.MockModelStatic('PackageInfo', 'all')
+    self.request.get('filename').AndReturn('')
     self.request.get_all('install_types').AndReturn(install_types)
     self.request.get_all('catalogs').AndReturn(catalogs)
     for t in install_types:
@@ -231,7 +238,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
 
     self.mox.ReplayAll()
-    self.c.get(filename)
+    self.c.get(None)
     self.mox.VerifyAll()
 
   def testPutFailInputNotParseable(self):

@@ -79,19 +79,21 @@ class UserAuthTest(test.RequestHandlerTest):
         self.ua.get)
     self.mox.VerifyAll()
 
-  def testGetWhenUserNotMacAdmin(self):
+  def testGetWhenUserNotMacAdminOrSupportUser(self):
     """Test get()."""
     user = 'not_%s' % uauth.settings.ADMINS[0]
     self.assertFalse(user in uauth.settings.ADMINS)
     mock_user = self.mox.CreateMockAnything()
 
     self.MockDoMunkiAuth(fail=True)
+
     self.mox.StubOutWithMock(uauth.users, 'get_current_user')
     self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(uauth.auth, 'IsSupportUser')
     uauth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(user)
     uauth.auth.IsAdminUser(user).AndReturn(False)
-    mock_user.email().AndReturn(user)
+    uauth.auth.IsSupportUser(user).AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -115,7 +117,6 @@ class UserAuthTest(test.RequestHandlerTest):
     mock_aps = self.mox.CreateMockAnything()
     self.stubs.Set(uauth.gaeserver, 'AuthSimianServer', mock_aps)
     mock_aps().AndReturn(mock_aps)
-    mock_user.email().AndReturn(user)
     mock_aps.SessionCreateUserAuthToken(
         user, level=uauth.gaeserver.LEVEL_ADMIN).AndReturn(None)
 
@@ -125,8 +126,8 @@ class UserAuthTest(test.RequestHandlerTest):
         self.ua.get)
     self.mox.VerifyAll()
 
-  def testGet(self):
-    """Test get()."""
+  def testGetAdminUser(self):
+    """Test get() where IsAdminUser() returns True."""
     self.mox.StubOutWithMock(uauth.users, 'get_current_user')
     self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
 
@@ -142,9 +143,39 @@ class UserAuthTest(test.RequestHandlerTest):
     mock_aps = self.mox.CreateMockAnything()
     self.stubs.Set(uauth.gaeserver, 'AuthSimianServer', mock_aps)
     mock_aps().AndReturn(mock_aps)
-    mock_user.email().AndReturn(user)
     mock_aps.SessionCreateUserAuthToken(
         user, level=uauth.gaeserver.LEVEL_ADMIN).AndReturn(token)
+    self.response.headers.__setitem__(
+        'Set-Cookie', '%s=%s; secure; httponly;' % (
+            uauth.auth_settings.AUTH_TOKEN_COOKIE, token)).AndReturn(None)
+    self.response.out.write(
+        uauth.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertEqual(None, self.ua.get())
+    self.mox.VerifyAll()
+
+  def testGetSupportUser(self):
+    """Test get() where IsSupportUser() returns True."""
+    self.mox.StubOutWithMock(uauth.users, 'get_current_user')
+    self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(uauth.auth, 'IsSupportUser')
+
+    user = uauth.settings.ADMINS[0]
+    mock_user = self.mox.CreateMockAnything()
+    token = 'token'
+
+    self.MockDoMunkiAuth(fail=True)
+    uauth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(user)
+    uauth.auth.IsAdminUser(user).AndReturn(False)
+    uauth.auth.IsSupportUser(user).AndReturn(True)
+
+    mock_aps = self.mox.CreateMockAnything()
+    self.stubs.Set(uauth.gaeserver, 'AuthSimianServer', mock_aps)
+    mock_aps().AndReturn(mock_aps)
+    mock_aps.SessionCreateUserAuthToken(
+        user, level=uauth.gaeserver.LEVEL_BASE).AndReturn(token)
     self.response.headers.__setitem__(
         'Set-Cookie', '%s=%s; secure; httponly;' % (
             uauth.auth_settings.AUTH_TOKEN_COOKIE, token)).AndReturn(None)

@@ -160,14 +160,14 @@ class ApplePlistTest(mox.MoxTestBase):
     self.apl.Validate()
     self.mox.VerifyAll()
 
-  def testEncodeXMLError(self):
+  def testEncodeXmlError(self):
     """Test Validate() with invalid/unknown encoding."""
     self.apl._plist_xml = 'crazy encoded string'
     self.mox.StubOutWithMock(
         self.apl, 'GetEncoding', self.mox.CreateMockAnything())
     self.apl.GetEncoding().AndReturn('INVALID ENCODING!!!')
     self.mox.ReplayAll()
-    self.assertRaises(plist.InvalidPlistError, self.apl.EncodeXML)
+    self.assertRaises(plist.InvalidPlistError, self.apl.EncodeXml)
     self.mox.VerifyAll()
 
   def testGetContents(self):
@@ -193,6 +193,15 @@ class ApplePlistTest(mox.MoxTestBase):
     else:
       self.apl.Parse()
       self.assertPlistEquals(plist_dict)
+      
+  def testBasicParseChangesLost(self):
+    """Test that Parse() will not wipe direct set values."""
+    self.apl.LoadDocument('<plist version="1.0"><dict></dict></plist>')
+    self.apl.Parse()
+    self.assertFalse('foo' in self.apl)
+    self.apl['foo'] = 'bar'
+    self.assertRaises(plist.PlistAlreadyParsedError, self.apl.Parse)
+    self.assertEqual(self.apl['foo'], 'bar')
 
   def _testBasicEmptyDict(self):
     """Test a basic plist doc."""
@@ -796,16 +805,21 @@ AAAAAAAAfA==""")
 
   def testSetContentsBasic(self):
     """Test SetContents() with basic input."""
+    self.mox.StubOutWithMock(self.apl, 'Validate')
     d = {'foo': 'bar'}
+    self.apl.Validate().AndReturn(None)
+    
+    self.mox.ReplayAll()
     self.apl.SetContents(d)
     self.assertEqual(self.apl._plist, d)
+    self.mox.VerifyAll()
 
   def testSetContentsNestedXml(self):
     """Test SetContents() with evil nested XML."""
     d = {'foo': '<xml>up up up and away</xml>'}
     self.apl.SetContents(d)
     self.assertEqual(self.apl._plist, d, str(self.apl._plist))
-
+    
   def testEqual(self):
     """Tests Equal()."""
     pl = plist.ApplePlist()
@@ -1147,6 +1161,15 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.munki._plist = {'foo': None}
     self.assertTrue('foo' in self.munki)
     self.assertFalse('bar' in self.munki)
+    
+  def testSetitem(self):
+    """Test __setitem__."""
+    self.munki._plist = {}
+    self.assertFalse('foo' in self.munki)
+    self.munki['foo'] = 123
+    self.assertTrue('foo' in self.munki)
+    self.assertEqual(self.munki['foo'], 123)
+    self.assertTrue(self.munki._changed)
 
   def testGet(self):
     """Test get()."""

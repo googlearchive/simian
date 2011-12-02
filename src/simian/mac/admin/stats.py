@@ -236,6 +236,10 @@ class Stats(webapp.RequestHandler):
       self.redirect('/admin/host/%s' % computers[0].uuid)
       return
 
+    # If we didn't get a sorted query from Datastore, sort now.
+    if report_type in REPORT_TYPES:
+      computers.sort(key=lambda c: c.preflight_datetime, reverse=True)
+
     summary = {
         'active': 0,
         'active_1d': 0,
@@ -416,6 +420,7 @@ class Stats(webapp.RequestHandler):
   def _DisplayPackagesList(self):
     """Displays list of all installs/removals/etc."""
     installs, counts_mtime = models.ReportsCache.GetInstallCounts()
+    pending, pending_mtime = models.ReportsCache.GetPendingCounts()
     packages = []
     for p in models.PackageInfo.all():
       pl = plist.MunkiPackageInfoPlist(p.plist)
@@ -425,6 +430,7 @@ class Stats(webapp.RequestHandler):
       pkg['count'] = installs.get(p.munki_name, {}).get('install_count', 'N/A')
       pkg['fail_count'] = installs.get(p.munki_name, {}).get(
           'install_fail_count', 'N/A')
+      pkg['pending_count'] = pending.get(p.munki_name, 'N/A')
       pkg['duration_seconds_avg'] = installs.get(p.munki_name, {}).get(
           'duration_seconds_avg', None) or 'N/A'
       pkg['unattended'] = pl.get('unattended_install', False)
@@ -442,7 +448,8 @@ class Stats(webapp.RequestHandler):
     packages.sort(key=lambda pkg: pkg['munki_name'].lower())
     self.response.out.write(
         RenderTemplate('templates/stats_installs.html',
-        {'packages': packages, 'counts_mtime': counts_mtime}))
+        {'packages': packages, 'counts_mtime': counts_mtime,
+         'pending_mtime': pending_mtime}))
 
   def _DisplayPackagesListFromCache(self, applesus=False):
     installs, counts_mtime = models.ReportsCache.GetInstallCounts()
@@ -499,7 +506,8 @@ class Stats(webapp.RequestHandler):
 
   def _DisplayHostsPendingPkg(self, pkg):
     """Displays a list of hosts where pkg is pending installation."""
-    query = models.Computer.AllActive().filter('pkgs_to_install =', pkg)
+    query = models.Computer.AllActive().filter(
+        'pkgs_to_install =', pkg).order('-preflight_datetime')
     computers, next_page = self._Paginate(query, COMPUTER_FETCH_LIMIT)
     values = {'computers': computers, 'pkg': pkg, 'next_page': next_page,
               'cached': False, 'report_type': 'pkgs_to_install',

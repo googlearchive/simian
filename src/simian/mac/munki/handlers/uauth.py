@@ -56,13 +56,16 @@ class UserAuth(handlers.AuthenticationHandler, webapp.RequestHandler):
       #logging.error('Uauth: user is not logged in')
       raise NotAuthenticated
 
-    if not auth.IsAdminUser(user.email()):
-      logging.error('Uauth: user %s is not an admin', user.email())
+    email = user.email()
+    if auth.IsAdminUser(email):
+      a = gaeserver.AuthSimianServer()
+      output = a.SessionCreateUserAuthToken(email, level=gaeserver.LEVEL_ADMIN)
+    elif auth.IsSupportUser(email):
+      a = gaeserver.AuthSimianServer()
+      output = a.SessionCreateUserAuthToken(email, level=gaeserver.LEVEL_BASE)
+    else:
+      logging.error('Uauth: user %s is not an admin', email)
       raise NotAuthenticated
-
-    a = gaeserver.AuthSimianServer()
-    output = a.SessionCreateUserAuthToken(
-        user.email(), level=gaeserver.LEVEL_ADMIN)
 
     if output:
       #logging.info('Uauth: success, token = %s', output)

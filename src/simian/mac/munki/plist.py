@@ -87,6 +87,10 @@ class PlistNotParsedError(Error):
   """A plist has not been successfully parsed; called method is unavailable."""
 
 
+class PlistAlreadyParsedError(Error):
+  """A plist has already been parsed from a XML or binary source."""
+
+
 class MalformedPlistError(PlistError):
   """Malformed Plist, like XML that is not well-formed."""
 
@@ -173,6 +177,21 @@ class ApplePlist(object):
     self.Reset()
     if plist is not None:
       self.LoadPlist(plist)
+
+  def copy(self):
+    """Return a new instance of this plist with the same values."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    new_plist = self.__class__()
+    new_plist._validation_hooks = self._validation_hooks
+    new_plist._plist = self._plist.copy()
+    new_plist._plist_xml = self._plist_xml
+    new_plist._plist_xml_encoding = self._plist_xml_encoding
+    new_plist._plist_bin = self._plist_bin
+    new_plist._plist_version = self._plist_version
+    new_plist._changed = self._changed
+    return new_plist
 
   def LoadPlist(self, plist):
     """Load a plist in binary or XML format.
@@ -900,6 +919,8 @@ class ApplePlist(object):
 
   def Parse(self):
     """Parse a Plist."""
+    if hasattr(self, '_plist'):
+      raise PlistAlreadyParsedError
 
     if self._plist_bin:
       self._BinaryParse()
@@ -910,7 +931,7 @@ class ApplePlist(object):
       except xml.parsers.expat.ExpatError, e:
         raise MalformedPlistError('%s\n\n%s' % (self._plist_xml, str(e)))
     self.Validate()
-    self.EncodeXML()
+    self.EncodeXml()
 
   def AddValidationHook(self, method):
     """Adds a validation hook to run when Validate is called.
@@ -955,7 +976,7 @@ class ApplePlist(object):
     if self._VALIDATE_BASIC_CONFIG:
       self._ValidateBasic(self._VALIDATE_BASIC_CONFIG)
 
-  def EncodeXML(self, encoding=None):
+  def EncodeXml(self, encoding=None):
     """Encodes the plist xml to a particular encoding.
 
     Args:
@@ -992,15 +1013,16 @@ class ApplePlist(object):
       plist_obj: array or dictionary plist.
     Raises:
       PlistError: the plist content type is not supported
+      other exceptions: as Validate() would raise them
     """
     if type(plist_obj) not in PLIST_CONTENT_TYPES:
       raise PlistError(
           'Plist contents type is not supported: %s' % type(plist_obj))
 
     self._plist = plist_obj
-    self._plist_xml = self.GetXml()
     self._changed = True
-    self.Parse()
+    self._plist_xml = self.GetXml()
+    self.Validate()
 
   def GetEncoding(self):
     """Returns the encoding of the plist document.

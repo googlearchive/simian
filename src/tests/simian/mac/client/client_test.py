@@ -527,6 +527,7 @@ class SimianClient(mox.MoxTestBase):
     pkginfo.__setitem__('unattended_install', True).AndReturn(None)
     pkginfo.__setitem__('forced_install', True).AndReturn(None)
     pkginfo.__setitem__('name', pkginfo_name).AndReturn(None)
+    pkginfo.Validate().AndReturn(None)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -572,6 +573,7 @@ class SimianClient(mox.MoxTestBase):
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo.__setitem__('unattended_uninstall', True).AndReturn(None)
     pkginfo.__setitem__('forced_uninstall', True).AndReturn(None)
+    pkginfo.Validate().AndReturn(None)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -616,6 +618,7 @@ class SimianClient(mox.MoxTestBase):
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hooks[0](pkginfo).AndReturn(True)
+    pkginfo.Validate().AndReturn(None)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(
@@ -659,6 +662,7 @@ class SimianClient(mox.MoxTestBase):
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hooks[0](pkginfo).AndReturn(False)
+    pkginfo.Validate().AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -692,7 +696,10 @@ class SimianClient(mox.MoxTestBase):
     self.client._LoadPackageInfo(
         filename, description, display_name, catalogs).AndReturn(pkginfo)
     pkginfo_hooks[0](pkginfo).AndReturn(pkginfo)
-    pkginfo.Parse().AndReturn(True)
+    pkginfo.Validate().AndReturn(True)
+    pkginfo.__getitem__('description').AndReturn(description)
+    pkginfo.__getitem__('display_name').AndReturn(display_name)
+    pkginfo.__getitem__('catalogs').AndReturn(catalogs)
     pkginfo.GetXml().AndReturn('pkginfo xml')
 
     self.client.UploadPackage(

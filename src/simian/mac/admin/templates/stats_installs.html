@@ -48,13 +48,13 @@
     </tr>
   {% endfor %}
   </table>
-  <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
+  <p>* success/failure counts last cached {{ counts_mtime|timesince }} ago.</p>
 {% else %}
   {% if packages %}
     <a href="javascript:function() { return false; }"
        onclick="simian.togglePkgDescVisibility(this);">Show Descriptions</a>
     <table class="stats-table" id="pkg-table">
-    <tr><th>Package</th><th>Success</th><th>Failed</td><th>Avg Secs</th><th>Pending</th><th>Filename</th><th>Pkginfo</th><th>Unattended</th><th>Force Install Datetime</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
+    <tr><th>Package</th><th>Success*</th><th>Failed*</td><th>Avg Secs</th><th>Pending**</th><th>Filename</th><th>Pkginfo</th><th>Unattended</th><th>Force Install Datetime</th><th>Install Types</th><th>Catalogs</th><th>Manifests</th><th>Description</th></tr>
     {% for pkg in packages %}
       <tr class="{% cycle lbg,dbg %}">
         <td>{{ pkg.munki_name }}</td>
@@ -69,7 +69,7 @@
         <td>{{ pkg.duration_seconds_avg }}</td>
         <td>
           <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1"
-             >pending</a>
+             >{{ pkg.pending_count }}</a>
         </td>
         <td>{{ pkg.filename }}</td>
         <td><a href="/pkgsinfo/{{ pkg.filename }}">pkginfo</a></td>
@@ -86,7 +86,8 @@
       </tr>
     {% endfor %}
     </table>
-    <p>* install counts last cached {{ counts_mtime|timesince }} ago.</p>
+    <p>* success/failure counts last cached {{ counts_mtime|timesince }} ago.</p>
+    <p>** pending counts last cached {{ pending_mtime|timesince }} ago.</p>
   {% endif %}
 {% endif %}
 

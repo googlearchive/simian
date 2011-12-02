@@ -25,7 +25,6 @@ Contents:
 
 
 
-
 import subprocess
 from simian.mac.munki import plist
 
@@ -41,10 +40,13 @@ class SystemProfilerError(Error):
 class SystemProfile(object):
 
   DATA_TYPES = {
-      'network': 'SPNetworkDataType',
-      'system': 'SPSystemDataType',
       'hardware': 'SPHardwareDataType',
+      'network': 'SPNetworkDataType',
+      'parallelata': 'SPParallelATADataType',
+      'power': 'SPPowerDataType',
       'serialata': 'SPSerialATADataType',
+      'system': 'SPSystemDataType',
+      'usb': 'SPUSBDataType',
   }
 
   def __init__(self, include_only=None):
@@ -90,82 +92,96 @@ class SystemProfile(object):
     self._system_profile_xml = sp_xml
     self._system_profile = p.GetContents()
 
-  def _FindHDDSerial(self):
+  def _GetDataTypeItems(self, data_type_key):
+    """Returns the "_items" array inside a given data type dictionary.
+
+    Args:
+      data_type_key: str, key of self.DATA_TYPE containing the desired _items.
+    Returns:
+      list of items in the array, or an empty list if the data type is unknown
+      or not found.
+    """
+    data_type = self.DATA_TYPES.get(data_type_key)
     for d in self._system_profile:
-      if d.get('_dataType') == 'SPSerialATADataType':
-        for item in d['_items']:
-          for item in item['_items']:
-            if 'device_serial' in item:
-              self._profile['hdd_serial'] = item['device_serial'].strip()
-              return
+      if data_type and d.get('_dataType') == data_type:
+        return d['_items']
+    return []
+
+  def _FindHDDSerial(self):
+    """Find the primary Hard Drive Disk serial number."""
+    ata_items = (self._GetDataTypeItems('serialata') +
+           self._GetDataTypeItems('parallelata'))
+    for ata_item in ata_items:
+      for item in ata_item['_items']:
+        if 'device_serial' in item:
+          self._profile['hdd_serial'] = item['device_serial'].strip()
+          return
+
+  def _FindMachineModel(self):
+    """Find machine model."""
+    for item in self._GetDataTypeItems('hardware'):
+      if 'machine_model' in item:
+        self._profile['machine_model'] = item['machine_model']
+        return
 
   def _FindPlatformUuid(self):
     """Find platform UUID."""
-    for d in self._system_profile:
-      if d.get('_dataType', None) == 'SPHardwareDataType':
-        for item in d['_items']:
-          if 'platform_UUID' in item:
-            self._profile['platform_uuid'] = item['platform_UUID']
-            return
+    for item in self._GetDataTypeItems('hardware'):
+      if 'platform_UUID' in item:
+        self._profile['platform_uuid'] = item['platform_UUID']
+        return
 
   def _FindSerialNumber(self):
     """Find system serial number."""
-    for d in self._system_profile:
-      if d.get('_dataType', None) == 'SPHardwareDataType':
-        for item in d['_items']:
-          if 'serial_number' in item:
-            self._profile['serial_number'] = item['serial_number']
-            return
+    for item in self._GetDataTypeItems('hardware'):
+      if 'serial_number' in item:
+        self._profile['serial_number'] = item['serial_number']
+        return
 
   def _FindMacAddresses(self):
     """Find MAC addresses for network adapters."""
-    for d in self._system_profile:
-      if d.get('_dataType', None) == 'SPNetworkDataType':
-        for item in d['_items']:
-          if 'hardware' in item:
-            if 'Ethernet' in item and 'MAC Address' in item['Ethernet']:
-              intf_mac = item['Ethernet']['MAC Address']
-              intf_name = item.get('interface', None)
+    for item in self._GetDataTypeItems('network'):
+      if 'hardware' in item:
+        if 'Ethernet' in item and 'MAC Address' in item['Ethernet']:
+          intf_mac = item['Ethernet']['MAC Address']
+          intf_name = item.get('interface', None)
 
-              if item['hardware'] == 'Ethernet':
-                intf_type = 'ethernet'
-              elif item['hardware'] == 'AirPort':
-                intf_type = 'airport'
-              elif item['hardware'] == 'FireWire':
-                intf_type = 'firewire'
-              else:
-                intf_type = None
+          if item['hardware'] == 'Ethernet':
+            intf_type = 'ethernet'
+          elif item['hardware'] == 'AirPort':
+            intf_type = 'airport'
+          elif item['hardware'] == 'FireWire':
+            intf_type = 'firewire'
+          else:
+            intf_type = None
 
-              if intf_type is not None:
-                self._profile['%s_mac' % intf_type] = intf_mac
-                if intf_name is not None:
-                  self._profile['interface_%s' % intf_name] = intf_type
+          if intf_type is not None:
+            self._profile['%s_mac' % intf_type] = intf_mac
+            if intf_name is not None:
+              self._profile['interface_%s' % intf_name] = intf_type
 
   def _FindBatteryInfo(self):
     """Find battery info."""
-    for d in self._system_profile:
-      if d.get('_dataType', None) == 'SPPowerDataType':
-        for item in d['_items']:
-          if 'sppower_battery_model_info' in item:
-            self._profile['battery_serial_number'] = (
-                item['sppower_battery_model_info'].get(
-                    'sppower_battery_serial_number', 'unknown'))
+    for item in self._GetDataTypeItems('power'):
+      if 'sppower_battery_model_info' in item:
+        self._profile['battery_serial_number'] = (
+            item['sppower_battery_model_info'].get(
+                'sppower_battery_serial_number', 'unknown'))
 
   def _FindUSBDevices(self):
     """Find all USB devices."""
-    for d in self._system_profile:
-      if d.get('_dataType', None) == 'SPUSBDataType':
-        for item in d['_items']:
-          if 'host_controller' in item:
-            for usb_item in item.get('_items', []):
-              if usb_item['_name'].find('iSight') > -1:
-                self._profile['isight_serial_number'] = (
-                    usb_item.get('d_serial_num', 'unknown'))
+    for item in self._GetDataTypeItems('usb'):
+      if 'host_controller' in item:
+        for usb_item in item.get('_items', []):
+          if usb_item['_name'].find('iSight') > -1:
+            self._profile['isight_serial_number'] = (
+                usb_item.get('d_serial_num', 'unknown'))
 
   def _FindAll(self):
     """Find all properties from system profile."""
     self._GetSystemProfile()
     self._FindHDDSerial()
+    self._FindMachineModel()
     self._FindSerialNumber()
     self._FindPlatformUuid()
     self._FindMacAddresses()
@@ -186,6 +202,7 @@ class SystemProfile(object):
         'interface_en0': 'ethernet' or 'airport' or 'firewire',
         'interface_enN': ....,
         'interface_fwN': ....,
+        'machine_model': str,
         'battery_serial_number': str,
         'isight_serial_number': str,
       }

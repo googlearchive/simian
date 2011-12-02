@@ -75,12 +75,13 @@ class SimianCliClient(mox.MoxTestBase):
         raise NotImplementedError
       def GetContents(self):
         raise NotImplementedError
+      def SetContents(self, x):
+        raise NotImplementedError
+      def SetChanged(self, x=True):
+        raise NotImplementedError
+      def Validate(self):
+        raise NotImplementedError
 
-    self.mox.StubOutWithMock(cli.plist, 'ApplePlist')
-    mock_open = self.mox.CreateMockAnything()
-    mock_template = EasyTestDict()
-    self.mox.StubOutWithMock(mock_template, 'Parse')
-    self.mox.StubOutWithMock(mock_template, 'GetContents')
     pkginfo = {
       'foo': 1,
       'zoo': 9,
@@ -94,11 +95,30 @@ class SimianCliClient(mox.MoxTestBase):
       'zoo': 9,
       'bar': 3,
     }
+    self.mpcc.config['template_pkginfo'] = 'filename'
+
+    self.mox.StubOutWithMock(cli.plist, 'ApplePlist')
+
+    mock_pkginfo = EasyTestDict()
+    mock_input_pkginfo = self.mox.CreateMockAnything()
+    mock_open = self.mox.CreateMockAnything()
+    mock_template = EasyTestDict()
+
+    self.mox.StubOutWithMock(mock_pkginfo, 'SetChanged')
+    self.mox.StubOutWithMock(mock_pkginfo, 'SetContents')
+    self.mox.StubOutWithMock(mock_pkginfo, 'Validate')
+    self.mox.StubOutWithMock(mock_template, 'Parse')
+    self.mox.StubOutWithMock(mock_template, 'GetContents')
+
+    # prep the template with values from dict
     for k in template:
       mock_template[k] = template[k]
-    mock_pkginfo = pkginfo  # See above re: ease of test creation
 
-    self.mpcc.config['template_pkginfo'] = 'filename'
+    # prep the pkginfo with values from dict
+    for k in pkginfo:
+      mock_pkginfo[k] = pkginfo[k]
+
+    mock_input_pkginfo.copy().AndReturn(mock_pkginfo)
 
     mock_open('filename', 'r').AndReturn(mock_open)
     mock_open.read().AndReturn('plist_xml')
@@ -106,11 +126,15 @@ class SimianCliClient(mox.MoxTestBase):
     mock_template.Parse().AndReturn(None)
     mock_template.GetContents().AndReturn(pkginfo)
 
+    # dictionary value copying occurs here in real code, no mocks
+    # visible here.
+
+    mock_pkginfo.Validate().AndReturn(None)
+
     self.mox.ReplayAll()
-    self.assertEqual(
-        self.mpcc.PackageInfoTemplateHook(mock_pkginfo, open_=mock_open),
-        mock_pkginfo)
-    self.assertEqual(mock_pkginfo, combined)
+    output = self.mpcc.PackageInfoTemplateHook(
+        mock_input_pkginfo, open_=mock_open)
+    self.assertEqual(output, combined)
     self.mox.VerifyAll()
 
   def testEditPackageInfoWhenUpdatingManifests(self):

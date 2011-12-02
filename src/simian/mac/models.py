@@ -697,6 +697,7 @@ class ReportsCache(KeyValueCache):
 
   _SUMMARY_KEY = 'summary'
   _INSTALL_COUNTS_KEY = 'install_counts'
+  _PENDING_COUNTS_KEY = 'pending_counts'
   _MSU_USER_SUMMARY_KEY = 'msu_user_summary'
   _TRACK_PREFIX = 'client_count__'
   _ALL_SUFFIX = '__ALL'
@@ -781,6 +782,28 @@ class ReportsCache(KeyValueCache):
     entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
     if not entity:
       entity = cls(key_name=cls._INSTALL_COUNTS_KEY)
+    entity.blob_value = util.Serialize(d)
+    entity.put()
+
+  @classmethod
+  def GetPendingCounts(cls):
+    """Returns tuple (pending counts dict, datetime) from Datastore."""
+    entity = cls.get_by_key_name(cls._PENDING_COUNTS_KEY)
+    if entity and entity.blob_value:
+      return util.Deserialize(entity.blob_value), entity.mtime
+    else:
+      return {}, None
+
+  @classmethod
+  def SetPendingCounts(cls, d):
+    """Sets a the pending counts dictionary to Datastore.
+
+    Args:
+      d: dict of summary data.
+    """
+    entity = cls.get_by_key_name(cls._PENDING_COUNTS_KEY)
+    if not entity:
+      entity = cls(key_name=cls._PENDING_COUNTS_KEY)
     entity.blob_value = util.Serialize(d)
     entity.put()
 

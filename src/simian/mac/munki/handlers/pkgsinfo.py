@@ -61,8 +61,13 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
     Args:
       filename: string like Firefox-1.0.dmg
     """
+    auth_return = auth.DoAnyAuth()
+    if hasattr(auth_return, 'email'):
+      email = auth_return.email()
+      if not auth.IsAdminUser(email) and not auth.IsSupportUser(email):
+        raise auth.IsAdminMismatch
+
     if filename:
-      auth.DoAnyAuth()
       filename = urllib.unquote(filename)
       hash_str = self.request.get('hash')
 
@@ -86,11 +91,16 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
       if hash_str:
         gae_util.ReleaseLock(lock)
     else:
-      gaeserver.DoMunkiAuth(require_level=gaeserver.LEVEL_UPLOADPKG)
       query = models.PackageInfo.all()
+
+      filename = self.request.get('filename')
+      if filename:
+        query.filter('filename', filename)
+
       install_types = self.request.get_all('install_types')
       for install_type in install_types:
         query.filter('install_types =', install_type)
+
       catalogs = self.request.get_all('catalogs')
       for catalog in catalogs:
         query.filter('catalogs =', catalog)

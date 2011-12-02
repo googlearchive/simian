@@ -1879,12 +1879,14 @@ class SimianClient(HttpsAuthClient):
 
     return response, filename, catalogs, manifests
 
-  def ListPackages(self, install_types=None, catalogs=None):
+  def GetPackageMetadata(
+      self, install_types=None, catalogs=None, filename=None):
     """Gets a list of all packages of given install_types and catalogs.
 
     Args:
       install_types: list of string install types.
       catalogs: list of string catalogs.
+      filename: str filename of the package.
     Returns:
       str body from response.
     Raises:
@@ -1895,6 +1897,8 @@ class SimianClient(HttpsAuthClient):
       query.append('install_types=%s' % install_types)
     if catalogs:
       query.append('catalogs=%s' % catalogs)
+    if filename:
+      query.append('filename=%s' % filename)
     query = '&'.join(query)
     return self._SimianRequest('GET', '/pkgsinfo/?%s' % query)
 

@@ -55,19 +55,25 @@ class SimianCliClient(cli.SimianCliClient):
     """Returns an instance of the Simian client to use within this CLI."""
     return client.SimianClient(*args, **kwargs)
 
-  def PackageInfoTemplateHook(self, pkginfo, open_=open):
+  def PackageInfoTemplateHook(self, input_pkginfo, open_=open):
     """Allow a template to supply values into the pkginfo.
 
-    The template is loaded and its values are overlaid onto the pkginfo
-    supplied.
+    The template is loaded. Its values are overlaid onto a new pkginfo
+    instance with values copied from the one that is supplied as
+    input_pkginfo. Note this means callers to this method will not have
+    their input_pkginfo modified, rather a new pkginfo is received as output
+    if any values changed.
 
     Args:
-      pkginfo: plist.MunkiPackageInfoPlist
+      input_pkginfo: plist.MunkiPackageInfoPlist, input pkginfo to use as base
+        values
     Returns:
-      a plist.MunkiPackageInfoPlist with potentially new values populated
+      a different plist.MunkiPackageInfoPlist instance with potentially new
+      values populated
     Raises:
       CliError: an error occurs reading the template
     """
+    pkginfo = input_pkginfo.copy()
     try:
       plist_xml = open_(self.config['template_pkginfo'], 'r').read()
       template = plist.ApplePlist(plist_xml)
@@ -96,6 +102,11 @@ class SimianCliClient(cli.SimianCliClient):
     logging.debug('Pkginfo changed as result of template: %s', changed)
 
     if changed:
+      try:
+        pkginfo.Validate()
+      except plist.Error, e:
+        logging.exception('Template resulted in broken pkginfo: %s' % str(e))
+        return False
       return pkginfo
     else:
       return True
@@ -252,6 +263,11 @@ class SimianCliClient(cli.SimianCliClient):
       manifests, catalogs, install_types, unattended_install,
       unattended_uninstall
     )
+
+  # TODO(user): The pkginfo_hooks code in EditPackageInfo needs to be
+  # refactored into a generic solution that both UploadPackage and
+  # EditPackageInfo can use. That private function should probably be
+  # right here.
 
   def UploadPackage(self):
     """Uploads a package and pkginfo plist to Simian."""

@@ -270,6 +270,77 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.CreateCatalog(name)
     self.mox.VerifyAll()
 
+  def testSaveFirstConnectionWithSkipSerial(self):
+    """Tests _SaveFirstConnection() with a serial in skip_serials = []."""
+    self.mox.StubOutWithMock(common.models, 'FirstClientConnection')
+
+    client_id = {
+        'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
+        'office': 'foooffice', 'site': 'foosite'
+    }
+    class MockComputer(object):
+      serial = None
+    mock_computer = MockComputer()
+    mock_entity = self.mox.CreateMockAnything()
+    common.models.FirstClientConnection(key_name=client_id['uuid']).AndReturn(
+        mock_entity)
+    mock_entity.put().AndReturn(None)
+
+    self.mox.ReplayAll()
+    common._SaveFirstConnection(client_id, mock_computer)
+    self.assertEqual(mock_entity.computer, mock_computer)
+    self.assertEqual(mock_entity.owner, client_id['owner'])
+    self.assertEqual(mock_entity.hostname, client_id['hostname'])
+    self.assertEqual(mock_entity.office, client_id['office'])
+    self.assertEqual(mock_entity.site, client_id['site'])
+    self.mox.VerifyAll()
+
+  def testSaveFirstConnectionMarkingDupesInactive(self):
+    """Tests _SaveFirstConnection(), marking dupe serial numbers as inactive."""
+    self.mox.StubOutWithMock(common.models, 'FirstClientConnection')
+    self.mox.StubOutWithMock(common.models.Computer, 'AllActive')
+
+    now = datetime.datetime.utcnow()
+
+    client_id = {
+        'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
+        'office': 'foooffice', 'site': 'foosite'
+    }
+
+    mock_computer = self.mox.CreateMockAnything()
+    mock_computer.uuid = 'this is a unique id'
+    mock_computer.preflight_datetime = now
+    mock_computer.serial = 'foobar serial'
+
+    mock_entity = self.mox.CreateMockAnything()
+    common.models.FirstClientConnection(key_name=client_id['uuid']).AndReturn(
+        mock_entity)
+    mock_entity.put().AndReturn(None)
+
+    dupe1 = self.mox.CreateMockAnything()
+    dupe1.uuid = 'diff'
+    dupe1.preflight_datetime = now - datetime.timedelta(days=0, minutes=1)
+
+    dupe2 = self.mox.CreateMockAnything()
+    dupe2.uuid = 'diff again'
+    dupe2.preflight_datetime = now - datetime.timedelta(days=21)
+
+    # same_serials contains mock_computer, but put() shouldn't be called again.
+    same_serials = [mock_computer, dupe1, dupe2]
+    mock_query = self.mox.CreateMockAnything()
+    common.models.Computer.AllActive().AndReturn(mock_query)
+    mock_query.filter('serial =', mock_computer.serial).AndReturn(same_serials)
+
+    dupe1.put(update_active=False).AndReturn(None)
+    dupe2.put(update_active=False).AndReturn(None)
+
+    self.mox.ReplayAll()
+    common._SaveFirstConnection(client_id, mock_computer)
+    self.assertTrue(mock_computer.active)
+    self.assertFalse(dupe1.active)
+    self.assertFalse(dupe2.active)
+    self.mox.VerifyAll()
+
   def testLogClientConnectionWithInvalidUuid(self):
     """Tests LogClientConnection() function with an invalid uuid."""
     client_id = {'uuid': ''}

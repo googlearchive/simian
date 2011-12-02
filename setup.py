@@ -42,7 +42,7 @@ SIMIAN_ENTRY_POINTS = ['%s = simian.stubs:%s' % s for s in SIMIAN_STUBS]
 
 setup(
   name = 'simian',
-  version = '1.5.1',
+  version = '1.5.2',
   url = 'http://code.google.com/p/simian',
   license = 'Apache 2.0',
   description = 'An App Engine-based client & server component for Munki',

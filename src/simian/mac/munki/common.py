@@ -209,6 +209,18 @@ def _SaveFirstConnection(client_id, computer):
   e.site = client_id['site']
   e.put()
 
+  # Set older computers with the same serial number as inactive.
+  skip_serials = ['SystemSerialNumb', 'System Serial#', None]
+  if computer.serial not in skip_serials:
+    for dupe in models.Computer.AllActive().filter('serial =', computer.serial):
+      # skip over the new client.
+      if dupe.uuid == computer.uuid:
+        continue
+      # if the dupe is clearly older, mark as inactive.
+      if dupe.preflight_datetime < computer.preflight_datetime:
+        dupe.active = False
+        dupe.put(update_active=False)
+
 
 def LogClientConnection(
     event, client_id, user_settings=None, pkgs_to_install=None, delay=0,

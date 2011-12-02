@@ -60,6 +60,8 @@ class ReportsCache(webapp.RequestHandler):
       self._GenerateSummary()
     elif name == 'installcounts':
       _GenerateInstallCounts()
+    elif name == 'pendingcounts':
+      self._GeneratePendingCounts()
     elif name == 'msu_user_summary':
       if arg:
         try:
@@ -309,6 +311,14 @@ class ReportsCache(webapp.RequestHandler):
       models.KeyValueCache.ResetMemcacheWrap(cursor_name)
       summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
           since=since, tmp=True)
+
+  def _GeneratePendingCounts(self):
+    """Generates a dictionary of all install names and their pending count."""
+    d = {}
+    for p in models.PackageInfo.all():
+      d[p.munki_name] = models.Computer.AllActive(keys_only=True).filter(
+          'pkgs_to_install =', p.munki_name).count(999999)
+    models.ReportsCache.SetPendingCounts(d)
 
 
 def _GenerateInstallCounts():

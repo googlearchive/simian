@@ -122,6 +122,7 @@ class SystemProfileTest(mox.MoxTestBase):
     funcs = (
         '_GetSystemProfile',
         '_FindHDDSerial',
+        '_FindMachineModel',
         '_FindSerialNumber',
         '_FindPlatformUuid',
         '_FindMacAddresses',

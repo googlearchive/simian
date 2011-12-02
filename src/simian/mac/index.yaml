@@ -44,6 +44,13 @@ indexes:
 - kind: Computer
   properties:
   - name: active
+  - name: pkgs_to_install
+  - name: preflight_datetime
+    direction: desc
+
+- kind: Computer
+  properties:
+  - name: active
   - name: last_on_corp_preflight_datetime
 
 - kind: Computer

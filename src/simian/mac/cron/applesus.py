@@ -45,8 +45,8 @@ from simian.mac.munki import plist
 #       network to not be hijacked and return malicious catalogs.
 CATALOGS = {
     '10.5': 'http://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
-    '10.6': 'http://swscan.apple.com/content/catalogs/others/index-snowleopard.merged-1.sucatalog.gz',
-    '10.7': 'http://swscan.apple.com/content/catalogs/others/index-lion.merged-1.sucatalog.gz',
+    '10.6': 'http://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
+    '10.7': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
 }
 
 

@@ -31,6 +31,10 @@ cron:
   url: /cron/reports_cache/installcounts
   schedule: every 15 minutes
 
+- description: Pending Counts Cache
+  url: /cron/reports_cache/pendingcounts
+  schedule: every 15 minutes
+
 - description: MSU User Logs Summary - all
   url: /cron/reports_cache/msu_user_summary
   schedule: every 24 hours
