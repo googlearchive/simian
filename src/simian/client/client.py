@@ -467,7 +467,10 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     logging.debug('SSL configuring with context')
     sock = SSL.Connection(ctx)
     logging.debug('SSL connect(%s)', server_address)
-    sock.connect(server_address)
+    try:
+      sock.connect(server_address)
+    except SSL.SSLError, e:
+      raise SimianClientError('SSL error: %s' % str(e))
 
     # If this client is validating cert subjects, make sure that some
     # certs were validated.  This is done to prove our callback

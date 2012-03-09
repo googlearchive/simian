@@ -129,7 +129,12 @@ def IpToInt(ip):
     ip: str, IP address, like "192.168.0.1"
   Returns:
     int
+  Raises:
+    ValueError: if IPv6 address is supplied.
   """
+  # TODO(user): ipv6 should be supported in the future.
+  if ip and ip.find(':') > -1:
+    raise ValueError('IPv6')
   ip_int = 0
   a = map(int, ip.split('.'))
   for i in xrange(len(a)):
@@ -146,7 +151,11 @@ def IpMaskToInts(ip_mask):
     ip_mask: str, IP address, like "192.168.0.0/24"
   Returns:
     (int ip, int mask)
+  Raises:
+    ValueError: if IPv6 address is supplied.
   """
+  if ip_mask and ip_mask.find(':') > -1:
+    raise ValueError('IPv6')
   (net, mask) = ip_mask.split('/')
   mask = int(mask)
   mask_int = ((2 ** mask) - 1) << (32 - mask)
@@ -161,6 +170,8 @@ def IpMaskMatch(ip, ip_mask):
     ip_mask: str, like "192.168.0.0/24"
   Returns:
     True or False
+  Raises:
+    ValueError: if IPv6 address is supplied.
   """
   (ip_int_mask, ip_int_mask_bits) = IpMaskToInts(ip_mask)
   ip_int = IpToInt(ip)

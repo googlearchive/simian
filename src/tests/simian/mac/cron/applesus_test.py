@@ -240,6 +240,8 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(applesus.models, 'AdminAppleSUSProductLog')
     self.mox.StubOutWithMock(applesus.applesus, 'GetAutoPromoteDate')
 
+    promotions = {}
+
     mock_query = self.mox.CreateMockAnything()
 
     # testing promote
@@ -256,6 +258,7 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
         action='auto-promote to %s' % applesus.common.TESTING,
         tracks=mock_product_promote_testing.tracks).AndReturn(mock_log)
     mock_log.put().AndReturn(None)
+    promotions[applesus.common.TESTING] = [mock_product_promote_testing]
 
     # the testing product with too new of a datetime does not get promoted.
     applesus.applesus.GetAutoPromoteDate(
@@ -276,9 +279,13 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
         action='auto-promote to %s' % applesus.common.STABLE,
         tracks=mock_product_promote_stable.tracks).AndReturn(mock_log)
     mock_log.put().AndReturn(None)
+    promotions[applesus.common.STABLE] = [mock_product_promote_stable]
 
     for track in [applesus.common.TESTING, applesus.common.STABLE]:
       applesus.applesus.GenerateAppleSUSCatalogs(track)
+
+    self.mox.StubOutWithMock(self.c, '_NotifyAdminsOfAutoPromotions')
+    self.c._NotifyAdminsOfAutoPromotions(promotions).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()

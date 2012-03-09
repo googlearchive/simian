@@ -146,7 +146,7 @@ class SimianCliClient(object):
         delete a software package
     --edit
         edit an already uploaded software package
-    --print_package_metdata
+    --print_package_metadata
         prints all package metadata of given --install_types and --catalogs, or
         of a given --package filename.
     --print_pkginfo

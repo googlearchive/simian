@@ -22,9 +22,9 @@
 import logging
 import re
 import urllib
+
 from google.appengine.api import users
-from google.appengine.ext import webapp
-from simian.mac import models
+
 from simian.auth import gaeserver
 from simian.mac.common import auth
 from simian.mac.munki import common
@@ -32,7 +32,7 @@ from simian.mac.munki import handlers
 from simian.mac.munki import plist as plist_module
 
 
-class Manifests(handlers.AuthenticationHandler, webapp.RequestHandler):
+class Manifests(handlers.AuthenticationHandler):
   """Handler for /manifests/"""
 
   def get(self, client_id_str=''):

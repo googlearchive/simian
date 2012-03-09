@@ -29,4 +29,7 @@ from simian.client import cli as base_cli
 
 
 if __name__ == '__main__':
+  warnings.warn(
+    'The cli admin client is deprecated. It may partially or fully '
+    'fail to provide admin functionality.')
   base_cli.main(sys.argv, mac_cli.SimianCliClient)

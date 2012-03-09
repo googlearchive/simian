@@ -1,0 +1,33 @@
+<div style="margin: 10px 0;">
+{% ifnotequal results_count limit %}
+  {% if results_count %}
+    Displaying all {{ results_count }} results.
+  {% endif %}
+{% else %}
+  Displaying {{ results_count }} of max
+  <form name="limit-form" method="GET" action="{{ request_path }}"
+        style="display: inline;">
+    {% for key, value in request_query_params.items %}
+      {% ifnotequal key "limit" %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}"/>
+      {% endifnotequal %}
+    {% endfor %}
+    <select name="limit" onChange="javascript:this.parentNode.submit()">
+      {% for opt in limits %}
+        {% if opt == limit %}
+          <option selected="selected">{{ opt }}</option>
+        {% else %}
+          <option>{{ opt }}</option>
+        {% endif %}
+      {% endfor %}
+    </select>
+  </form>
+  results.
+
+  {% if next_page_link %}
+    <span stlye="margin-left: 20px;">
+      <a class="button" href="{{ next_page_link }}">Next {{ limit }} &raquo;</a>
+    </span>
+  {% endif %}
+{% endifnotequal %}
+</div>

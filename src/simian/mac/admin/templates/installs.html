@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Munki Installs{% endblock %}
+
+{% block page-content %}
+
+{% ifnotequal pkg "all" %}
+  {% if failures %}
+    <h2>Failed Installs: {{ pkg }}</h2>
+  {% else %}
+    <h2>Successful Installs: {{ pkg }}</h2>
+  {% endif %}
+{% endifnotequal %}
+
+{% include "results_pagination.html" %}
+
+{% include "installs_list.html" %}
+
+{% include "results_pagination.html" %}
+
+{% endblock %}
+

@@ -39,237 +39,6 @@ class CommonModuleTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return common
 
-  def _MockObtainLock(self, name, obtain=True):
-    if not hasattr(self, '_mock_obtain_lock'):
-      self.mox.StubOutWithMock(common.gae_util, 'ObtainLock')
-      self._mock_obtain_lock = True
-    common.gae_util.ObtainLock(name).AndReturn(obtain)
-
-  def _MockReleaseLock(self, name):
-    if not hasattr(self, '_mock_release_lock'):
-      self.mox.StubOutWithMock(common.gae_util, 'ReleaseLock')
-      self._mock_release_lock = True
-    common.gae_util.ReleaseLock(name).AndReturn(None)
-
-  def testCreateManifestAsync(self):
-    """Tests calling CreateManifest(delay=2)."""
-    name = 'manifestname'
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
-    self.stubs.Set(common.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-manifest-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    common.datetime.datetime.utcnow().AndReturn(utcnow)
-    common.deferred.defer(
-        common.CreateManifest, name, _name=deferred_name, _countdown=2)
-    self.mox.ReplayAll()
-    common.CreateManifest(name, delay=2)
-    self.mox.VerifyAll()
-
-  def testCreateManifestSuccess(self):
-    """Tests the success path for CreateManifest()."""
-    xml = 'fooxml'
-    name = 'goodname'
-    pkg1 = test.GenericContainer(install_types=['footype1'], name='pkg1')
-    pkg2 = test.GenericContainer(
-        install_types=['footype1', 'footype2'], name='pkg2')
-    manifest_dict = {
-        'catalogs': [name],
-        pkg1.install_types[0]: [pkg1.name, pkg2.name],
-        pkg2.install_types[1]: [pkg2.name],
-    }
-    self._MockObtainLock('manifest_lock_%s' % name)
-    self.stubs.Set(
-        common.plist_module,
-        'MunkiManifestPlist',
-        self.mox.CreateMock(common.plist_module.MunkiManifestPlist))
-
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('manifests =', name).AndReturn([pkg1, pkg2])
-
-    mock_plist = self.mox.CreateMockAnything()
-    common.plist_module.MunkiManifestPlist().AndReturn(mock_plist)
-    mock_plist.SetContents(manifest_dict)
-    mock_plist.GetXml().AndReturn(xml)
-
-    mock_manifest = self.MockModelStatic('Manifest', 'get_or_insert', name)
-    mock_manifest.put().AndReturn(None)
-    self.mox.StubOutWithMock(common.models.Manifest, 'ResetMemcacheWrap')
-    common.models.Manifest.ResetMemcacheWrap(name).AndReturn(None)
-
-    self._MockReleaseLock('manifest_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    common.CreateManifest(name)
-    self.assertEqual(mock_manifest.plist, xml)
-    self.mox.VerifyAll()
-
-  def testCreateManifestDbError(self):
-    """Tests CreateManifest() with db Error."""
-    name = 'goodname'
-    self._MockObtainLock('manifest_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('manifests =', name).AndRaise(common.models.db.Error)
-
-    self._MockReleaseLock('manifest_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    self.assertRaises(common.models.db.Error, common.CreateManifest, name)
-    self.mox.VerifyAll()
-
-  def testCreateManifestWithNoPkgsinfo(self):
-    """Tests CreateManifest() where no coorresponding PackageInfo exist."""
-    name = 'badname'
-    self._MockObtainLock('manifest_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('manifests =', name).AndReturn([])
-    self._MockReleaseLock('manifest_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        common.ManifestCreationError, common.CreateManifest, name)
-    self.mox.VerifyAll()
-
-  def testCreateManifestLocked(self):
-    """Tests CreateManifest() where name is locked."""
-    name = 'lockedname'
-    self._MockObtainLock('manifest_lock_%s' % name, obtain=False)
-    # here is where CreateManifest calls itself; can't stub the method we're
-    # testing, so mock the calls that happen as a result.
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
-    self.stubs.Set(common.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-manifest-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    common.datetime.datetime.utcnow().AndReturn(utcnow)
-    common.deferred.defer(
-        common.CreateManifest, name, _name=deferred_name, _countdown=5)
-
-    self.mox.ReplayAll()
-    common.CreateManifest(name)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogAsync(self):
-    """Tests calling CreateCatalog(delay=2)."""
-    name = 'catalogname'
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
-    self.stubs.Set(common.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-catalog-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    common.datetime.datetime.utcnow().AndReturn(utcnow)
-    common.deferred.defer(
-        common.CreateCatalog, name, _name=deferred_name, _countdown=2)
-    self.mox.ReplayAll()
-    common.CreateCatalog(name, delay=2)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogSuccess(self):
-    """Tests the success path for CreateCatalog()."""
-    name = 'goodname'
-    catalog = self.mox.CreateMockAnything()
-    plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
-    pkg1 = test.GenericContainer(plist=plist1)
-    plist2 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
-    pkg2 = test.GenericContainer(plist=plist2)
-    self.mox.StubOutWithMock(common, 'CreateManifest')
-    self._MockObtainLock('catalog_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('catalogs =', name).AndReturn([pkg1, pkg2])
-    catalog = self.MockModelStatic('Catalog', 'get_or_insert', name)
-    catalog.put().AndReturn(None)
-    self.mox.StubOutWithMock(common.models.Catalog, 'ResetMemcacheWrap')
-    common.models.Catalog.ResetMemcacheWrap(name).AndReturn(None)
-    self._MockReleaseLock('catalog_lock_%s' % name)
-    common.CreateManifest(name, delay=1).AndReturn(None)
-
-    self.mox.ReplayAll()
-    common.CreateCatalog(name)
-    self.assertEqual(catalog.name, name)
-    xml = ('  <dict>\n'
-           '    <key>foo</key>\n'
-           '    <string>bar</string>\n'
-           '  </dict>\n'
-           '  <dict>\n'
-           '    <key>foo</key>\n'
-           '    <string>bar</string>\n'
-           '  </dict>')
-    plist = common.CATALOG_PLIST_XML % xml
-    self.assertEqual(plist, catalog.plist)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogWithNoPkgsinfo(self):
-    """Tests CreateCatalog() where no coorresponding PackageInfo exist."""
-    name = 'badname'
-    self._MockObtainLock('catalog_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('catalogs =', name).AndReturn([])
-    self._MockReleaseLock('catalog_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        common.CatalogCreationError, common.CreateCatalog, name)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogWithPlistParseError(self):
-    """Tests CreateCatalog() where plist.GetXmlDocument() raises plist.Error."""
-    name = 'goodname'
-    plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
-    pkg1 = test.GenericContainer(plist=plist1)
-    self._MockObtainLock('catalog_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('catalogs =', name).AndReturn([pkg1])
-    self.mox.StubOutWithMock(
-        common.plist_module, 'ApplePlist', self.mox.CreateMockAnything())
-    mock_plist = self.mox.CreateMockAnything()
-    common.plist_module.ApplePlist(pkg1.plist).AndReturn(mock_plist)
-    mock_plist.Parse().AndRaise(common.plist_module.Error)
-    self._MockReleaseLock('catalog_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        common.plist_module.Error, common.CreateCatalog, name)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogWithDbError(self):
-    """Tests CreateCatalog() where put() raises db.Error."""
-    name = 'goodname'
-    catalog = self.mox.CreateMockAnything()
-    plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
-    pkg1 = test.GenericContainer(plist=plist1)
-    plist2 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
-    pkg2 = test.GenericContainer(plist=plist2)
-    self._MockObtainLock('catalog_lock_%s' % name)
-    mock_model = self.MockModelStatic('PackageInfo', 'all')
-    mock_model.filter('catalogs =', name).AndReturn([pkg1, pkg2])
-    catalog = self.MockModelStatic('Catalog', 'get_or_insert', name)
-    catalog.put().AndRaise(common.models.db.Error)
-    self._MockReleaseLock('catalog_lock_%s' % name)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        common.models.db.Error, common.CreateCatalog, name)
-    self.mox.VerifyAll()
-
-  def testCreateCatalogLocked(self):
-    """Tests CreateCatalog() where name is locked."""
-    name = 'lockedname'
-    self._MockObtainLock('catalog_lock_%s' % name, obtain=False)
-    # here is where CreateCatalog calls itself; can't stub the method we're
-    # testing, so mock the calls that happen as a result.
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
-    self.stubs.Set(common.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-catalog-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    common.datetime.datetime.utcnow().AndReturn(utcnow)
-    common.deferred.defer(
-        common.CreateCatalog, name, _name=deferred_name, _countdown=10)
-
-    self.mox.ReplayAll()
-    common.CreateCatalog(name)
-    self.mox.VerifyAll()
-
   def testSaveFirstConnectionWithSkipSerial(self):
     """Tests _SaveFirstConnection() with a serial in skip_serials = []."""
     self.mox.StubOutWithMock(common.models, 'FirstClientConnection')
@@ -381,6 +150,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     user_disk_free = 789
     global_uuid = 'uuid'
     ip_address = 'fooip'
+    runtype = 'auto'
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
         'track': track, 'config_track': config_track, 'os_version': os_version,
@@ -388,7 +158,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': global_uuid,
+        'global_uuid': global_uuid, 'runtype': runtype,
     }
     connection_datetimes = range(1, common.CONNECTION_DATETIMES_LIMIT + 1)
     connection_dates = range(1, common.CONNECTION_DATES_LIMIT + 1)
@@ -410,6 +180,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         event, client_id, user_settings=user_settings, ip_address=ip_address)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(ip_address, mock_computer.ip_address)
+    self.assertEquals(runtype, mock_computer.runtype)
     self.assertEquals(hostname, mock_computer.hostname)
     self.assertEquals(serial, mock_computer.serial)
     self.assertEquals(owner, mock_computer.owner)
@@ -449,6 +220,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     root_disk_free = 456
     user_disk_free = 789
     global_uuid = 'uuid'
+    runtype = 'custom'
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
         'track': track, 'config_track': config_track, 'os_version': os_version,
@@ -456,9 +228,13 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': uuid,
+        'global_uuid': uuid, 'runtype': runtype,
     }
     pkgs_to_install = ['FooApp1', 'FooApp2']
+    apple_updates_to_install = ['FooUpdate1', 'FooUpdate2']
+    all_pkgs_to_install = pkgs_to_install + [
+        common.APPLESUS_PKGS_TO_INSTALL_FORMAT % update
+        for update in apple_updates_to_install]
     connection_datetimes = range(1, common.CONNECTION_DATETIMES_LIMIT + 1)
     connection_dates = range(1, common.CONNECTION_DATES_LIMIT + 1)
 
@@ -477,9 +253,11 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     common.LogClientConnection(
         event, client_id, pkgs_to_install=pkgs_to_install,
+        apple_updates_to_install=apple_updates_to_install,
         computer=mock_computer, ip_address=ip_address)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(ip_address, mock_computer.ip_address)
+    self.assertEquals(runtype, mock_computer.runtype)
     self.assertEquals(hostname, mock_computer.hostname)
     self.assertEquals(serial, mock_computer.serial)
     self.assertEquals(owner, mock_computer.owner)
@@ -504,7 +282,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     # Verify on_corp/off_corp counts.
     self.assertEquals(1, mock_computer.connections_on_corp)
     self.assertEquals(0, mock_computer.connections_off_corp)
-    self.assertEquals(pkgs_to_install, mock_computer.pkgs_to_install)
+    self.assertEquals(all_pkgs_to_install, mock_computer.pkgs_to_install)
     self.assertEquals(False, mock_computer.all_pkgs_installed)
     self.mox.VerifyAll()
 
@@ -529,7 +307,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     uptime = 123
     root_disk_free = 456
     user_disk_free = 789
-    global_uuid = 'uuid',
+    global_uuid = 'uuid'
+    runtype = 'auto'
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
         'track': track, 'config_track': config_track, 'os_version': os_version,
@@ -537,7 +316,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': global_uuid,
+        'global_uuid': global_uuid, 'runtype': runtype,
     }
 
     # bypass the db.run_in_transaction step
@@ -564,6 +343,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.LogClientConnection(event, client_id, ip_address=ip_address)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(ip_address, mock_computer.ip_address)
+    self.assertEquals(runtype, mock_computer.runtype)
     self.assertEquals(hostname, mock_computer.hostname)
     self.assertEquals(serial, mock_computer.serial)
     self.assertEquals(owner, mock_computer.owner)
@@ -596,8 +376,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.datetime.datetime.utcnow().AndReturn(utcnow)
     common.deferred.defer(
         common.LogClientConnection, event, client_id, user_settings=None,
-        pkgs_to_install=None, ip_address=ip_address,
-        _name=deferred_name, _countdown=2)
+        pkgs_to_install=None, apple_updates_to_install=None,
+        ip_address=ip_address, _name=deferred_name, _countdown=2)
     self.mox.ReplayAll()
     common.LogClientConnection(event, client_id, delay=2, ip_address=ip_address)
     self.mox.VerifyAll()
@@ -618,28 +398,50 @@ class CommonModuleTest(test.RequestHandlerTest):
         'os_version=10.6.3|client_version=0.6.0.759.0|on_corp=0|'
         'last_notified_datetime=2010-01-01|site=NYC|office=US-NYC-FOO|'
         'uptime=123.0|root_disk_free=456|user_disk_free=789|'
-        'global_uuid=uuid|applesus=false'
+        'global_uuid=uuid|applesus=false|runtype=auto'
     )
 
     client_id_dict = {
-        'uuid': '6c3327e9-6405-4f05-8374-142cbbd260c9',
-        'owner': 'foouser',
-        'hostname': 'foohost',
-        'serial': '1serial2',
-        'config_track': 'fooconfigtrack',
-        'site': 'NYC',
-        'office': 'US-NYC-FOO',
-        'os_version': '10.6.3',
-        'client_version': '0.6.0.759.0',
-        'on_corp': False,
-        'last_notified_datetime': '2010-01-01',
-        'uptime': 123.0,
-        'root_disk_free': 456,
-        'user_disk_free': 789,
-        'global_uuid': 'uuid',
-        'applesus': False,
+        u'uuid': u'6c3327e9-6405-4f05-8374-142cbbd260c9',
+        u'owner': u'foouser',
+        u'hostname': u'foohost',
+        u'serial': u'1serial2',
+        u'config_track': u'fooconfigtrack',
+        u'site': u'NYC',
+        u'office': u'US-NYC-FOO',
+        u'os_version': u'10.6.3',
+        u'client_version': u'0.6.0.759.0',
+        u'on_corp': False,
+        u'last_notified_datetime': u'2010-01-01',
+        u'uptime': 123.0,
+        u'root_disk_free': 456,
+        u'user_disk_free': 789,
+        u'global_uuid': u'uuid',
+        u'applesus': False,
+        u'runtype': 'auto',
     }
     return client_id_str, client_id_dict
+
+  def testParseClientIdWithUnicode(self):
+    """Tests ParseClientId with some unicode characters."""
+    client_id_str, client_id_dict = self._GetClientIdTestData()
+    # Convert the client_id_str to unicode.
+    client_id_unicode = client_id_str.decode('utf-8')
+    # Replace foohost with a unicode O with umlaut, surrounded by zz.
+    client_id_unicode = client_id_str.replace('foohost', u'zz\u00D6zz')
+    cid = client_id_unicode % u'stable'
+    client_id_dict[u'track'] = u'stable'
+    client_id_dict[u'hostname'] = u'zz\xd6zz'
+    self.assertEqual(client_id_dict, common.ParseClientId(cid))
+
+  def testParseClientIdNoneBool(self):
+    """Tests ParseClientId with on_corp=<missing>."""
+    client_id_str, client_id_dict = self._GetClientIdTestData()
+    client_id_str = client_id_str.replace('on_corp=0', 'on_corp=')
+    client_id_dict['on_corp'] = None
+    cid = client_id_str % 'stable'
+    client_id_dict['track'] = 'stable'
+    self.assertEqual(client_id_dict, common.ParseClientId(cid))
 
   def testParseClientIdOnCorp(self):
     """Tests ParseClientId with on_corp=1."""
@@ -909,18 +711,34 @@ class CommonModuleTest(test.RequestHandlerTest):
     owner_mods = [owner_mod_one]
     self.mox.StubOutWithMock(
         common.models.OwnerManifestModification,
-        'MemcacheWrappedPropMapGetAll')
-    common.models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
-        'owner', client_id['owner']).AndReturn(owner_mods)
+        'MemcacheWrappedGetAllFilter')
+    common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
+        (('owner', client_id['owner']),)).AndReturn(owner_mods)
 
     uuid_mod_one = self.mox.CreateMockAnything()
     uuid_mod_one.enabled = False
     uuid_mods = [uuid_mod_one]
     self.mox.StubOutWithMock(
         common.models.UuidManifestModification,
-        'MemcacheWrappedPropMapGetAll')
-    common.models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
-        'uuid', client_id['uuid']).AndReturn(uuid_mods)
+        'MemcacheWrappedGetAllFilter')
+    common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
+        (('uuid', client_id['uuid']),)).AndReturn(uuid_mods)
+
+    computer_tags = ['footag1', 'footag2']
+    self.mox.StubOutWithMock(common.models.Tag, 'GetAllTagNamesForKey')
+    self.mox.StubOutWithMock(common.models.db.Key, 'from_path')
+    common.models.db.Key.from_path('Computer', client_id['uuid']).AndReturn('k')
+    common.models.Tag.GetAllTagNamesForKey('k').AndReturn(computer_tags)
+    tag_mod_one = self.mox.CreateMockAnything()
+    tag_mod_one.enabled = False
+    tag_mods = [tag_mod_one]
+    self.mox.StubOutWithMock(
+        common.models.TagManifestModification,
+        'MemcacheWrappedGetAllFilter')
+    common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
+        (('tag_key_name', 'footag1'),)).AndReturn([])
+    common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
+        (('tag_key_name', 'footag2'),)).AndReturn(tag_mods)
 
     mock_plist = self.mox.CreateMockAnything()
     managed_installs = ['FooPkg', blocked_package_name]
@@ -968,6 +786,9 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(common.models, 'OSVersionManifestModification')
     self.mox.StubOutWithMock(common.models, 'OwnerManifestModification')
     self.mox.StubOutWithMock(common.models, 'UuidManifestModification')
+    self.mox.StubOutWithMock(common.models, 'TagManifestModification')
+    self.mox.StubOutWithMock(common.models.db.Key, 'from_path')
+    self.mox.StubOutWithMock(common.models.Tag, 'GetAllTagNamesForKey')
 
     client_id = {
         'site': 'sitex',
@@ -979,33 +800,48 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     blocked_package_name = 'FooPackage'
     user_settings = {
-        'BlockPackages': [blocked_package_name]
+        'BlockPackages': [blocked_package_name],
+        'FlashDeveloper': True,
     }
 
     plist_xml = '<plist xml>'
 
     common.models.SiteManifestModification.MemcacheWrappedGetAllFilter(
-        (('site =', client_id['site']),)).AndReturn(None)
+        (('site =', client_id['site']),)).AndReturn([])
     common.models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
-        (('os_version =', client_id['os_version']),)).AndReturn(None)
-    common.models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
-        'owner', client_id['owner']).AndRaise(KeyError)
-    common.models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
-        'uuid', client_id['uuid']).AndRaise(KeyError)
+        (('os_version =', client_id['os_version']),)).AndReturn([])
+    common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
+        (('owner', client_id['owner']),)).AndReturn([])
+    common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
+        (('uuid', client_id['uuid']),)).AndReturn([])
+    common.models.db.Key.from_path('Computer', client_id['uuid']).AndReturn('k')
+    common.models.Tag.GetAllTagNamesForKey('k').AndReturn(['tag'])
+    common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
+        (('tag_key_name', 'tag'),)).AndReturn([])
 
-    managed_installs = ['FooPkg', blocked_package_name]
+    managed_installs = [
+        'FooPkg', blocked_package_name, common.FLASH_PLUGIN_NAME]
+    managed_updates = []
 
     mock_plist = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(common.plist_module, 'MunkiManifestPlist')
     common.plist_module.MunkiManifestPlist(plist_xml).AndReturn(mock_plist)
     mock_plist.Parse().AndReturn(None)
 
-    for install_type in common.common.INSTALL_TYPES:
-      if install_type == 'managed_installs':
-        mock_plist.get(install_type, []).AndReturn(managed_installs)
-        mock_plist.__getitem__(install_type).AndReturn(managed_installs)
-      else:
-        mock_plist.get(install_type, []).AndReturn([])
+    # FlashDeveloper is True, so managed_updates and managed_installs are read.
+    mock_plist.__getitem__(common.common.MANAGED_UPDATES).AndReturn(
+        managed_updates)
+    mock_plist.__getitem__(common.common.MANAGED_UPDATES).AndReturn(
+        managed_installs)
+
+    for blocked_pkg in user_settings['BlockPackages']:
+      for install_type in common.common.INSTALL_TYPES:
+        if install_type == 'managed_installs':
+          mock_plist.get(install_type, []).AndReturn(managed_installs)
+          if blocked_pkg == blocked_package_name:
+            mock_plist.__getitem__(install_type).AndReturn(managed_installs)
+        else:
+          mock_plist.get(install_type, []).AndReturn([])
 
     mock_plist.GetXml().AndReturn(plist_xml)
 
@@ -1014,6 +850,10 @@ class CommonModuleTest(test.RequestHandlerTest):
         plist_xml, client_id, user_settings=user_settings)
     self.assertEqual(plist_xml, xml_out)
     self.assertTrue(blocked_package_name not in managed_installs)
+    # non-debug flashplugin should be removed from managed_updates
+    self.assertTrue(common.FLASH_PLUGIN_NAME not in managed_installs)
+
+    self.assertTrue(common.FLASH_PLUGIN_DEBUG_NAME in managed_updates)
     self.mox.VerifyAll()
 
   def testGenerateDynamicManifestWhenNoMods(self):
@@ -1022,6 +862,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(common.models, 'OSVersionManifestModification')
     self.mox.StubOutWithMock(common.models, 'OwnerManifestModification')
     self.mox.StubOutWithMock(common.models, 'UuidManifestModification')
+    self.mox.StubOutWithMock(common.models.db.Key, 'from_path')
+    self.mox.StubOutWithMock(common.models.Tag, 'GetAllTagNamesForKey')
 
     client_id = {
         'site': 'sitex',
@@ -1035,13 +877,15 @@ class CommonModuleTest(test.RequestHandlerTest):
     plist_xml = '<plist xml>'
 
     common.models.SiteManifestModification.MemcacheWrappedGetAllFilter(
-        (('site =', client_id['site']),)).AndReturn(None)
+        (('site =', client_id['site']),)).AndReturn([])
     common.models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
-        (('os_version =', client_id['os_version']),)).AndReturn(None)
-    common.models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
-        'owner', client_id['owner']).AndRaise(KeyError)
-    common.models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
-        'uuid', client_id['uuid']).AndRaise(KeyError)
+        (('os_version =', client_id['os_version']),)).AndReturn([])
+    common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
+        (('owner', client_id['owner']),)).AndRaise([])
+    common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
+        (('uuid', client_id['uuid']),)).AndRaise([])
+    common.models.db.Key.from_path('Computer', client_id['uuid']).AndReturn('k')
+    common.models.Tag.GetAllTagNamesForKey('k').AndReturn([])
 
     self.mox.ReplayAll()
     self.assertTrue(
@@ -1078,11 +922,15 @@ class CommonModuleTest(test.RequestHandlerTest):
     computer.user_settings = None
 
     # PackageInfo entities
+    mock_pl1 = self.mox.CreateMockAnything()
+    mock_pl2 = self.mox.CreateMockAnything()
+    mock_pl3 = self.mox.CreateMockAnything()
+    mock_pl4 = self.mox.CreateMockAnything()
     package_infos = [
-        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
-        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
+        test.GenericContainer(plist=mock_pl1, version='1.0', name='fooname1'),
+        test.GenericContainer(plist=mock_pl2, version='1.0', name='fooname2'),
+        test.GenericContainer(plist=mock_pl3, version='1.0', name='fooname3'),
+        test.GenericContainer(plist=mock_pl4, version='1.0', name='fooname4'),
     ]
 
     packagemap = {}
@@ -1098,10 +946,11 @@ class CommonModuleTest(test.RequestHandlerTest):
     # mock manifest creation
     common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
     common.IsPanicModeNoPackages().AndReturn(False)
+    mock_plist = self.mox.CreateMockAnything()
     common.models.Manifest.MemcacheWrappedGet('track').AndReturn(
-        test.GenericContainer(enabled=True, plist='manifest_plist'))
+        test.GenericContainer(enabled=True, plist=mock_plist))
     common.GenerateDynamicManifest(
-        'manifest_plist', client_id, user_settings=None).AndReturn(
+        mock_plist, client_id, user_settings=None).AndReturn(
         'manifest_plist')
 
     # mock manifest parsing
@@ -1112,25 +961,20 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     # mock manifest reading and package map creation
     mock_package_info = self.mox.CreateMockAnything()
-    mock_manifest_plist.GetContents().AndReturn({'catalogs': ['catalog1']})
+    mock_manifest_plist.__getitem__('catalogs').AndReturn(
+        {'catalogs': ['catalog1']})
     common.models.PackageInfo.all().AndReturn(mock_package_info)
     iter_return = []
 
     for package_info in package_infos:
       iter_return.append(test.GenericContainer(
           plist=package_info.plist,
-          name=package_info.plist[5:]))
-      mock_package_info_plist = self.mox.CreateMockAnything()
-      common.plist_module.MunkiPackageInfoPlist(
-          package_info.plist).AndReturn(mock_package_info_plist)
-      mock_package_info_plist.Parse().AndReturn(None)
-      contents = {
-          'display_name': package_info.plist[5:],
-          'version': package_info.version,
-      }
-      packagemap[contents['display_name']] = '%s-%s' % (
-          contents['display_name'], contents['version'])
-      mock_package_info_plist.GetContents().AndReturn(contents)
+          name=package_info.name))
+      package_info.plist.get('display_name', None).AndReturn(None)
+      package_info.plist.get('name').AndReturn(package_info.name)
+      package_info.plist.get('version', '').AndReturn(package_info.version)
+      packagemap[package_info.name] = '%s-%s' % (
+          package_info.name, package_info.version)
 
     def __iter_func():
       for i in iter_return:
@@ -1197,10 +1041,11 @@ class CommonModuleTest(test.RequestHandlerTest):
     # mock manifest creation
     common.models.Computer.get_by_key_name(uuid).AndReturn(computer)
     common.IsPanicModeNoPackages().AndReturn(False)
+    mock_plist = self.mox.CreateMockAnything()
     common.models.Manifest.MemcacheWrappedGet('track').AndReturn(
-        test.GenericContainer(enabled=True, plist='manifest_plist'))
+        test.GenericContainer(enabled=True, plist=mock_plist))
     common.GenerateDynamicManifest(
-        'manifest_plist', client_id, user_settings=None).AndReturn(None)
+        mock_plist, client_id, user_settings=None).AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertRaises(

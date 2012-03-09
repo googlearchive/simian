@@ -121,6 +121,8 @@ def UpdateInstallLogSchema(cursor=None, num_updated=0):
   for e in entities:
     e.success = e.IsSuccess()
     e.applesus = getattr(e, 'applesus', False)
+    if not getattr(e, 'server_datetime', False):
+      e.server_datetime = e.mtime
     entities_to_put.append(e)
   gae_util.BatchDatastoreOp(models.db.put, entities_to_put, 100)
 
@@ -128,4 +130,4 @@ def UpdateInstallLogSchema(cursor=None, num_updated=0):
   num_updated += len(entities_to_put)
   logging.info('%s entities converted', num_updated)
 
-  deferred.defer(TouchAllInstalls, cursor=cursor, num_updated=num_updated)
+  deferred.defer(UpdateInstallLogSchema, cursor=cursor, num_updated=num_updated)

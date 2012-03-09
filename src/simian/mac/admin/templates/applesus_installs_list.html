@@ -1,0 +1,38 @@
+{% if host_report %}
+  <div>
+  <h3>Apple Software Updates</h3>
+  <span class="count">({{ applesus_installs|length }} found, limit {{ limit }})</span>
+  </div>
+{% endif %}
+
+{% if applesus_installs %}
+  <table class="stats-table">
+    <tr class="multi-header">
+      {% if host_report or pkg == "all" %}<th>Package</th>{% endif %}
+      {% if not host_report %}
+        <th>UUID</th>
+      {% endif %}
+      <th>Status</th>
+      <th>On Corp</th>
+      <th>Time</th>
+      <th>Time Since</th>
+    </tr>
+    {% for install in applesus_installs %}
+    <tr>
+      {% if host_report or pkg == "all" %}
+        <td><a href="/admin/installs?pkg={{ install.package }}&applesus={{ applesus|yesno:"1,0" }}">{{ install.package }}</a></td>
+      {% endif %}
+      {% if not host_report %}
+      <td>
+        {{ install.uuid|host_uuid_link }}
+      </td>
+      {% endif %}
+      <td>{{ install.status }}</td>
+      <td>{{ install.on_corp }}</td>
+      <td>{{ install.mtime }}</td>
+      <td>{{ install.mtime|timesince }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+

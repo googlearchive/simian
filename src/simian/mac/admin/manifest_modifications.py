@@ -21,26 +21,43 @@
 
 
 
-import logging
-import os
 from google.appengine.api import users
-from google.appengine.ext import webapp
 from google.appengine.ext import db
-from google.appengine.ext.webapp import template
-from simian import settings
-from simian.mac import models
+from simian.mac import admin
 from simian.mac import common
+from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.common import util
 
 
-class ManifestModifications(webapp.RequestHandler):
+# Manifest Modification Type key/value pairs, where the key is used for
+# form field and query parameter naming, and the value is for human readable
+# UI friendliness.
+MOD_TYPES = (
+    ('owner', 'Owner'),
+    ('uuid', 'UUID'),
+    ('site', 'Site'),
+    ('os_version', 'OS Version'),
+    ('tag', 'Tag'),
+)
+# A dictionary of the allowed manifest modification types for each group.
+MOD_GROUP_TYPES = {
+    common.MANIFEST_MOD_SUPPORT_GROUP: MOD_TYPES[:1],
+    common.MANIFEST_MOD_SECURITY_GROUP: MOD_TYPES[:2],
+}
+
+DEFAULT_MANIFEST_MOD_FETCH_LIMIT = 25
+
+
+class ManifestModifications(admin.AdminHandler):
   """Handler for /admin/manifest_modifications."""
 
   def post(self):
     """POST handler."""
     if self.request.get('add_manifest_mod'):
-      if not auth.IsAdminUser() and not auth.IsSecurityUser():
+      if (not auth.IsAdminUser() and
+          not auth.IsSupportUser() and
+          not auth.IsSecurityUser()):
         self.response.set_status(403)
         return
       self._AddManifestModification()
@@ -57,26 +74,42 @@ class ManifestModifications(webapp.RequestHandler):
 
   def _AddManifestModification(self):
     """Adds a new manifest modification to Datastore."""
-    # TODO(user): add support for other types of manifest modifications.
     mod_type = self.request.get('mod_type')
-    mod_value = self.request.get('mod_value').strip()
+    target = self.request.get('target').strip()
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
     manifests = self.request.get_all('manifests')
     install_types = self.request.get_all('install_types')
 
     # Security users are only able to inject specific packages.
-    if auth.IsSecurityUser() and not auth.IsAdminUser():
-      if munki_pkg_name not in settings.SECURITY_USERS_MANIFEST_MOD_PKGS:
+    if not auth.IsAdminUser():
+      grp = None
+      if auth.IsSupportUser():
+        grp = common.MANIFEST_MOD_SUPPORT_GROUP
+        # Support users can only inject items into optional_installs.
+        install_types = ['optional_installs']
+      elif auth.IsSecurityUser():
+        grp = common.MANIFEST_MOD_SECURITY_GROUP
+        # Security users can only inject items into managed_installs.
+        install_types = ['managed_installs']
+
+      munki_pkg_names = models.PackageInfo.GetManifestModPkgNames(
+          grp, only_names=True)
+      if munki_pkg_name not in munki_pkg_names:
         self.response.out.write(
-            'Security team is not allowed to inject: %s' % munki_pkg_name)
+            'You are not allowed to inject: %s' % munki_pkg_name)
+        self.response.set_status(403)
+        return
+      elif mod_type not in [k for k, v in MOD_GROUP_TYPES.get(grp, [])]:
+        self.response.out.write(
+            'You are not allowed to inject to: %s' % mod_type)
         self.response.set_status(403)
         return
 
     # Validation.
     error_msg = None
-    if not mod_value or not munki_pkg_name or not install_types:
+    if not target or not munki_pkg_name or not install_types:
       error_msg = (
-          'mod_value, munki_pkg_name, and install_types are all required')
+          'target, munki_pkg_name, and install_types are all required')
     if not error_msg:
       for manifest in manifests:
         if manifest not in common.TRACKS:
@@ -90,14 +123,16 @@ class ManifestModifications(webapp.RequestHandler):
       if not models.PackageInfo.all().filter('name =', munki_pkg_name).get():
         error_msg = 'No package found with Munki name: %s' % munki_pkg_name
     if error_msg:
-      self.redirect('/admin/manifest_modifications?error=%s' % error_msg)
+      self.redirect('/admin/manifest_modifications?msg=%s' % error_msg)
       return
 
     mod = models.BaseManifestModification.GenerateInstance(
-        mod_type, mod_value, munki_pkg_name, manifests=manifests,
+        mod_type, target, munki_pkg_name, manifests=manifests,
         install_types=install_types, user=users.get_current_user())
     mod.put()
-    self.redirect('/admin/manifest_modifications?mod_type=%s' % mod_type)
+    msg = 'Manifest Modification successfully saved.'
+    self.redirect(
+        '/admin/manifest_modifications?mod_type=%s&msg=%s' % (mod_type, msg))
 
   def _ToggleManifestModification(self):
     """Toggles manifest modifications between enabled and disabled."""
@@ -115,71 +150,51 @@ class ManifestModifications(webapp.RequestHandler):
     auth.DoUserAuth()
     self._DisplayMain()
 
-  def _Paginate(self, query, limit):
-    """Returns a list of entities limited to limit, with a next_page cursor."""
-    if self.request.get('page', ''):
-      query.with_cursor(self.request.get('page'))
-    entities = list(query.fetch(limit))
-    if len(entities) == limit:
-      next_page = query.cursor()
-    else:
-      next_page = None
-    return entities, next_page
-
   def _DisplayMain(self):
     """Displays the main Manifest Modification report."""
-    limit = 1000
     error = self.request.get('error')
 
-    mod_type = self.request.get('mod_type')
+    mod_type = self.request.get('mod_type') or 'owner'
     model = models.MANIFEST_MOD_MODELS.get(mod_type)
     if mod_type and not model:
       raise ValueError('Invalid mod_type: %s' % mod_type)
     elif mod_type:
       mods_query = model.all().order('-mtime')
-      mods, next_page = self._Paginate(mods_query, limit)
-    else:
-      mods = None
-      next_page = None
+
+    mods = self.Paginate(mods_query, DEFAULT_MANIFEST_MOD_FETCH_LIMIT)
 
     is_admin = auth.IsAdminUser()
+    is_support = False
     is_security = False
     if not is_admin:
-      is_security = auth.IsSecurityUser()
-    # TODO(user): generate PackageInfo dict so admin select box can use display
-    #             names, munki package names can link to installs, etc.
+      is_support = auth.IsSupportUser()
+      if not is_support:
+        is_security = auth.IsSecurityUser()
     if is_admin:
-      munki_pkg_names = [e.name for e in models.PackageInfo.all()]
+      munki_pkg_names = models.PackageInfo.GetManifestModPkgNames(
+          common.MANIFEST_MOD_ADMIN_GROUP)
+      mod_types = MOD_TYPES
+    elif is_support:
+      munki_pkg_names = models.PackageInfo.GetManifestModPkgNames(
+          common.MANIFEST_MOD_SUPPORT_GROUP)
+      mod_types = MOD_GROUP_TYPES[common.MANIFEST_MOD_SUPPORT_GROUP]
     elif is_security:
-      munki_pkg_names = settings.SECURITY_USERS_MANIFEST_MOD_PKGS
+      munki_pkg_names = models.PackageInfo.GetManifestModPkgNames(
+          common.MANIFEST_MOD_SECURITY_GROUP)
+      mod_types = MOD_GROUP_TYPES[common.MANIFEST_MOD_SECURITY_GROUP]
     else:
       munki_pkg_names = None
+      mod_types = []
 
     data = {
+      'mod_types': mod_types,
       'mod_type': mod_type,
       'mods': mods,
       'error': error,
-      'is_admin': is_admin,
-      'is_security': is_security,
+      'can_add_manifest_mods': is_admin or is_support or is_security,
       'munki_pkg_names': munki_pkg_names,
       'install_types': common.INSTALL_TYPES,
       'manifests': common.TRACKS,
-      'next_page': next_page,
-      'limit': limit,
+      'report_type': 'manifests_admin',
     }
-    self.response.out.write(
-        RenderTemplate('templates/manifest_modifications.html', data))
-
-
-def RenderTemplate(template_path, values):
-  """Renders a template using supplied data values and returns HTML.
-
-  Args:
-    template_path: str path of template.
-    values: dict of template values.
-  Returns:
-    str HTML of rendered template.
-  """
-  path = os.path.join(
-      os.path.dirname(__file__), template_path)
-  return template.render(path, values)
+    self.Render('templates/manifest_modifications.html', data)

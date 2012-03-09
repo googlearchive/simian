@@ -21,19 +21,17 @@
 
 import logging
 import os
+
 from google.appengine.ext import blobstore
-from google.appengine.ext import webapp
-from simian.mac.munki import handlers
-from simian.mac import models
+
 from simian.auth import base
-from simian.auth import settings as auth_settings
 from simian.auth import gaeserver
+from simian.auth import settings as auth_settings
 from simian.mac.common import util
+from simian.mac.munki import handlers
 
 
-class Auth(
-    handlers.AuthenticationHandler,
-    webapp.RequestHandler):
+class Auth(handlers.AuthenticationHandler):
   """Handler for /auth URL."""
 
   def GetAuth1Instance(self):
@@ -56,7 +54,7 @@ class Auth(
       True if it is within blocked range, False if not.
     """
     # NOTE(user): for future expansion, one could do something like the
-    # following: 
+    # following:
     #
     # return models.KeyValueCache.IpInList('auth_bad_ip_blocks', ip)
     #

@@ -23,8 +23,7 @@
 
 import logging
 import urllib
-from google.appengine.ext import db
-from google.appengine.ext import webapp
+
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import auth
@@ -34,7 +33,7 @@ from simian.mac.munki import plist
 
 
 
-class AppleSUS(handlers.AuthenticationHandler, webapp.RequestHandler):
+class AppleSUS(handlers.AuthenticationHandler):
   """Handler for /applesus/"""
 
   def get(self, client_id_str=''):
@@ -99,7 +98,7 @@ class AppleSUS(handlers.AuthenticationHandler, webapp.RequestHandler):
       asucatalog = models.AppleSUSCatalog.get_or_insert(name)
       asucatalog.plist = self.request.body  # retain original appearance
       asucatalog.put()
-    except (plist.PlistError, db.Error), e:
+    except (plist.PlistError, models.db.Error), e:
       logging.exception('applesus: %s', str(e))
       self.response.set_status(500)
       self.response.out.write(str(e))

@@ -56,9 +56,9 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return maint
 
-  def testGetUpdatedDescriptionExistingDescWithAvgDuration(self):
+  def _testGetUpdatedDescriptionExistingDescWithAvgDuration(self):
     """Test _GetUpdatedDescription() with desc and avg duration text."""
-    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    avg_duration_text = maint.models.PackageInfo.AVG_DURATION_TEXT
     old_desc = 'Foo Bar\n\n%s' % avg_duration_text % (5490, 120)
     duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
     expected_desc = 'Foo Bar\n\n%s' % avg_duration_text % (6523, 117)
@@ -66,9 +66,9 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
     new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
     self.assertEqual(new_desc, expected_desc)
 
-  def testGetUpdatedDescriptionExistingDescWithoutAvgDuration(self):
+  def _testGetUpdatedDescriptionExistingDescWithoutAvgDuration(self):
     """Test _GetUpdatedDescription() with desc lacking avg durations text."""
-    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    avg_duration_text = maint.models.PackageInfo.AVG_DURATION_TEXT
     old_desc = 'Foo Bar'
     duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
     expected_desc = 'Foo Bar\n\n%s' % avg_duration_text % (6523, 117)
@@ -76,41 +76,15 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
     new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
     self.assertEqual(new_desc, expected_desc)
 
-  def testGetUpdatedDescriptionEmpty(self):
+  def _testGetUpdatedDescriptionEmpty(self):
     """Test _GetUpdatedDescription() with an empty desc."""
-    avg_duration_text = maint.UpdateAverageInstallDurations.AVG_DURATION_TEXT
+    avg_duration_text = maint.models.PackageInfo.AVG_DURATION_TEXT
     old_desc = ''
     duration_dict = {'duration_count': 6523, 'duration_seconds_avg': 117}
     expected_desc = avg_duration_text % (6523, 117)
 
     new_desc = self.c._GetUpdatedDescription(duration_dict, old_desc)
     self.assertEqual(new_desc, expected_desc)
-
-  def testParsePackageInfoPlist(self):
-    """Test _ParsePackageInfoPlist()."""
-    plist_xml = 'fooxml'
-    self.mox.StubOutWithMock(maint.plist, 'MunkiPackageInfoPlist')
-    mock_plist = self.mox.CreateMockAnything()
-    maint.plist.MunkiPackageInfoPlist(plist_xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-
-    self.mox.ReplayAll()
-    ret = self.c._ParsePackageInfoPlist(plist_xml)
-    self.assertEqual(ret, mock_plist)
-    self.mox.VerifyAll()
-
-  def testParsePackageInfoPlistError(self):
-    """Test _ParsePackageInfoPlist()."""
-    plist_xml = 'plist'
-    self.mox.StubOutWithMock(maint.plist, 'MunkiPackageInfoPlist')
-    mock_plist = self.mox.CreateMockAnything()
-    maint.plist.MunkiPackageInfoPlist(plist_xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndRaise(maint.plist.Error)
-
-    self.mox.ReplayAll()
-    ret = self.c._ParsePackageInfoPlist(plist_xml)
-    self.assertEqual(ret, None)
-    self.mox.VerifyAll()
 
   def testGet(self):
     """Test get()."""
@@ -121,10 +95,9 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
     pkginfo1.version = '1.2.3'
     pkg1_munki_name = '%s-%s' % (pkginfo1.name, pkginfo1.version)
     pkginfo1.munki_name = pkg1_munki_name
-    pkg1_desc = 'This pkg is cool!'
-    pkg1_desc_updated = 'This pkg is cool!\n\nAvg foo!'
     pkg1_lock = 'pkgsinfo_%s' % pkginfo1.filename
     mock_pl1 = self.mox.CreateMockAnything()
+    pkginfo1.plist = mock_pl1
 
     pkginfos = [pkginfo1]
 
@@ -142,33 +115,37 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
          },
     }
 
+    pkg1_avg_duration_text = maint.models.PackageInfo.AVG_DURATION_TEXT % (
+        install_counts[pkg1_munki_name]['duration_count'],
+        install_counts[pkg1_munki_name]['duration_seconds_avg'])
+    pkg1_desc = 'This pkg is cool!'
+    pkg1_desc_updated = '%s\n\n%s' % (pkg1_desc, pkg1_avg_duration_text)
+
+    # Start with the description lacking avg duration text.
+    pkginfo1.description = pkg1_desc
+
     self.mox.StubOutWithMock(maint.models.ReportsCache, 'GetInstallCounts')
     self.mox.StubOutWithMock(maint.models.PackageInfo, 'all')
     self.mox.StubOutWithMock(maint.gae_util, 'ObtainLock')
     self.mox.StubOutWithMock(maint.gae_util, 'ReleaseLock')
-    self.mox.StubOutWithMock(self.c, '_ParsePackageInfoPlist')
-    self.mox.StubOutWithMock(self.c, '_GetUpdatedDescription')
     self.mox.StubOutWithMock(maint.models.Catalog, 'all')
-    self.mox.StubOutWithMock(maint.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(maint.models.Catalog, 'Generate')
 
     maint.models.ReportsCache.GetInstallCounts().AndReturn(
         (install_counts, None))
     maint.models.PackageInfo.all().AndReturn(pkginfos)
-    self.c._ParsePackageInfoPlist(pkginfo1.plist).AndReturn(mock_pl1)
     maint.gae_util.ObtainLock(pkg1_lock, timeout=5.0).AndReturn(True)
-    mock_pl1.get('description', '').AndReturn(pkg1_desc)
-    self.c._GetUpdatedDescription(
-        install_counts[pkg1_munki_name], pkg1_desc).AndReturn(pkg1_desc_updated)
-    mock_pl1.__setitem__('description', pkg1_desc_updated).AndReturn(None)
-    mock_pl1.GetXml().AndReturn('pkg1_xml')
+    mock_pl1.__getitem__('description').AndReturn(pkg1_desc)
+    mock_pl1.__getitem__('description').AndReturn(pkg1_desc_updated)
     pkginfo1.put().AndReturn(None)
     maint.gae_util.ReleaseLock(pkg1_lock).AndReturn(None)
 
     maint.models.Catalog.all().AndReturn(catalogs)
-    maint.common.CreateCatalog(catalog1.name, delay=5)
+    maint.models.Catalog.Generate(catalog1.name, delay=5)
 
     self.mox.ReplayAll()
     self.c.get()
+    self.assertEqual(pkginfo1.description, pkg1_desc_updated)
     self.mox.VerifyAll()
 
 
@@ -193,8 +170,8 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
     """Test get()."""
     self.mox.StubOutWithMock(maint.models, 'PackageInfo')
     self.mox.StubOutWithMock(maint.blobstore, 'BlobInfo')
-    self.mox.StubOutWithMock(maint.logging, 'critical')
     self.mox.StubOutWithMock(maint.time, 'sleep')
+    self.mox.StubOutWithMock(maint.mail, 'EmailMessage')
     blobstore_key_good = 'goodkey'
     blobstore_key_bad = 'badkey'
     filename_bad = 'badfilename'
@@ -205,13 +182,16 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
     mock_pkginfo_good.blobstore_key = blobstore_key_good
     mock_pkginfo_bad.blobstore_key = blobstore_key_bad
     mock_pkginfo_bad.filename = filename_bad
+    mock_pkginfo_bad.mtime = maint.datetime.datetime(1970, 1, 1)
     pkginfos = [mock_pkginfo_good, mock_pkginfo_bad]
     maint.models.PackageInfo.all().AndReturn(pkginfos)
     maint.blobstore.BlobInfo.get(
         mock_pkginfo_good.blobstore_key).AndReturn(True)
     maint.blobstore.BlobInfo.get(
         mock_pkginfo_bad.blobstore_key).AndReturn(None)
-    maint.logging.critical('PackageInfo missing Blob: %s', filename_bad)
+    mock_email1 = self.mox.CreateMockAnything()
+    maint.mail.EmailMessage().AndReturn(mock_email1)
+    mock_email1.send().AndReturn(None)
 
     # verify Blobstore blobs are not orphaned.
     blob_good = self.mox.CreateMockAnything()
@@ -229,11 +209,16 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 3
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 4
     self.MockPackageInfoQuery(blobstore_key_bad)  # attempt 5
-    maint.logging.critical(
-        'Orphaned Blob %s: %s', blob_bad.filename, blobstore_key_bad)
+    mock_email2 = self.mox.CreateMockAnything()
+    maint.mail.EmailMessage().AndReturn(mock_email2)
+    mock_email2.send().AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()
+    self.assertEqual(
+        mock_email1.subject, 'Package is lacking a file: %s' % filename_bad)
+    self.assertEqual(
+        mock_email2.subject, 'Orphaned Blob in Blobstore: %s' % filename_bad)
     self.mox.VerifyAll()
 
 

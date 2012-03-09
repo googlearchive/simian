@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Package{% endblock %}
+
+{% block head-content %}
+  <style type="text/css">
+    #content { bottom: 5px !important; }
+  </style>
+{% endblock %}
+
+{% block page-content %}
+
+<script type="text/javascript">
+  function validateSubmit(form){
+    if (document.getElementsByClassName('invalid-input').length) {
+      form.submit.disabled = true;
+    } else {
+      form.submit.disabled = false;
+    }
+  }
+
+  function validateField(field, regexp, opt_altValidation, opt_alsoValidate) {
+    if (!regexp.test(field.value) || opt_altValidation && !opt_altValidation()) {
+      simian.addClass(field, 'invalid-input');
+    } else {
+      simian.removeClass(field, 'invalid-input');
+    }
+    if (opt_alsoValidate) opt_alsoValidate(false);
+    validateSubmit(field.form);
+  }
+
+  function alsoCheck(box, also, requirement) {
+    if (box.checked && requirement) {
+      document.getElementById(also).checked = true;
+    } else if (!box.checked && !requirement) {
+      document.getElementById(also).checked = false;
+    }
+  }
+
+  function fieldValidate_forceinstall_datepick(recurse) {
+    var thiselement = document.getElementById('forceinstall_datepick')
+    validateField(
+        thiselement,
+        /^(\d{4}-(0\d|10|11|12)-([0-2]\d|30|31))?$/,
+        function() {
+          return !(thiselement.value == '' && document.getElementById('forceinstall_time').value != '');
+        },
+        recurse ? fieldValidate_forceinstall_time : null);
+  }
+
+  function fieldValidate_forceinstall_time(recurse) {
+    var thiselement = document.getElementById('forceinstall_time');
+    validateField(
+        thiselement,
+        /^((20|21|22|23|[01]\d|\d):[0-5]\d)?$/,
+        function() {
+          return !(thiselement.value == '' && document.getElementById('forceinstall_datepick').value != '');
+        },
+        recurse ? fieldValidate_forceinstall_datepick : null);
+  }
+</script>
+
+<form method="post" action="/admin/package/{{ pkg.filename }}?delete=1" id="deleteform"
+      onsubmit="return confirm('This will DELETE the Package. This action is not revertable.\nAre you sure?') && confirm('..sure?');">
+</form>
+{% if not pkg_safe_to_modify %}
+  <form method="post" action="/admin/package/{{ pkg.filename }}?unlock=1" id="unlockform"></form>
+{% endif %}
+
+<form method="post" class="form" id="editform" {% if editxml %}style="bottom:0"{% endif %}>
+
+  <div style="margin-top: 10px" id="editbuttons">
+    {% spaceless %}
+    <a class="button leftbutton"
+       onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/packages'">
+       &laquo; Back to package list</a>
+
+    <button type="submit" name="submit" value="save" class="rightbutton">Save</button>
+
+    <h3 style="display: inline; font-size: 1.3em; margin: 0 10px;">
+      Package <b>{{ pkg.munki_name }}</b>
+    </h3>
+
+    {% if not pkg.blob_info %}
+      <a href="/admin/uploadpkg?filename={{ pkg.filename }}"
+         class="blue upload button leftbutton">
+         Upload File</a>
+    {% endif %}
+
+    <a class="blue button {% if not pkg.blob_info %}rightbutton{% endif %}"
+       {% if editxml %}
+         onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/package/{{ pkg.filename }}'">
+         Human friendly editor
+       {% else %}
+         onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/package/{{ pkg.filename }}?editxml=1'">
+         Edit PkgInfo XML
+       {% endif %}
+    </a>
+
+    <button type="button" class="red delete" style="margin-left: 4px"
+            onclick="var deleteform = document.getElementById('deleteform'); if(deleteform.onsubmit()) deleteform.submit();">
+            Delete Package</button>
+    {% endspaceless %}
+
+    {% if editxml and not pkg_safe_to_modify %}
+      <div class="infopanel" style="padding:4px 6px; margin: 4px 0 0 0">PackageInfo NOT safe to modify!</div>
+    {% endif %}
+  </div>
+
+{% if editxml %}
+
+  <div style="position:absolute; top: 50px; bottom: 0; right: 5px; left: 15px;" id="textareawrap">
+        <textarea name="new_pkginfo_plist"
+                  {% if not pkg_safe_to_modify %}disabled{% endif %}
+                  style="width: 100%; height: 100%; box-sizing:border-box; -moz-box-sizing:border-box; -webkit-box-sizing:border-box;"
+                  class="formfield">{{ pkg.plist }}</textarea>
+  </div>
+  <script type="text/javascript">
+    var fittextarea = function(e) {
+      document.getElementById('textareawrap').style.top =
+        (document.getElementById('editbuttons').offsetHeight + 25) + 'px';
+    };
+    fittextarea();
+    window.onresize = fittextarea;
+  </script>
+
+{% else %}
+
+<div style="display:inline-block;margin:0;padding:0">
+    {% if not pkg_safe_to_modify %}
+      <div class="infopanel">
+        <div style="float:right">
+          <a onclick="unlockform.submit();" class="red button" style="margin: 6px 0 6px 10px">Unlock Package</a>
+        </div>
+        Some fields have been disabled because this package is either in stable or testing.<br/>
+        Please move to unstable and save before making other changes.
+        <div style="clear: both;"></div>
+      </div>
+    {% endif %}
+
+  <div class="formcolumn">
+    <label>Disk Image</label>
+    {% if pkg.blob_info %}
+      <span class="tt" style="color:darkgreen;font-weight:bold">{{ pkg.filename }}</span>
+      <div class="tooltip whitecheck">File is uploaded<span class="blackpointer"></span></div>
+    {% else %}
+      <span class="tt" style="color:red;font-weight:bold">{{ pkg.filename }}</span>
+      <br/>
+      <div class="infopanel" style="padding:4px 8px; margin:6px 10px; width: 300px">
+        This file does NOT exist in the blob store, please upload the corresponding disk image.
+        <span class="pointup"></span>
+      </div>
+    {% endif %}
+
+    <label for="name">Name</label>
+    <input type="text" name="name" value="{{ pkg.name }}" class="formfield"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="validateField(this, /^\w+$/);" />
+    <br/>
+
+    <label for="display_name">Display Name</label>
+    <input type="text" name="display_name" value="{{ pkg.display_name }}" class="formfield"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="validateField(this, /^.{0,50}$/);" />
+    <br/>
+
+    <label for="version">Version</label>
+    <input type="text" name="version" value="{{ pkg.version }}" class="formfield"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="validateField(this, /^[\w-\.]{0,30}$/);" />
+    <br/>
+
+    <label for="minimum_os_version">Minimum OS Version</label>
+    <input type="text" name="minimum_os_version" class="formfield"
+           value="{{ pkg.plist.minimum_os_version }}"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="validateField(this, /^\d{2}.\d+\.\d+$/);" />
+    <br/>
+
+    <label for="maximum_os_version">Maximum OS Version</label>
+    <input type="text" name="maximum_os_version" class="formfield"
+           value="{{ pkg.plist.maximum_os_version }}"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="validateField(this, /^\d{2}.\d+\.\d+$/);" />
+    <br/>
+
+    <label for="force_install_after_date">Force install after date<br/>
+    <span class="note">Time is evaluated in the client's local timezone</span></label>
+    <div style="display:table; border-collapse: collapse">
+    <div style="display: table-row">
+      <div style="display: table-cell">
+        <input type="text" name="force_install_after_date" class="formfield"
+               style="width: 140px; margin: 0 0 0 4px" id="forceinstall_datepick"
+               value="{{ pkg.force_install_after_date }}"
+               {% if not pkg_safe_to_modify %} disabled{% endif %}
+               oninput="fieldValidate_forceinstall_datepick(true);"/>
+        <div style="text-align:right" class="note">YYYY-MM-DD</div>
+      </div>
+      <div style="display: table-cell">
+        <input type="text" name="force_install_after_date_time" class="formfield"
+               style="width: 60px; margin: 0;" id="forceinstall_time"
+               value="{{ pkg.force_install_after_date_time }}"
+               {% if not pkg_safe_to_modify %} disabled{% endif %}
+               oninput="fieldValidate_forceinstall_time(true);"/>
+        <div style="text-align:right" class="note">HH:MM</div>
+      </div>
+    </div>
+    </div>
+    <script type="text/javascript">
+      simian.makeDateInput(
+          document.getElementById('forceinstall_datepick'),
+          function(e) { fieldValidate_forceinstall_datepick(true); }
+      );
+    </script>
+    <br/>
+  </div>
+
+  <div class="formcolumn">
+    <label>Catalogs</label>
+    {% if not pkg.blob_info %}
+    <div style="position:relative;z-index:1100">
+      <div class="infopanel" style="position:absolute; top:0; right:0; margin:0; padding: 4px 6px; width: 80px;">
+        Locked until a package file is uploaded.
+        <span class="pointleft"></span>
+      </div>
+    </div>
+    {% endif %}
+    {% for track in tracks reversed %}
+      <input type="checkbox" name="catalogs" class="tags formfield" value="{{ track }}" id="catalog_{{ track }}"
+        {% if track in pkg.catalogs %} checked{% endif %}
+        {% if not pkg.blob_info %} disabled{% endif %}
+        onchange="alsoCheck(this, 'manifest_{{ track }}', false)"
+      />
+      <label for="catalog_{{ track }}">{{ track }}</label>
+    {% endfor %}
+    <br/>
+
+    <label>Manifests</label>
+    {% for track in tracks reversed %}
+      <input type="checkbox" name="manifests" class="tags formfield" value="{{ track }}" id="manifest_{{ track }}"
+        {% if track in pkg.manifests %} checked{% endif %}
+        {% if not pkg.blob_info %} disabled{% endif %}
+        onchange="alsoCheck(this, 'catalog_{{ track }}', true)"
+      />
+      <label for="manifest_{{ track }}">{{ track }}</label>
+    {% endfor %}
+    <br/>
+
+    <label>Install Types</label>
+    {% for type in install_types %}
+      <input type="checkbox" name="install_types" class="tags formfield" value="{{ type }}" id="{{ type }}"
+        {% if type in pkg.install_types %} checked{% endif %}
+        {% if not pkg_safe_to_modify %} disabled{% endif %}
+      />
+      <label for="{{ type }}">{{ type }}</label>
+    {% endfor %}
+    <br/>
+
+    <label>Unattended install?</label>
+    <input type="checkbox" class="tags formfield" name="unattended_install"
+        id="unattended_install" {% if pkg.unattended %} checked{% endif %}
+        {% if not pkg_safe_to_modify %} disabled{% endif %}/>
+    <label for="unattended_install">unattended install</label>
+    <br/>
+
+    <label>Manifest mod access</label>
+    {% for group in manifest_mod_groups %}
+      <input type="checkbox" name="manifest_mod_access" class="tags formfield"
+             value="{{ group }}" id="{{ group }}"
+        {% if group in pkg.manifest_mod_access %} checked{% endif %}
+        {% if not pkg_safe_to_modify %} disabled{% endif %}
+      />
+      <label for="{{ group }}">{{ group }}</label>
+    {% endfor %}
+    <br/>
+
+    <label for="description">Description</label>
+    <textarea name="description" class="formfield"{% if not pkg_safe_to_modify %} disabled{% endif %}>{{ pkg.description }}</textarea>
+  </div>
+  <div style="clear:both"></div>
+</div>
+
+{% endif %}
+
+</form>
+<script type="text/javascript">
+  var formEdited = false;
+  (function() {
+    var form = document.getElementById('editform');
+    var fields = form.getElementsByClassName('formfield');
+    for (var i = 0, el; el = fields[i]; i++) {
+      el.onchange = function () { formEdited = true; };
+    }
+  })();
+</script>
+{% endblock %}

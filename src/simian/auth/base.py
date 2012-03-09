@@ -878,15 +878,15 @@ class Auth1(AuthBase):
     # for sn value does not create a false positive.
     if orig_sn is None:
       h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
-      logging.warning('%s: orig_sn is None', h)
+      logging.debug('%s: orig_sn is None', h)
       return False
     elif orig_sn == AuthState.OK:
       h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
-      logging.warning('%s: orig_sn != AuthState.OK', h)
+      logging.debug('%s: orig_sn != AuthState.OK', h)
       return False
     elif orig_sn != sn:
       h = 'SessionVerifyKnownCnSn(%s,%s)' % (str(cn), str(sn))
-      logging.warning('%s: orig_sn (%s) != sn (%s)', h, orig_sn, sn)
+      logging.debug('%s: orig_sn (%s) != sn (%s)', h, orig_sn, sn)
       return False
 
     return True
@@ -952,7 +952,7 @@ class Auth1(AuthBase):
     to immediately use it.
 
     Args:
-      user: str, some user id like 'foo' or 'foo@domain.tld', etc
+      user: str, some user id like 'foo' or 'foo@example.com', etc
       level: int, optional, default LEVEL_BASE, level for session
     Returns:
       str, token
@@ -1090,9 +1090,9 @@ class Auth1(AuthBase):
         self._AddOutput(token)
 
       except (_Error, CryptoError), e:
-        logging.critical('%s Auth error: %s', log_prefix, e.args)
-        logging.critical('%s Auth message: %s', log_prefix, m)
-        logging.critical(
+        logging.warning('%s Auth error: %s', log_prefix, e.args)
+        logging.debug('%s Auth message: %s', log_prefix, m)
+        logging.debug(
             '%s Auth sig: %s', log_prefix, base64.urlsafe_b64encode(s))
         self.AuthFail()
 
@@ -1156,7 +1156,10 @@ class Auth1Client(Auth1):
           raise _Error('Invalid s parameter b64 format (%s)' % str(e))
 
         # verify cert is a server cert
-        server_cert = self.LoadOtherCert(self._server_cert_pem)
+        try:
+          server_cert = self.LoadOtherCert(self._server_cert_pem)
+        except ValueError, e:
+          raise _Error('Server cert load error: %s' % str(e))
         if not self.VerifyCertSignedByCA(server_cert):
           raise _Error('Server cert is not signed by known CA')
 

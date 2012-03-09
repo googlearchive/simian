@@ -25,13 +25,14 @@ import os
 import re
 import time
 import urllib
-from google.appengine.ext import webapp
+
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac import common as main_common
 from simian.mac.munki import common
 from simian.mac.munki import handlers
 from simian.mac.common import util
+
 
 # int number of days after which postflight_datetime is considered stale.
 FORCE_CONTINUE_POSTFLIGHT_DAYS = 5
@@ -64,19 +65,20 @@ class ReportFeedback(object):
   UPLOAD_LOGS = 'UPLOAD_LOGS'
 
 
-class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
+def IsExitFeedbackIpAddress(ip_address):
+  """Is this an IP address that should result in an exit feedback?
+
+  Args:
+    ip_address: str, like "1.2.3.4"
+  Returns:
+    True if this IP address should result in exit feedback
+  """
+  return (ip_address and
+      models.KeyValueCache.IpInList('client_exit_ip_blocks', ip_address))
+
+
+class Reports(handlers.AuthenticationHandler):
   """Handler for /reports/."""
-
-  def _IsExitFeedbackIpAddress(self, ip_address):
-    """Is this an IP address that should result in an exit feedback?
-
-    Args:
-      ip_address: str, like "1.2.3.4"
-    Returns:
-      True if this IP address should result in exit feedback
-    """
-    return (ip_address and
-        models.KeyValueCache.IpInList('client_exit_ip_blocks', ip_address))
 
   def GetReportFeedback(self, uuid, report_type, **kwargs):
     """Inspect a report and provide a feedback status/command.
@@ -102,7 +104,7 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
 
     # TODO(user): if common.BusinessLogicMethod ...
     if report_type == 'preflight':
-      if self._IsExitFeedbackIpAddress(ip_address):
+      if IsExitFeedbackIpAddress(ip_address):
         report = ReportFeedback.EXIT
       elif common.IsPanicModeNoPackages():
         report = ReportFeedback.EXIT
@@ -134,7 +136,7 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
           report = ReportFeedback.FORCE_CONTINUE
 
     if report not in [ReportFeedback.OK, ReportFeedback.FORCE_CONTINUE]:
-      logging.warning('Feedback to %s: %s', uuid, report)
+      logging.info('Feedback to %s: %s', uuid, report)
 
     return report
 
@@ -166,7 +168,11 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
         logging.warning(
             'Client %s sent broken user_settings: %s',
             client_id_str, user_settings_str)
+
       pkgs_to_install = self.request.get_all('pkgs_to_install')
+      apple_updates_to_install = self.request.get_all(
+          'apple_updates_to_install')
+
       computer = models.Computer.get_by_key_name(uuid)
       ip_address = os.environ.get('REMOTE_ADDR', '')
       if report_type == 'preflight':
@@ -183,7 +189,7 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
                   ip_address=ip_address))
       common.LogClientConnection(
           report_type, client_id, user_settings, pkgs_to_install,
-          computer=computer, ip_address=ip_address)
+          apple_updates_to_install, computer=computer, ip_address=ip_address)
     elif report_type == 'install_report':
       on_corp = self.request.get('on_corp')
       if on_corp == '1':
@@ -204,12 +210,14 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
             d = {
                 'name': m.group(1), 'version': m.group(2), 'applesus': 'false',
                 'status': status, 'duration_seconds': None,
+                'download_kbytes_per_sec': None,
             }
           except (IndexError, AttributeError):
             logging.warning('Unknown install string format: %s', install)
             d = {
                 'name': install, 'version': '', 'applesus': 'false',
                 'status': 'UNKNOWN', 'duration_seconds': None,
+                'download_kbytes_per_sec': None,
             }
         else:
           # support for new 'name=pkg|version=foo|...' style strings.
@@ -224,6 +232,14 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
         except (TypeError, ValueError):
           duration_seconds = None
         try:
+          dl_kbytes_per_sec = int(d.get('download_kbytes_per_sec', None))
+          # Ignore zero KB/s download speeds, as that's how Munki reports
+          # unknown speed.
+          if dl_kbytes_per_sec == 0:
+            dl_kbytes_per_sec = None
+        except (TypeError, ValueError):
+          dl_kbytes_per_sec = None
+        try:
           install_datetime = util.Datetime.utcfromtimestamp(d.get('time', None))
         except ValueError, e:
           logging.warning('Ignoring invalid install_datetime; %s' % str(e))
@@ -237,7 +253,8 @@ class Reports(handlers.AuthenticationHandler, webapp.RequestHandler):
         common.WriteClientLog(
             models.InstallLog, uuid, package=pkg, status=status,
             on_corp=on_corp, applesus=applesus,
-            duration_seconds=duration_seconds, mtime=install_datetime)
+            duration_seconds=duration_seconds, mtime=install_datetime,
+            dl_kbytes_per_sec=dl_kbytes_per_sec)
       for removal in self.request.get_all('removals'):
         common.WriteClientLog(
             models.ClientLog, uuid, action='removal', details=removal)

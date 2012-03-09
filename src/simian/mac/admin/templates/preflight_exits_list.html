@@ -1,0 +1,27 @@
+{% if host_report %}
+  <div>
+  <h3>Preflight Exits</h3>
+  <span class="count">({{ preflight_exits|length }} found, limit {{ limit }})</span>
+  </div>
+{% endif %}
+
+{% if preflight_exits %}
+  <table class="stats-table">
+    <tr>
+       <th>Exit Reason</th>
+       {% if not host_report %}<th>UUID</th>{% endif %}
+       <th>Time</th>
+       <th>Time Since</th>
+    </tr>
+    {% for exit in preflight_exits %}
+      <tr>
+        <td>{{ exit.exit_reason }}</td>
+        {% if not host_report %}
+        <td>{{ exit.uuid|host_uuid_link }}</td>
+        {% endif %}
+        <td>{{ exit.mtime }}</td>
+        <td>{{ exit.mtime|timesince }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}

@@ -21,12 +21,13 @@
 
 import logging
 import urllib
+
 from google.appengine.api import memcache
 from google.appengine.ext import blobstore
-from google.appengine.ext import webapp
 from google.appengine.ext.webapp import blobstore_handlers
-from simian.mac import models
+
 from simian.auth import gaeserver
+from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.munki import common
 from simian.mac.munki import handlers
@@ -92,6 +93,7 @@ class Packages(
     etag_nomatch_str = self.request.headers.get('If-None-Match', 0)
     etag_match_str = self.request.headers.get('If-Match', 0)
     pkg_date = blob_info.creation
+    pkg_size_bytes = blob_info.size
 
     # TODO(user): The below can be simplified once all of our clients
     # have ETag values set on the filesystem for these files.  The
@@ -125,6 +127,7 @@ class Packages(
         self.response.headers['ETag'] = pkg.pkgdata_sha256
       self.response.headers['Last-Modified'] = pkg_date.strftime(
           handlers.HEADER_DATE_FORMAT)
+      self.response.headers['X-Download-Size'] = pkg_size_bytes
       self.send_blob(pkg.blobstore_key)
     else:
       # Client doesn't need to do anything, current version is OK based on

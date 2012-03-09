@@ -31,7 +31,7 @@ and gMac, not gWindows.
 # imports of readline use our version which already initialized itself
 # with our TERM value, instead of the real one.
 #
-# This unintended escape str output problem was first detected on gboduch@'s
+# This unintended escape str output problem was first detected on a
 # 10.6 machine.  The root cause was not determined, but the output of the
 # escape sequence is somewhere within GNU readline rl_initialize().  No
 # inputrc file was used and setting an inputrc with "set meta-mode off" did

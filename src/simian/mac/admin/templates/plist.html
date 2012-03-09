@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}{{ track }} manifest{% endblock %}
+
+{% block page-content %}
+
+<a class="button" href="javascript:history.back()">&laquo; Back</a>
+<a class="blue download button" href="{{ raw_xml_link }}" target="_blank">View raw XML</a><br/><br/>
+
+<h2>{{ title|safe }}</h2><br/><br/>
+
+{{ xml|safe }}
+
+{% endblock %}

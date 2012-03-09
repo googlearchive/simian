@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics{% endblock %}
+
+{% block page-content %}
+{% ifequal report_type "track" %}
+  <h2>Statistics for track: {{ report_filter }}</h2>
+{% endifequal %}
+
+{% if summary %}
+  {% if limit %}
+    {% include "results_pagination.html" %}
+  {% endif %}
+
+  <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader"
+       title="summary">Summary
+    {% if cached_mtime %}<div class="last-cached"> - Last cached {{ cached_mtime|timesince }} ago.</div>{% endif %}
+  </div>
+  <div id="summary">
+    <div id="activeclients" style="float:left; margin: 5px;">
+      <table class="minimal-table">
+        <tr><th colspan="5" style="text-align: left;">Active Client Reports</th></tr>
+        <tr>
+          <td>&nbsp;</td>
+          <td>30 day</td>
+          <td>14 day</td>
+          <td>7 day</td>
+          <td>24 hour</td>
+        </tr>
+        <tr>
+          <td>All Clients</td>
+          <td>{{ summary.active.30 }}</td>
+          <td>{{ summary.active.14 }}</td>
+          <td>{{ summary.active.7 }}</td>
+          <td>{{ summary.active.1 }}</td>
+        </tr>
+        <tr>
+          <td>Stable Track</td>
+          <td>{{ summary.tracks.stable.30 }}</td>
+          <td>{{ summary.tracks.stable.14 }}</td>
+          <td>{{ summary.tracks.stable.7 }}</td>
+          <td>{{ summary.tracks.stable.1 }}</td>
+        </tr>
+        <tr>
+          <td>Testing Track</td>
+          <td>{{ summary.tracks.testing.30 }}</td>
+          <td>{{ summary.tracks.testing.14 }}</td>
+          <td>{{ summary.tracks.testing.7 }}</td>
+          <td>{{ summary.tracks.testing.1 }}</td>
+        </tr>
+        <tr>
+          <td>Unstable Track</td>
+          <td>{{ summary.tracks.unstable.30 }}</td>
+          <td>{{ summary.tracks.unstable.14 }}</td>
+          <td>{{ summary.tracks.unstable.7 }}</td>
+          <td>{{ summary.tracks.unstable.1 }}</td>
+        </tr>
+        <tr>
+          <td>Munki Patched</td>
+          <td>{{ summary.all_pkgs_installed_percent.30|floatformat }}%</td>
+          <td>{{ summary.all_pkgs_installed_percent.14|floatformat }}%</td>
+          <td>{{ summary.all_pkgs_installed_percent.7|floatformat }}%</td>
+          <td>{{ summary.all_pkgs_installed_percent.1|floatformat }}%</td>
+        </tr>
+        <tr>
+          <td>Apple Patched</td>
+          <td>{{ summary.all_apple_updates_installed_percent.30|floatformat }}%</td>
+          <td>{{ summary.all_apple_updates_installed_percent.14|floatformat }}%</td>
+          <td>{{ summary.all_apple_updates_installed_percent.7|floatformat }}%</td>
+          <td>{{ summary.all_apple_updates_installed_percent.1|floatformat }}%</td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="clientversions" style="float: left; margin: 5px;">
+      <table class="barChart green" title="Client Versions">
+      {% for version in summary.client_versions %}
+        <tr>
+          <td>
+            {% if cached_mtime %}
+              <a href="/admin?filter-type=client_version&filter={{ version.0 }}"
+                >{{ version.0 }}</a>
+            {% else %}
+              {{ version.0  }}
+            {% endif %}
+          </td>
+          <td>{{ version.1 }}</td>
+        </tr>
+      {% endfor %}
+      </table>
+    </div>
+
+    <div id="osversions" style="float: left; margin: 5px;">
+      <table class="barChart blue" title="OS Versions">
+        {% for version in summary.os_versions %}
+        <tr>
+          <td>
+            {% if cached_mtime %}
+              <a href="/admin?filter-type=os_version&filter={{ version.0 }}"
+                  >{{ version.0 }}</a>
+            {% else %}
+              {{ version.0 }}
+            {% endif %}
+          </td>
+          <td>{{ version.1 }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div id="connections" style="float: left; margin: 5px;">
+      <table class="barChart orange" title="Connections">
+        <tr>
+          <td>Off Corp</td>
+          <td>{{ summary.conns_off_corp_percent|floatformat }}%</td></tr>
+        </tr>
+        <tr>
+          <td>On Corp</td>
+          <td>{{ summary.conns_on_corp_percent|floatformat }}%</td></tr>
+        </tr>
+      </table>
+    </div>
+
+
+    <div id="offcorp" style="float: left; margin: 5px;">
+      <table class="barChart" title="% Off Corp / % of Clients">
+        {% for p in summary.off_corp_conns_histogram %}
+          <tr>
+            <td>{{ p.0 }}%</td>
+            <td>{{ p.1|floatformat }}%</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div style="clear:both"></div>
+  </div>
+
+  <script type="text/javascript">simian.renderCharts('summary');</script>
+
+
+  {% ifnotequal report_type "site" %}
+    <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site</div>
+    <div id="by_site" style="max-width: 95%;">
+      <ol class="clients-by-site">
+      {% for site in summary.sites_histogram %}
+        <li>
+        <span class="site">{{ site.0 }}</span>
+        {% if cached_mtime %}
+          <a class="client-count"
+             href="/admin?filter-type=site&filter={{ site.0 }}">{{ site.1 }}</a>
+        {% else %}
+          <span class="client-count">{{ site.1 }}</span>
+        {% endif %}
+        </li>
+      {% endfor %}
+      </ol>
+    </div>
+  {% endifnotequal %}
+
+{% else %}
+
+  {% ifequal report_type "summary" %}
+    <p>No clients were found.</p>
+  {% endifequal %}
+
+{% endif %}  {# endif summary  #}
+
+  {% ifequal report_type "pkgs_to_install" %}
+    <h3>Pending: {{ pkg }}</h3>
+    <a href="/admin/installs">Back to installs list</a><br />
+  {% endifequal %}
+
+  {% if computers %}
+
+  {% if summary %}
+    <div class="zippy_toggle {% if not cached_mtime %}expanded{% endif %} sectionheader" title="computers">Computers</div>
+    <div id="computers">
+  {% else %}
+    {% if limit %}
+      {% include "results_pagination.html" %}
+    {% endif %}
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+       {% if report_type == "diskfree" %}
+         <th>Disk Free</th>
+       {% else %}
+         {% if report_type == "uptime" %}
+           <th>Uptime</th>
+         {% else %}
+           {% if report_type == "offcorp" %}
+             <th>Last Off Corp Preflight</th>
+             <th>Time Since</th>
+           {% endif %}
+         {% endif %}
+       {% endif %}
+       <th>Hostname</th><th>Serial</th><th>UUID</th><th>Owner</th><th>Track</th>
+       <th>OS Version</th><th>Munki Version</th>
+       <th>Site</th><th>Office</th>
+       <th>Last Preflight</th>
+       <th>Last Postflight</th>
+    </tr>
+    {% for c in computers %}
+    <tr>
+      {% if report_type == "diskfree" %}
+        <td>{{ c.root_disk_free|filesizeformat }}</td>
+      {% else %}
+        {% if report_type == "uptime" %}
+          <td>{{ c.uptime|uptime_from_seconds }}</td>
+        {% else %}
+          {% if report_type == "offcorp" %}
+            <td>{{ c.last_on_corp_preflight_datetime|default_if_none:"Zero on corp connections" }}</td>
+            <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+      <td>{{ c.hostname }}</td>
+      <td>{{ c.serial }}</td>
+      <td>
+        {% ifequal report "host" %}
+          {{ c.uuid }}
+        {% else %}
+          {{ c.uuid|host_uuid_link }}
+        {% endifequal %}
+      </td>
+      <td><a href="/admin?filter-type=owner&filter={{ c.owner }}"
+          >{{ c.owner }}</a></td>
+      <td>{{ c.track }}</td>
+      <td>{{ c.os_version }}</td>
+      <td>{{ c.client_version }}</td>
+      <td>{{ c.site }}</td>
+      <td>{{ c.office }}</td>
+      <td>{{ c.preflight_datetime|timesince }}</td>
+      <td>{{ c.postflight_datetime|timesince }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  {% if limit %}
+    {% include "results_pagination.html" %}
+  {% endif %}
+
+  {% if summary %}
+    </div>
+  {% endif %}
+{% endif %}
+
+{% if summary %}
+  <script type="text/javascript">
+    simian.zippyfy('content');
+  </script>
+{% endif %}
+
+{% endblock %}

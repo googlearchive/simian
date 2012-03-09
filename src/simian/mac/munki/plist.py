@@ -211,14 +211,6 @@ class ApplePlist(object):
       # let it occur on call to Parse().  load the binary plist now.
       self._LoadBinary(plist)
 
-  def LoadDocument(self, plist_xml):
-    """Load a plist in binary or XML format.
-
-    Args:
-      plist_xml: str, XML string or binary plist (was: only XML)
-    """
-    self.LoadPlist(plist_xml)
-
   def _LoadDocument(self, plist_xml):
     """Load but not parse an Apple plist XML document.
 
@@ -502,6 +494,12 @@ class ApplePlist(object):
     elif name in ['array', 'dict']:
       value = self._CurrentValue()
       self._ReleaseValue()
+    # this string element is ending, but no value was ever collected
+    # so the "_CurrentMode() == value" block above was passed.
+    # here, we just provide an empty string as output value instead.
+    # e.g. <string></string> == ''
+    elif name == 'string':
+      value = ''
     else:
       value = None
 
@@ -1038,7 +1036,10 @@ class ApplePlist(object):
     return None
 
   def GetXml(self, indent_num=0, xml_doc=True):
-    """Returns string XML document, or None if the plist is empty.
+    """Returns string XML document.
+
+    This function will always return a string, even if the plist is invalid,
+    empty, or unset.
 
     Args:
       indent_num: int, number of indents to start from
@@ -1048,11 +1049,22 @@ class ApplePlist(object):
     Returns:
       str
     Raises:
-      PlistNotParsedError: if Parse() has not been called
       PlistError: Output of this plist not supported because of its type
     """
-    if not hasattr(self, '_plist'):
-      raise PlistNotParsedError
+    if not hasattr(self, '_plist'):  # no plist is parsed.
+      if xml_doc and getattr(self, '_plist_xml', None):
+        # A full XML document was requested and unparsed XML is set, return it.
+        return self._plist_xml
+      elif getattr(self, '_plist_xml', None):
+        # Only the XML contents were requested, so parse the unparsed XML, which
+        # creates the _plist property for regular use below.
+        try:
+          self.Parse()
+        except PlistError:
+          self._plist = None
+      else:
+        # self._plist_xml is unset or None, so the plist is considered empty.
+        self._plist = None
 
     if type(self._plist) not in PLIST_CONTENT_TYPES:
       raise PlistError(
@@ -1156,6 +1168,14 @@ class ApplePlist(object):
     self._plist[k] = v
     self._changed = True
 
+  def __delitem__(self, k):
+    """Standard python __delitem__ method."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    del(self._plist[k])
+    self._changed = True
+
   def __iter__(self):
     """Standard python __iter__ method."""
     if not hasattr(self, '_plist'):
@@ -1173,6 +1193,14 @@ class ApplePlist(object):
     if not issubclass(other.__class__, self.__class__):
       return False
     return self._plist == other.GetContents()
+
+  def __str__(self):
+    """Returns a utf-8 encoded string representation of the plist XML."""
+    return self.GetXml().encode('utf-8')
+
+  def __unicode__(self):
+    """Returns a unicode representation of the plist XML."""
+    return self.GetXml()
 
   def get(self, k, default=None):  # pylint: disable-msg=C6409
     """Standard python dict get method."""
@@ -1197,6 +1225,10 @@ class MunkiPlist(ApplePlist):
     """Raises InvalidPlistError if plist is empty or non-existent."""
     if not hasattr(self, '_plist') or self._plist is None:
       raise InvalidPlistError
+
+
+# TODO(user): below plist classes should offer a way to initialize an empty
+#             plist with all core/required properties.
 
 
 class MunkiManifestPlist(MunkiPlist):
@@ -1284,7 +1316,7 @@ class MunkiPackageInfoPlist(MunkiPlist):
       InvalidPlistError: pkginfo is missing required fields; version is always
         requires, and either display_name or name are required.
     """
-    if self._plist is None:
+    if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
     if 'version' not in self._plist:
@@ -1389,6 +1421,11 @@ class MunkiPackageInfoPlist(MunkiPlist):
     self._plist['catalogs'] = catalogs
     self._changed = True
 
+  def RemoveDisplayName(self):
+    """Removes the display_name key from the plist."""
+    if 'display_name' in self._plist:
+      del(self._plist['display_name'])
+
   def EqualIgnoringManifestsAndCatalogs(self, pkginfo):
     """Returns True if the pkginfo is equal except the manifests."""
     return self.Equal(pkginfo, ignore_keys=['manifests', 'catalogs'])
@@ -1438,7 +1475,9 @@ def DictToXml(xml_dict, indent_num=None):
   child_indent = INDENT_CHAR * (indent_num + 1)
   str_xml = []
   str_xml.append('%s<dict>' % indent)
-  for key, value in xml_dict.iteritems():
+
+  for key in sorted(xml_dict):
+    value = xml_dict[key]
     str_xml.append('%s<key>%s</key>' % (child_indent, EscapeString(key)))
     str_xml.append(GetXmlStr(value, indent_num=indent_num + 1))
   str_xml.append('%s</dict>' % indent)

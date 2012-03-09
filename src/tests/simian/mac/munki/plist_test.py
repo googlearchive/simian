@@ -186,17 +186,17 @@ class ApplePlistTest(mox.MoxTestBase):
       plist_dict: dict, optional, expected dictionary output from Plist
       exc: Exception, optional, expected exception when calling Parse()
     """
-    self.apl.LoadDocument(plist_xml)
+    self.apl.LoadPlist(plist_xml)
     if exc is not None:
       self.assertRaises(exc, self.apl.Parse)
       self.assertFalse(hasattr(self.apl, '_plist'))
     else:
       self.apl.Parse()
       self.assertPlistEquals(plist_dict)
-      
+
   def testBasicParseChangesLost(self):
     """Test that Parse() will not wipe direct set values."""
-    self.apl.LoadDocument('<plist version="1.0"><dict></dict></plist>')
+    self.apl.LoadPlist('<plist version="1.0"><dict></dict></plist>')
     self.apl.Parse()
     self.assertFalse('foo' in self.apl)
     self.apl['foo'] = 'bar'
@@ -205,7 +205,7 @@ class ApplePlistTest(mox.MoxTestBase):
 
   def _testBasicEmptyDict(self):
     """Test a basic plist doc."""
-    self.apl.LoadDocument('<plist version="1.0">\n\n  </plist>')
+    self.apl.LoadPlist('<plist version="1.0">\n\n  </plist>')
     self.assertRaises(plist.InvalidPlistError, self.apl.Parse)
     self.apl._plist = {}
     self.assertEqual(None, self.apl.GetXml())
@@ -264,6 +264,13 @@ class ApplePlistTest(mox.MoxTestBase):
            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
     self.PlistTest(xml, {'': 'what a bug this was'})
 
+  def testBasicEmptyString(self):
+    xml = '%s<dict><key>foo</key><string></string><key>bar</key><string/></dict>%s' % (
+        plist.PLIST_HEAD, plist.PLIST_FOOT)
+    plist2 = plist.ApplePlist(xml)
+    plist2.Parse()
+    self.PlistTest(xml, {'foo': '', 'bar': ''})
+
   def testBasicNested(self):
     xml = ('%s  <dict>\n    <key>foo</key>\n    <string>bar</string>\n  '
            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
@@ -291,13 +298,13 @@ class ApplePlistTest(mox.MoxTestBase):
          'floattest': 12.3456,
     }
     out = ('<dict>\n  '
-           '<key>outside</key>\n  <true/>\n  '
-           '<key>foo</key>\n  <array>\n    <integer>1</integer>\n    '
-           '<string>two</string>\n    <array>\n      <false/>\n    </array>\n  '
-           '</array>\n  <key>bar</key>\n  <dict>\n    <key>foobar</key>\n    '
-           '<string></string>\n  </dict>\n  '
-           '<key>floattest</key>\n  <real>12.345600</real>\n'
-           '</dict>')
+         '<key>bar</key>\n  <dict>\n    '
+         '<key>foobar</key>\n    <string></string>\n  </dict>\n  '
+         '<key>floattest</key>\n  <real>12.345600</real>\n  '
+         '<key>foo</key>\n  <array>\n    <integer>1</integer>\n    '
+         '<string>two</string>\n    <array>\n      <false/>\n    </array>\n  '
+         '</array>\n  <key>outside</key>\n  <true/>\n'
+         '</dict>')
     self.assertEquals(out, plist.DictToXml(d, indent_num=0))
 
   def testSequenceToXml(self):
@@ -408,28 +415,28 @@ AAAAAAAAfA==""")
         '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
         '<plist version="1.0">\n'
         '  <dict>\n'
+        '    <key>foo</key>\n'
+        '    <string>bar</string>\n'
+        '    <key>is9</key>\n'
+        '    <integer>9</integer>\n'
         '    <key>isArray</key>\n'
         '    <array>\n'
         '      <string>1</string>\n'
         '      <string>2</string>\n'
         '      <string>3</string>\n'
         '    </array>\n'
-        '    <key>is9</key>\n'
-        '    <integer>9</integer>\n'
         '    <key>isData</key>\n'
         '    <data>AQID/w==</data>\n'
+        '    <key>isFalse</key>\n'
+        '    <false/>\n'
+        '    <key>isPi</key>\n'
+        '    <real>3.140000</real>\n'
+        '    <key>isToday</key>\n'
+        '    <date>2011-11-10T00:00:00Z</date>\n'
         '    <key>isTrue</key>\n'
         '    <true/>\n'
         '    <key>isUid</key>\n'
         '    <dict><key>CF$UID</key><integer>12345</integer></dict>\n'
-        '    <key>isFalse</key>\n'
-        '    <false/>\n'
-        '    <key>isToday</key>\n'
-        '    <date>2011-11-10T00:00:00Z</date>\n'
-        '    <key>isPi</key>\n'
-        '    <real>3.140000</real>\n'
-        '    <key>foo</key>\n'
-        '    <string>bar</string>\n'
         '  </dict>\n'
         '</plist>\n'
     )
@@ -446,9 +453,42 @@ AAAAAAAAfA==""")
 
   def testGetXmlWithEmptyPlist(self):
     """Test GetXml() with empty plist."""
-    plist_xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
     self.apl._plist = None
+    empty_plist_xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.assertEqual(empty_plist_xml, self.apl.GetXml())
+
+  def testGetXmlWithNoPlistProperty(self):
+    """Test GetXml() in the case that a _plist property does not exist."""
+    if hasattr(self.apl, '_plist'):
+      del(self.apl._plist)
+    empty_plist_xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.assertEqual(empty_plist_xml, self.apl.GetXml())
+
+  def testGetXmlWithUnparsedPlistXml(self):
+    """Test GetXml() with an unparsed plist_xml."""
+    if hasattr(self.apl, '_plist'):
+      del(self.apl._plist)
+    plist_xml = '%s<dict><key>foo</key><string>bar</string>%s' % (
+        plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.apl._plist_xml = plist_xml
     self.assertEqual(plist_xml, self.apl.GetXml())
+
+  def testGetXmlWithUnparsedButEmptyPlistXml(self):
+    """Test GetXml() with an unparsed plist_xml."""
+    if hasattr(self.apl, '_plist'):
+      del(self.apl._plist)
+    self.apl._plist_xml = None
+    empty_plist_xml = '%s%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT)
+    self.assertEqual(empty_plist_xml, self.apl.GetXml())
+
+  def testGetXmlXmlDocFalseWithUnparsedPlistXml(self):
+    """Test GetXml() with an unparsed plist_xml."""
+    if hasattr(self.apl, '_plist'):
+      del(self.apl._plist)
+    content_xml = '<dict>\n  <key>foo</key>\n  <string>bar</string>\n</dict>'
+    plist_xml = ''.join([plist.PLIST_HEAD, content_xml, plist.PLIST_FOOT])
+    self.apl._plist_xml = plist_xml
+    self.assertEqual(content_xml, self.apl.GetXml(xml_doc=False))
 
   def testLessBasic(self):
     """Test with a more complex plist that should parse OK."""
@@ -808,7 +848,7 @@ AAAAAAAAfA==""")
     self.mox.StubOutWithMock(self.apl, 'Validate')
     d = {'foo': 'bar'}
     self.apl.Validate().AndReturn(None)
-    
+
     self.mox.ReplayAll()
     self.apl.SetContents(d)
     self.assertEqual(self.apl._plist, d)
@@ -819,7 +859,7 @@ AAAAAAAAfA==""")
     d = {'foo': '<xml>up up up and away</xml>'}
     self.apl.SetContents(d)
     self.assertEqual(self.apl._plist, d, str(self.apl._plist))
-    
+
   def testEqual(self):
     """Tests Equal()."""
     pl = plist.ApplePlist()
@@ -887,7 +927,7 @@ class MunkiManifestPlistTest(mox.MoxTestBase):
 
   def testParseSuccess(self):
     """Test Parse() with valid Manifest plist."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
         '<key>managed_installs</key><array><string>hello</string></array>'
         '</dict></plist>')
@@ -895,7 +935,7 @@ class MunkiManifestPlistTest(mox.MoxTestBase):
 
   def testParseMissingCatalogsList(self):
     """Test Parse() with missing catalogs."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>managed_installs</key><array></array>'
         '</dict></plist>')
     self.assertRaises(
@@ -903,7 +943,7 @@ class MunkiManifestPlistTest(mox.MoxTestBase):
 
   def testParseInvalidCatalogsList(self):
     """Test Parse() with an invalid catalogs list."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><string>hello</string>'
         '<key>managed_installs</key><array><string>hello</string></array>'
         '</dict></plist>')
@@ -925,7 +965,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
 
   def testParseSuccess(self):
     """Test Parse() with valid Package Info plist."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
         '<key>installer_item_hash</key><string>foo hash</string>'
         '<key>installer_item_location</key><string>good location</string>'
@@ -935,7 +975,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
 
   def testParseMissingName(self):
     """Test Parse() with missing name."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
         '<key>installer_item_hash</key><string>foo hash</string>'
         '<key>installer_item_location</key><string>foo hash</string>'
@@ -945,7 +985,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
 
   def testParseInstallerItemHash(self):
     """Test Parse() with missing name."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
         '<key>name</key><string>fooname</string>'
         '<key>installer_item_location</key><string>foo hash</string>'
@@ -955,7 +995,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
 
   def testParseMissingInstallerItemLocation(self):
     """Test Parse() with missing installer_item_location."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><array><string>hello</string></array>'
         '<key>installer_item_hash</key><string>foo hash</string>'
         '<key>name</key><string>fooname</string>'
@@ -965,7 +1005,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
 
   def testParseInvalidCatalogsList(self):
     """Test Parse() with an invalid catalogs list."""
-    self.munki.LoadDocument(
+    self.munki.LoadPlist(
         '<plist><dict><key>catalogs</key><string>hello</string>'
         '<key>name</key><string>fooname</string>'
         '<key>installer_item_hash</key><string>foo hash</string>'
@@ -1161,7 +1201,7 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.munki._plist = {'foo': None}
     self.assertTrue('foo' in self.munki)
     self.assertFalse('bar' in self.munki)
-    
+
   def testSetitem(self):
     """Test __setitem__."""
     self.munki._plist = {}
@@ -1170,6 +1210,13 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.assertTrue('foo' in self.munki)
     self.assertEqual(self.munki['foo'], 123)
     self.assertTrue(self.munki._changed)
+
+  def testDelitem(self):
+    """Test __delitem__."""
+    self.munki._plist = {'foo': True}
+    self.assertTrue('foo' in self.munki)
+    del(self.munki['foo'])
+    self.assertTrue('foo' not in self.munki)
 
   def testGet(self):
     """Test get()."""

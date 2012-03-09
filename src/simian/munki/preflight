@@ -75,8 +75,6 @@ def LoginToServer(config, client_id, user_settings):
   script_path = os.path.join(script_dir, flight_common.AUTH_BINARY)
 
   client_id_str = flight_common.DictToStr(client_id)
-  if type(client_id_str) is unicode:
-    client_id_str = client_id_str.encode('utf-8')
 
   if user_settings:
     if not HAS_JSON:
@@ -379,7 +377,7 @@ def main(args):
     secure_config = {}
 
   # update the ClientIdentifier key with the custom client id.
-  client_id = flight_common.GetClientIdentifier()
+  client_id = flight_common.GetClientIdentifier(runtype)
   secure_config['ClientIdentifier'] = client_id['track']
 
   user_settings = {}

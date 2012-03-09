@@ -1,1 +1,0 @@
-../src/simian//mac/main.py

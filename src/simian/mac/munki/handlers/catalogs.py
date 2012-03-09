@@ -19,9 +19,8 @@
 
 
 
-from google.appengine.ext import webapp
-from simian.mac import models
 from simian.auth import gaeserver
+from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.munki import handlers
 
@@ -34,7 +33,7 @@ class CatalogGenerationError(Error):
   """There was an error generating a catalog."""
 
 
-class Catalogs(handlers.AuthenticationHandler, webapp.RequestHandler):
+class Catalogs(handlers.AuthenticationHandler):
   """Handler for /catalogs/"""
 
   def get(self, name):

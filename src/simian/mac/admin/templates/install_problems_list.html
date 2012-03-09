@@ -1,0 +1,31 @@
+{% if host_report %}
+  <div>
+  <h3>Installation Problems</h3>
+  <span class="count">({{ install_problems|length }} found, limit {{ limit }})</span>
+  </div>
+{% endif %}
+
+{% if install_problems %}
+  <table class="stats-table">
+    <tr>
+       <th>Details</th>
+       {% if not host_report %}
+         <th>UUID</th>
+       {% endif %}
+       <th>Time</th>
+       <th>Time Since</th>
+    </tr>
+    {% for problem in install_problems %}
+      <tr>
+        <td>{{ problem.details }}</td>
+        {% if not host_report %}
+        <td>
+          {{ problem.uuid|host_uuid_link }}
+        </td>
+        {% endif %}
+        <td>{{ problem.mtime }}</td>
+        <td>{{ problem.mtime|timesince }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}

@@ -439,9 +439,11 @@ def GetDiskFree(path=None):
   return st.f_frsize * st.f_bavail  # f_bavail matches df(1) output
 
 
-def GetClientIdentifier():
+def GetClientIdentifier(runtype=None):
   """Assembles the client identifier based on information collected by facter.
 
+  Args:
+    runtype: str, optional, Munki runtype. i.e. auto, custom, manual, etc.
   Returns:
     dict client identifier.
   """
@@ -546,6 +548,7 @@ def GetClientIdentifier():
       'client_version': GetClientVersion(),
       'on_corp': on_corp,
       'last_notified_datetime': last_notified_datetime_str,
+      'runtype': runtype,
       'uptime': uptime,
       'root_disk_free': root_disk_free,
       'user_disk_free': user_disk_free,
@@ -572,7 +575,7 @@ def DictToStr(d, delimiter=DELIMITER):
       if type(value) is str:
         value = value.decode('utf-8')
       out.append('%s=%s' % (key, value))
-  return delimiter.join(out)
+  return delimiter.join(out).encode('utf-8')
 
 
 def GetAppleSUSCatalog():
@@ -749,14 +752,28 @@ def GetInstallResults(install_results):
         item = {
             'name': m.group(1), 'version': m.group(2), 'applesus': False,
             'status': status, 'duration_seconds': None,
+            'download_kbytes_per_sec': None,
         }
       except (IndexError, AttributeError):
         item = {
             'name': item, 'version': '', 'applesus': False,
             'status': 'UNKNOWN', 'duration_seconds': None,
+            'download_kbytes_per_sec': None,
         }
     out.append(item)
   return out
+
+
+def GetMunkiName(item_dict):
+    """Returns the display_name or name of a Munki package."""
+    return item_dict.get('display_name', item_dict.get('name')).encode('utf-8')
+
+
+def GetMunkiNameAndVersion(item_dict):
+    """Returns the "(display_name|name)-version" Munki name."""
+    name = GetMunkiName(item_dict)
+    munki_name = '%s-%s' % (name, item_dict.get('version_to_install', ''))
+    return munki_name.encode('utf-8')
 
 
 def GetRemainingPackagesToInstall():
@@ -770,15 +787,15 @@ def GetRemainingPackagesToInstall():
                     if hasattr(i, 'keys')]
 
   pkgs_to_install_dicts = install_report.get('ItemsToInstall', [])
-  pkgs_to_install = []
+  pkgs_to_install = [GetMunkiNameAndVersion(d) for d in pkgs_to_install_dicts
+                     if GetMunkiName(d) not in just_installed]
 
-  for item_dict in pkgs_to_install_dicts:
-    name = item_dict.get('display_name', item_dict.get('name'))
-    pkg = '%s-%s' % (name, item_dict.get('version_to_install', ''))
-    if name not in just_installed:
-      pkgs_to_install.append(pkg.encode('utf-8'))
+  apple_to_install_dicts = install_report.get('AppleUpdates', [])
+  apple_updates_to_install = [
+      GetMunkiNameAndVersion(d) for d in apple_to_install_dicts
+      if GetMunkiName(d) not in just_installed]
 
-  return pkgs_to_install
+  return pkgs_to_install, apple_updates_to_install
 
 
 def _UploadManagedInstallReport(on_corp, install_report, logout=False):
@@ -818,6 +835,9 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
     install_time =  installs[i].get('time', None)
     if hasattr(install_time, 'timeIntervalSince1970'):
       installs[i]['time'] = install_time.timeIntervalSince1970()
+    # TODO(user): if we moved all of this code to simianauth, we could just use
+    #      JSON instead of doing all this DictToStr nonsense just to pass it
+    #      over the commandline.
     install_string = DictToStr(installs[i])
     installs[i] = install_string.encode('utf-8')
 
@@ -895,6 +915,10 @@ def UploadClientLogFiles():
   # Upload system.log.
   params.append('--uploadfile')
   params.append('/var/log/system.log')
+
+  # Upload install.log.
+  params.append('--uploadfile')
+  params.append('/var/log/install.log')
 
   # Inform simianauth which type of file(s) we're uploading.
   params.append('--uploadfiletype')

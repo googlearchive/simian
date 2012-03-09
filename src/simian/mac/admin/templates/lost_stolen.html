@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Lost/Stolen Clients{% endblock %}
+
+{% block page-content %}
+
+{% if computers %}
+  {{ computers|length }} computers found.
+  <table class="stats-table" id="stolentable">
+    <tr>
+      <th>UUID</th>
+      <th>Connection Info</th>
+      <th>Lost/Stolen Date</th>
+    </tr>
+  {% for c in computers %}
+    <tr>
+      <td>{{ c.uuid|host_uuid_link }}</td>
+      <td>
+        <a class="zippy_toggle button" style="padding-left:10px;float:right;" title="conn_{{ c.uuid }}">View connections</a>
+        Last: {{ c.mtime }} ({{ c.mtime|timesince }} ago)
+      </td>
+      <td>{{ c.lost_stolen_datetime }} ({{ c.lost_stolen_datetime|timesince }} ago)</td>
+    </tr>
+    <tr class="diffrow" id="conn_{{ c.uuid }}">
+      <td>&nbsp;</td>
+      <td colspan="2">{% for conn in c.connections %}{{ conn }}<br/>{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </table>
+  <script type="text/javascript">
+    simian.zippyfy('stolentable', true);
+  </script>
+{% else %}
+  <p>Yay!! There are no lost/stolen computers.</p>
+{% endif %}
+
+{% endblock %}

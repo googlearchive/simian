@@ -2,35 +2,66 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 #
 
-ARCH=i386
-OSX_VERSION=$(shell sw_vers -productVersion | cut -d. -f1-2)
-SIMIAN_VERSION=1.5.2
+OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
+SWIG=$(shell type -p swig 2>/dev/null)
+SIMIAN_VERSION=2.0
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=0.8.0.1351.0
+MUNKI_VERSION=0.8.2.1430.0
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.mpkg.dmg
-M2CRYPTO25=M2Crypto-0.21.1-py2.5-macosx-10.5-i386.egg
-M2CRYPTO26=M2Crypto-0.21.1-py2.6-macosx-10.6-universal.egg
-M2CRYPTO27=M2Crypto-0.21.1-py2.7-macosx-10.7-intel.egg
+PYTHON_VERSION=2.5
+PYTHON=$(shell type -p python${PYTHON_VERSION})
+TS=$(shell date '+%s')
+# This is the version that opensource.apple.com offers
+SWIG_VERSION=1.3.40
+SWIG_URL=http://downloads.sourceforge.net/project/swig/swig/swig-${SWIG_VERSION}/swig-${SWIG_VERSION}.tar.gz?r=&ts=${TS}
 
-test:
-	python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,for_tests,client}.cfg
-	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" python setup.py google_test
+os_check:
+	@if [ -z "${OSX_VERSION}" ]; then echo Must run on OS X ; exit 1 ; fi
 
-build:
-	python setup.py build
+python_check:
+	@if [ ! -x "${PYTHON}" ]; then echo Cannot find ${PYTHON} ; exit 1 ; fi
 
-install: client_config build
-	python setup.py install
+swig_check:
+	@if [ -z "${SWIG}" -o ! -x "${SWIG}" ]; then \
+	echo swig must be installed. make swig to do this automatically. ; \
+	exit 1 ; \
+	fi
+
+swig.tgz:
+	curl -L -o swig.tgz "${SWIG_URL}"
+
+swig: os_check swig.tgz
+	rm -rf tmpswig
+	mkdir -p tmpswig
+	tar -zxf swig.tgz -C tmpswig
+	cd tmpswig/swig-${SWIG_VERSION} ; \
+	./configure --prefix=/usr/local ; \
+	make ; \
+	echo Type your password to exec sudo make install. ; \
+	sudo make install
+	rm -rf tmpswig
+	@echo Success building and installing swig.
+
+virtualenv: python_check
+	${PYTHON} -c 'import virtualenv' || \
+	sudo easy_install-${PYTHON_VERSION} -U virtualenv
+
+VE: virtualenv python_check
+	${PYTHON} $(shell type -p virtualenv) --no-site-packages VE
+
+test: swig_check VE
+	VE/bin/python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,for_tests,client}.cfg
+	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" VE/bin/python setup.py google_test
+
+build: swig_check VE
+	VE/bin/python setup.py build
+
+install: swig_check client_config build
+	VE/bin/python setup.py install
 	mkdir -p /etc/simian/ && cp -Rf etc/simian /etc && chmod 644 /etc/simian/*.cfg
-
-clean: clean_contents clean_sdist clean_pkgs
-	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/*
-
-clean_sdist:
-	rm -rf ${SDIST} ${SDIST_TAR}
 
 clean_contents:
 	rm -rf contents.tar contents.tar.gz tmpcontents
@@ -38,24 +69,34 @@ clean_contents:
 clean_pkgs:
 	rm -rf tmppkgs
 
-${SDIST}: clean_sdist client_config
-	python setup.py sdist --formats=tar
+clean_sdist:
+	rm -rf ${SDIST} ${SDIST_TAR}
+
+clean: clean_contents clean_pkgs clean_sdist
+	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* VE *.egg
+
+${SDIST}: VE clean_sdist client_config
+	VE/bin/python setup.py sdist --formats=tar
 	gzip ${SDIST_TAR}
 
-server_config:
-	python src/simian/util/gen_settings.py -t server -o gae_bundle/simian/settings.py etc/simian/{common,server}.cfg
+server_config: VE
+	src/simian/util/create_gae_bundle.sh $(PWD)
+	VE/bin/python src/simian/util/gen_settings.py -t server -o gae_bundle/simian/settings.py etc/simian/{common,server}.cfg
 	sed -i "" "s/^application:.*/application: `PYTHONPATH=. python src/simian/util/appid_generator.py`/" gae_bundle/app.yaml
+	src/simian/util/link_module.sh PyYAML
+	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
 	src/simian/util/link_module.sh icalendar
+	VE/bin/python src/simian/util/compile_js.py src/simian/mac/admin/js/main.js gae_bundle/simian/mac/admin/js/simian.js
 	
-client_config:
-	python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,client}.cfg
+client_config: VE
+	VE/bin/python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,client}.cfg
 
 ${MUNKIFILE}:
 	curl -o $@ http://munki.googlecode.com/files/$@
 	
-add_munkicontents: ${MUNKIFILE}
+add_munkicontents: os_check ${MUNKIFILE}
 	mkdir -p tmpcontents/
 	# Munki moved to a mpkg, scrape out all the contents of each
 	# mpkg in this shell multiliner.
@@ -84,51 +125,89 @@ contents.tar.gz: client_config
 	cd tmpcontents && tar -cf ../contents.tar .
 	gzip contents.tar
 	
-${M2CRYPTO25}:
-	curl -o $@ http://chandlerproject.org/pub/Projects/MeTooCrypto/$@
-
-${M2CRYPTO26}:
-	curl -o $@ http://chandlerproject.org/pub/Projects/MeTooCrypto/$@
-
-${M2CRYPTO27}:
-	curl -o $@ http://chandlerproject.org/pub/Projects/MeTooCrypto/$@
-	
-${SIMIAN}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents contents.tar.gz
+${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian \
 	-version ${SIMIAN_VERSION} \
-	-r ${M2CRYPTO25} \
-	-r ${M2CRYPTO26} \
-	-r ${M2CRYPTO27} \
+	-pyver ${PYTHON_VERSION} \
+	-R M2Crypto-*.egg \
+	-R PyYAML-*.egg \
+	-R WebOb-*.egg \
+	-R google_apputils-*.egg \
+	-R icalendar-*.egg \
+	-R pyasn1-*.egg \
+	-R python_dateutil-*.egg \
+	-R python_gflags-*.egg \
+	-R pytz-*.egg \
+	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}.pkg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents contents.tar.gz
+${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
 	-pkgonly \
 	-id com.google.code.simian \
 	-version ${SIMIAN_VERSION} \
-	-r ${M2CRYPTO25} \
-	-r ${M2CRYPTO26} \
-	-r ${M2CRYPTO27} \
+	-pyver ${PYTHON_VERSION} \
+	-R M2Crypto-*.egg \
+	-R PyYAML-*.egg \
+	-R WebOb-*.egg \
+	-R google_apputils-*.egg \
+	-R icalendar-*.egg \
+	-R pyasn1-*.egg \
+	-R python_dateutil-*.egg \
+	-R python_gflags-*.egg \
+	-R pytz-*.egg \
+	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.dmg: ${M2CRYPTO25} ${M2CRYPTO26} ${M2CRYPTO27} ${SDIST} clean_contents add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents add_munkicontents contents.tar.gz
+	rm -rf tmppkgs/$@
+	mkdir -p tmppkgs
+	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
+	-pkgonly \
+	-id com.google.code.simian.and.munkitools \
+	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
+	-pyver ${PYTHON_VERSION} \
+	-R M2Crypto-*.egg \
+	-R PyYAML-*.egg \
+	-R WebOb-*.egg \
+	-R google_apputils-*.egg \
+	-R icalendar-*.egg \
+	-R pyasn1-*.egg \
+	-R python_dateutil-*.egg \
+	-R python_gflags-*.egg \
+	-R pytz-*.egg \
+	-R tlslite-*.egg \
+	-r ${SDIST} \
+	-s postflight
+
+${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents add_munkicontents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian.and.munkitools \
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
-	-r ${M2CRYPTO25} \
-	-r ${M2CRYPTO26} \
-	-r ${M2CRYPTO27} \
+	-pyver ${PYTHON_VERSION} \
+	-R M2Crypto-*.egg \
+	-R PyYAML-*.egg \
+	-R WebOb-*.egg \
+	-R google_apputils-*.egg \
+	-R icalendar-*.egg \
+	-R pyasn1-*.egg \
+	-R python_dateutil-*.egg \
+	-R python_gflags-*.egg \
+	-R pytz-*.egg \
+	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight
 
-pkg: ${SIMIAN}.pkg
+simian-pkg: ${SIMIAN}.pkg
+
+pkg: ${SIMIAN}-and-${MUNKI}.pkg
 
 dmg: ${SIMIAN}-and-${MUNKI}.dmg
 

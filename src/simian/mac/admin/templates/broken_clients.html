@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Broken Clients{% endblock %}
+
+{% block page-content %}
+
+<div class="zippy_toggle expanded sectionheader" title="py_computers">
+  Broken Python Clients <span class="count">({{ py_computers|length }})</span>
+</div>
+<div id="py_computers">
+  {% if py_computers %}
+    <table class="stats-table">
+      <tr>
+        <th>Hostname</th><th>Owner</th><th>UUID</th>
+        <th>Details</th><th>First Broken Exec</th><th># Broken Execs</th>
+        <th>Last 10 Broken Exec</th><th>Likely Fixed</th><th>Set Fixed</th>
+      </tr>
+    {% for c in py_computers %}
+      <tr>
+        <td>{{ c.hostname }}</td><td>{{ c.owner }}</td>
+        <td>{{ c.uuid|host_uuid_link }}</td>
+        <td><a href="javascript:var w = window.open('', 'details', 'width=600, height=800'); w.document.write('{{ c.details|escape }}'); w.focus();">Details</a></td>
+        <td>{{ c.first_broken_datetime|timesince }} ago</td>
+        <td>{{ c.broken_datetimes|length }}</td>
+        <td style="max-width: 40em;">
+          {% for d in c.broken_datetimes|slice:":10" %}
+            {{ d|timesince }} ...
+          {% endfor %}
+        </td>
+        <td>{{ c.likely_fixed }}</td>
+        <td>
+          <form method="POST" action="/admin/brokenclients">
+            <input type="hidden" name="uuid" value="{{ c.uuid }}"/>
+            <input type="hidden" name="action" value="set_fixed"/>
+            <button>Set Client As Fixed</button>
+          </form>
+        </td>
+    {% endfor %}
+    </table>
+  {% else %}
+    <p>Yay!! There are currently no broken Python clients.</p>
+  {% endif %}
+</div>
+
+<div class="zippy_toggle sectionheader" title="zero_conn_computers">
+  Clients with zero successful executions <span class="count">({{ zero_conn_computers|length }})</span>
+</div>
+<div id="zero_conn_computers">
+  Note: clients may appear in this table during their first execution.<br>
+  {% if zero_conn_computers %}
+    <table class="stats-table">
+      <tr class="multi-header">
+         <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
+         <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
+         <th>Site</th><th>Office</th><th>Last Preflight</th>
+         <th>Last On Corp Preflight</th><th>Last IP Address</th>
+         <th>Upload Logs</th>
+      </tr>
+      {% for c in zero_conn_computers %}
+      <tr>
+        <td>{{ c.hostname }}</td>
+        <td>{{ c.uuid|host_uuid_link }}</td>
+        <td><a href="/admin?filter-type=owner&filter={{ c.owner }}"
+            >{{ c.owner }}</a></td>
+        <td>{{ c.track }}</td>
+        <td>{{ c.config_track }}</td>
+        <td>{{ c.os_version }}</td>
+        <td>{{ c.client_version }}</td>
+        <td>{{ c.site }}</td>
+        <td>{{ c.office }}</td>
+        <td>{{ c.preflight_datetime|timesince }}</td>
+        <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
+        {% if is_admin or is_security_user %}
+          <td>{{ c.ip_address }}</td>
+        {% else %}
+          <td>--redacted--</td>
+        {% endif %}
+        <td>
+          {% if c.upload_logs_and_notify %}
+            Email: {{ c.upload_logs_and_notify }}
+          {% else %}
+            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this);">
+              Upload logs</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    0 results
+  {% endif %}
+</div>
+
+
+<div class="zippy_toggle sectionheader" title="pf_computers">
+  Clients with recent preflight_datetime, but old postflight_datetime <span class="count">({{ pf_computers|length }})</span>
+</div>
+<div id="pf_computers">
+  {% if truncated %}Results were truncated.{% endif %}
+  {% if pf_computers %}
+    <table class="stats-table">
+      <tr class="multi-header">
+         <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
+         <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
+         <th>Site</th><th>Office</th><th>Last Preflight</th><th>Last Postflight</th>
+         <th>Last On Corp Preflight</th><th>Last IP Address</th>
+         <th>Upload Logs</th>
+      </tr>
+      {% for c in pf_computers %}
+      <tr>
+        <td>{{ c.hostname }}</td>
+        <td>{{ c.uuid|host_uuid_link }}</a>
+        <td><a href="/admin?filter-type=owner&filter={{ c.owner }}"
+            >{{ c.owner }}</a></td>
+        <td>{{ c.track }}</td>
+        <td>{{ c.config_track }}</td>
+        <td>{{ c.os_version }}</td>
+        <td>{{ c.client_version }}</td>
+        <td>{{ c.site }}</td>
+        <td>{{ c.office }}</td>
+        <td>{{ c.preflight_datetime|timesince }}</td>
+        <td>{{ c.postflight_datetime|timesince }}</td>
+        <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
+        {% if is_admin or is_security_user %}
+          <td>{{ c.ip_address }}</td>
+        {% else %}
+          <td>--redacted--</td>
+        {% endif %}
+        <td>
+          {% if c.upload_logs_and_notify %}
+            Email: {{ c.upload_logs_and_notify }}
+          {% else %}
+            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this);">
+              Upload logs</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    0 results
+  {% endif %}
+</div>
+
+<script type="text/javascript">
+  simian.zippyfy('content');
+</script>
+
+{% endblock %}

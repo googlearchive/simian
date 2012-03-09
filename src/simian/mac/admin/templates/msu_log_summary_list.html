@@ -1,0 +1,11 @@
+<h4>Generated {{ summary.mtime|timesince }} ago</h4>
+
+<table class="stats-table">
+  <tr><th colspan="2">MSU logs since {{ summary.since }}</th></tr>
+  {% for val in summary.values %}
+  <tr>
+    <td><a href="/admin/msulogevent?event={{ val.var }}">{{ val.var }}</a></td>
+    <td>{{ val.val }}</td>
+  </tr>
+  {% endfor %}
+</table>

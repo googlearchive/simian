@@ -6,52 +6,22 @@ inbound_services:
 - warmup
 builtins:
 - remote_api: on
-#- appstats: on
-skip_files:
-- ^(.*/)?.*\.so
 
-
-
-
-
-
-default_expiration: '3650d'
 
 handlers:
 
-### warmup url
+### Warmup URL
 
 - url: /_ah/warmup
   script: main.py
   login: admin
   secure: always
 
-### admin interface
+
+### Dev Admin Console
 
 - url: /ahadmin/.*
   script: $PYTHON_LIB/google/appengine/ext/admin
-  login: admin
-  secure: always
-
-### crons
-
-- url: /cron/applesus/.*
-  script: simian/mac/cron/main.py
-  login: admin
-  secure: always
-
-- url: /cron/maintenance/.*
-  script: simian/mac/cron/main.py
-  login: admin
-  secure: always
-
-- url: /cron/reports_cache/.*
-  script: simian/mac/cron/main.py
-  login: admin
-  secure: always
-
-- url: /cron/welcome_email
-  script: simian/mac/cron/main.py
   login: admin
   secure: always
 
@@ -95,9 +65,9 @@ handlers:
   script: main.py
   secure: always
 
-# intentionally omit "secure: always" for Scotty/Blobstore functionality.
 - url: /uploadpkg
   script: main.py
+  # intentionally omit "secure: always" for Scotty/Blobstore functionality.
 
 - url: /auth
   script: main.py
@@ -108,30 +78,55 @@ handlers:
   login: required
   secure: always
 
-# intentionally omit "login: required" for arriving loginz requests
 - url: /loginz
   script: main.py
   secure: always
+  # intentionally omit "login: required" for arriving loginz requests
+
 
 - url: /api/.*
   script: main.py
   secure: always
 
-### deferred tasks
+### Deferred Tasks
 
 - url: /_ah/queue/deferred
   script: simian/mac/deferred_wrapper.py
   secure: always
   login: admin
 
-# Static content for admin page.
+### Cron Job Handler
+
+- url: /cron/.*
+  script: simian/mac/cron/main.py
+  login: admin
+  secure: always
+
+### Static content for admin UI
 
 - url: /admin/static
   static_dir: simian/mac/admin/static
   secure: always
   login: required
 
-### catchall handler
+- url: /.*/admin/css
+  static_dir: simian/mac/admin/css
+  secure: always
+  login: required
+
+- url: /.*/admin/js
+  static_dir: simian/mac/admin/js
+  secure: always
+  login: required
+
+### Admin UI
+
+- url: /admin($|/.*)
+  script: simian/mac/admin/main.py
+  secure: always
+  login: required
+
+### Catchall handler
 
 - url: /.*
   script: main.py

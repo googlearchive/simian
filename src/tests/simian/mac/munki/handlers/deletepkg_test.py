@@ -45,7 +45,7 @@ class DeletePackageTest(test.RequestHandlerTest):
     user = 'foouser'
 
     self.mox.StubOutWithMock(deletepkg.gae_util, 'SafeBlobDel')
-    self.mox.StubOutWithMock(deletepkg.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(deletepkg.models.Catalog, 'Generate')
     mock_pkginfo = self.mox.CreateMockAnything()
     mock_pkginfo.blobstore_key = blobstore_key
     mock_pkginfo.catalogs = catalogs
@@ -61,7 +61,7 @@ class DeletePackageTest(test.RequestHandlerTest):
     mock_pkginfo.delete().AndReturn(None)
     deletepkg.gae_util.SafeBlobDel(blobstore_key).AndReturn(None)
     for catalog in catalogs:
-      deletepkg.common.CreateCatalog(catalog).AndReturn(None)
+      deletepkg.models.Catalog.Generate(catalog).AndReturn(None)
 
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='deletepkg', filename=filename,

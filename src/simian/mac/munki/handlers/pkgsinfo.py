@@ -22,11 +22,9 @@
 import hashlib
 import logging
 import urllib
-from google.appengine.ext import blobstore
-from google.appengine.ext import webapp
-from simian.mac import models
+
 from simian.auth import gaeserver
-from simian.mac.munki import common
+from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.common import gae_util
 from simian.mac.munki import handlers
@@ -52,7 +50,7 @@ class MunkiPackageInfoPlistStrict(plist.MunkiPackageInfoPlist):
           'Package %s does not exist' % self._plist['installer_item_location'])
 
 
-class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
+class PackagesInfo(handlers.AuthenticationHandler):
   """Handler for /pkgsinfo/"""
 
   def get(self, filename=None):
@@ -85,6 +83,8 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
           self.response.headers['X-Pkgsinfo-Hash'] = self._Hash(pkginfo.plist)
         self.response.out.write(pkginfo.plist)
       else:
+        if hash_str:
+          gae_util.ReleaseLock(lock)
         self.response.set_status(404)
         return
 
@@ -124,7 +124,7 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
     Returns:
       str, sha256 digest
     """
-    h = hashlib.sha256(s)
+    h = hashlib.sha256(str(s))
     return h.hexdigest()
 
   def put(self, filename):
@@ -180,9 +180,7 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
 
     # If the pkginfo is not modifiable, ensure only manifests have changed.
     if not pkginfo.IsSafeToModify():
-      existing_pkginfo = MunkiPackageInfoPlistStrict(pkginfo.plist)
-      existing_pkginfo.Parse()
-      if not mpl.EqualIgnoringManifestsAndCatalogs(existing_pkginfo):
+      if not mpl.EqualIgnoringManifestsAndCatalogs(pkginfo.plist):
         logging.warning(
             'pkginfo "%s" is in stable or testing; change prohibited.',
             filename)
@@ -202,7 +200,7 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
         return
 
     # All verification has passed, so let's create the PackageInfo entity.
-    pkginfo.plist = mpl.GetXml()
+    pkginfo.plist = mpl
     pkginfo.name = mpl.GetPackageName()
     if catalogs is not None:
       pkginfo.catalogs = catalogs
@@ -215,12 +213,12 @@ class PackagesInfo(handlers.AuthenticationHandler, webapp.RequestHandler):
     gae_util.ReleaseLock(lock)
 
     for track in pkginfo.catalogs:
-      common.CreateCatalog(track, delay=1)
+      models.Catalog.Generate(track, delay=1)
 
     # Log admin pkginfo put to Datastore.
     user = session.uuid
     admin_log = models.AdminPackageLog(
         user=user, action='pkginfo', filename=filename,
         catalogs=pkginfo.catalogs, manifests=pkginfo.manifests,
-        install_types=pkginfo.install_types, plist=pkginfo.plist)
+        install_types=pkginfo.install_types, plist=pkginfo.plist.GetXml())
     admin_log.put()

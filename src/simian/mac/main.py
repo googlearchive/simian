@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 
+import appengine_config
 
 # catch fatal datastore errors and provide a friendly but minimal message.
 CATCH_DATASTORE_FATAL = True
@@ -58,9 +59,6 @@ def BasicExceptionPrint(exc_type, exc_value, exc_traceback):
 
 
 def main():
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
-    logging.getLogger().setLevel(logging.DEBUG)
-
   from google.appengine.api import users
   from simian.mac import urls
 

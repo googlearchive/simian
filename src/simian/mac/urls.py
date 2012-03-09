@@ -21,11 +21,8 @@
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
-from simian.mac.admin import stats as admin_stats
-from simian.mac.admin import applesus as applesus_admin
-from simian.mac.admin import panic as admin_panic
-from simian.mac.admin import manifest_modifications
-from simian.mac.admin import package_alias
+
+from simian import settings
 from simian.mac.api import urls as api_urls
 from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import uauth
@@ -72,21 +69,6 @@ application = webapp.WSGIApplication(
     (r'/reports$', reports.Reports),
     # PUT uploadfile from munki.
     (r'/uploadfile/([\w\-]+)/([\w\-\.]+)$', uploadfile.UploadFile),
-    # GET/POST Apple SUS admin.
-    (r'/admin/applesus/?$', applesus_admin.AppleSUSAdmin),
-    (r'/admin/applesus/([\w\-]+)/([\d\w\-]+)$', applesus_admin.AppleSUSAdmin),
-    # GET/POST Manifest Modifications admin.
-    (r'/admin/manifest_modifications/?$',
-     manifest_modifications.ManifestModifications),
-    # GET/POST Manifest Modifications admin.
-    (r'/admin/package_alias/?$', package_alias.PackageAlias),
-    # GET or POST admin panic interface,
-    (r'/admin/panic/?$', admin_panic.AdminPanic),
-    # GET reports pages.
-    (r'/admin/?$', admin_stats.Stats),
-    (r'/admin/([\w\-\_\.\=\|\%]+)$', admin_stats.Stats),
-    (r'/admin/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$',
-     admin_stats.Stats),
     # GET or POST user auth.
     (r'/uauth/?$', uauth.UserAuth),
     # GET auth logout, POST munki auth.
@@ -95,7 +77,7 @@ application = webapp.WSGIApplication(
     (r'/repair/([\w\-\_\.\=\|\%]+)$', pkgs.ClientRepair),
     (r'/_ah/warmup', RedirectToAdmin),
     (r'/?$', RedirectToAdmin),
-    ], debug=True)
+    ], debug=settings.DEBUG)
 
 
 def main():

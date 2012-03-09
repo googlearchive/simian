@@ -26,8 +26,11 @@ Classes:
 
 import os
 import appengine_config
+
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
+
+from simian import settings
 from simian.mac.cron import applesus
 from simian.mac.cron import maintenance
 from simian.mac.cron import reports_cache
@@ -53,13 +56,11 @@ application = webapp.WSGIApplication([
 
     # Welcome Email
     (r'/cron/welcome_email$', welcome_email.WelcomeEmail),
-])
+], debug=settings.DEBUG)
 
 
 
 def main():
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
-    logging.getLogger().setLevel(logging.DEBUG)
   run_wsgi_app(application)
 
 

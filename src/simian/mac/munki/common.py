@@ -13,8 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#   #!/usr/bin/python2.4
-#
+# #
 
 """Shared resources for handlers."""
 
@@ -42,6 +41,7 @@ CLIENT_ID_FIELDS = {
     'os_version': str, 'client_version': str, 'on_corp': bool,
     'last_notified_datetime': str, 'uptime': float, 'root_disk_free': int,
     'user_disk_free': int, 'global_uuid': str, 'applesus': bool,
+    'runtype': str,
 }
 CONNECTION_DATETIMES_LIMIT = 10
 CONNECTION_DATES_LIMIT = 30
@@ -52,18 +52,14 @@ PANIC_MODE_PREFIX = 'panic_mode_'
 # Panic mode which disables all packages
 PANIC_MODE_NO_PACKAGES = 'no_packages'
 PANIC_MODES = [PANIC_MODE_NO_PACKAGES]
+FLASH_PLUGIN_NAME = 'flashplugin'
+FLASH_PLUGIN_DEBUG_NAME = 'flash_player_debug'
+# Apple Software Update pkgs_to_install text format.
+APPLESUS_PKGS_TO_INSTALL_FORMAT = 'AppleSUS: %s'
 
 
 class Error(Exception):
   """Base Error."""
-
-
-class CatalogCreationError(Error):
-  """There was an error generating a catalog."""
-
-
-class ManifestCreationError(Error):
-  """There was an error updating the manifest."""
 
 
 class ComputerNotFoundError(Error):
@@ -76,121 +72,6 @@ class ManifestNotFoundError(Error):
 
 class ManifestDisabledError(Error):
   """Disable manifest was requested."""
-
-
-# Munki catalog plist XML with Apple DTD/etc, and empty array for filling.
-CATALOG_PLIST_XML = '%s<array>\n%s\n</array>%s' % (
-    plist_module.PLIST_HEAD, '%s', plist_module.PLIST_FOOT)
-
-
-def CreateManifest(name, delay=0):
-  """Creates a manifest from available and matching PackageInfo entities.
-
-  Args:
-    name: str manifest name.
-    delay: int. if > 0, AddPackageToManifest call is deferred this many seconds.
-  """
-  if delay:
-    now = datetime.datetime.utcnow()
-    now_str = '%s-%d' % (now.strftime('%Y-%m-%d-%H-%M-%S'), now.microsecond)
-    deferred_name = 'create-manifest-%s-%s' % (name, now_str)
-    deferred.defer(CreateManifest, name, _name=deferred_name, _countdown=delay)
-    return
-
-  lock = 'manifest_lock_%s' % name
-  if not gae_util.ObtainLock(lock):
-    logging.debug(
-        'CreateManifest for %s is locked. Delaying....', name)
-    CreateManifest(name, delay=5)
-    return
-
-  #logging.debug('Creating manifest: %s', name)
-  try:
-    package_infos = models.PackageInfo.all().filter('manifests =', name)
-    if not package_infos:
-      # TODO(user): if this happens we probably want to notify admins...
-      raise ManifestCreationError('PackageInfo entities found: %s' % name)
-
-    install_types = {}
-    for p in package_infos:
-      # Add all installs to their appropriate install type containers.
-      for install_type in p.install_types:
-        if install_type not in install_types:
-          install_types[install_type] = []
-        install_types[install_type].append(p.name)
-
-    # Generate a dictionary of the manifest data.
-    manifest_dict = {'catalogs': [name]}
-    for k, v in install_types.iteritems():
-      manifest_dict[k] = v
-    # Turn the manifest dictionary into XML.
-    manifest = plist_module.MunkiManifestPlist()
-    manifest.SetContents(manifest_dict)
-
-    # Save the new manifest to Datastore.
-    manifest_entity = models.Manifest.get_or_insert(name)
-    manifest_entity.plist = manifest.GetXml()
-    manifest_entity.put()
-    models.Manifest.ResetMemcacheWrap(name)
-    #logging.debug(
-    #    'Manifest %s created successfully', name)
-  except (ManifestCreationError, db.Error, plist_module.Error):
-    logging.exception('CreateManifest failure: %s', name)
-    gae_util.ReleaseLock(lock)
-    raise
-  gae_util.ReleaseLock(lock)
-
-
-def CreateCatalog(name, delay=0):
-  """Creates a catalog from pkgsinfo plists.
-
-  Args:
-    name: str catalog name.
-    delay: int. if > 0, CreateCatalog call is deferred this many seconds.
-  """
-  if delay:
-    now = datetime.datetime.utcnow()
-    now_str = '%s-%d' % (now.strftime('%Y-%m-%d-%H-%M-%S'), now.microsecond)
-    deferred_name = 'create-catalog-%s-%s' % (name, now_str)
-    deferred.defer(CreateCatalog, name, _name=deferred_name, _countdown=delay)
-    return
-
-  lock = 'catalog_lock_%s' % name
-  # Obtain a lock on the catalog name.
-  if not gae_util.ObtainLock(lock):
-    # If catalog creation for this name is already in progress then delay.
-    logging.debug('Catalog creation for %s is locked. Delaying....', name)
-    CreateCatalog(name, delay=10)
-    return
-
-  #logging.debug('Creating catalog: %s', name)
-  try:
-    pkgsinfo_dicts = []
-    package_infos = models.PackageInfo.all().filter('catalogs =', name)
-    if not package_infos:
-      # TODO(user): if this happens we probably want to notify admins...
-      raise CatalogCreationError('No pkgsinfo found with catalog: %s' % name)
-
-    for p in package_infos:
-      apl = plist_module.ApplePlist(p.plist)
-      apl.Parse()
-      pkgsinfo_dicts.append(apl.GetXmlContent(indent_num=1))
-
-    catalog = CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
-
-    c = models.Catalog.get_or_insert(name)
-    c.name = name
-    c.plist = catalog
-    c.put()
-    models.Catalog.ResetMemcacheWrap(name)
-    #logging.debug('Created catalog successfully: %s', name)
-    # Create manifest for newly generated catalog.
-    CreateManifest(name, delay=1)
-  except (CatalogCreationError, db.Error, plist_module.Error):
-    logging.exception('CreateCatalog failure for catalog: %s', name)
-    gae_util.ReleaseLock(lock)
-    raise
-  gae_util.ReleaseLock(lock)
 
 
 def _SaveFirstConnection(client_id, computer):
@@ -223,8 +104,8 @@ def _SaveFirstConnection(client_id, computer):
 
 
 def LogClientConnection(
-    event, client_id, user_settings=None, pkgs_to_install=None, delay=0,
-    computer=None, ip_address=None):
+    event, client_id, user_settings=None, pkgs_to_install=None,
+    apple_updates_to_install=None, delay=0, computer=None, ip_address=None):
   """Logs a host checkin to Simian.
 
   Args:
@@ -232,6 +113,8 @@ def LogClientConnection(
     client_id: dict client id with fields: uuid, hostname, owner.
     user_settings: optional dict of user settings.
     pkgs_to_install: optional list of string packages remaining to install.
+    apple_updates_to_install: optional list of string Apple updates remaining
+        to install.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
     computer: optional models.Computer object.
     ip_address: str IP address of the connection.
@@ -249,6 +132,7 @@ def LogClientConnection(
     deferred.defer(
         LogClientConnection, event, client_id, user_settings=user_settings,
         pkgs_to_install=pkgs_to_install, ip_address=ip_address,
+        apple_updates_to_install=apple_updates_to_install,
         _name=deferred_name, _countdown=delay)
     return
 
@@ -257,8 +141,8 @@ def LogClientConnection(
     return
 
   def __UpdateComputerEntity(
-      event, _client_id, _user_settings, _pkgs_to_install, c=None,
-      ip_address=None):
+      event, _client_id, _user_settings, _pkgs_to_install,
+      _apple_updates_to_install, c=None, ip_address=None):
     """Update the computer entity, or create a new one if it doesn't exists."""
     now = datetime.datetime.utcnow()
     is_new_client = False
@@ -281,6 +165,7 @@ def LogClientConnection(
     c.root_disk_free = _client_id['root_disk_free']
     c.user_disk_free = _client_id['user_disk_free']
     c.global_uuid = _client_id['global_uuid']
+    c.runtype = _client_id['runtype']
     c.ip_address = ip_address
 
     last_notified_datetime = _client_id['last_notified_datetime']
@@ -300,6 +185,7 @@ def LogClientConnection(
         c.last_on_corp_preflight_datetime = now
     elif event == 'postflight':
       c.postflight_datetime = now
+
       # Update pkgs_to_install.
       if _pkgs_to_install:
         c.pkgs_to_install = _pkgs_to_install
@@ -307,6 +193,22 @@ def LogClientConnection(
       else:
         c.pkgs_to_install = []
         c.all_pkgs_installed = True
+      # Update all_apple_updates_installed and add Apple updates to
+      # pkgs_to_install. It's important that this code block comes after
+      # all_pkgs_installed is updated above, to ensure that all_pkgs_installed
+      # is only considers Munki updates, ignoring Apple updates added below.
+      # NOTE: if there are any pending Munki updates then we simply assume
+      # there are also pending Apple Updates, even though we cannot be sure
+      # due to the fact that Munki only checks for Apple Updates if all regular
+      # updates are installed
+      if not pkgs_to_install and not _apple_updates_to_install:
+        c.all_apple_updates_installed = True
+      else:
+        c.all_apple_updates_installed = False
+        # For now, let's store Munki and Apple Update pending installs together,
+        # using APPLESUS_PKGS_TO_INSTALL_FORMAT to format the text as desired.
+        for update in _apple_updates_to_install:
+          c.pkgs_to_install.append(APPLESUS_PKGS_TO_INSTALL_FORMAT % update)
 
       # Keep the last CONNECTION_DATETIMES_LIMIT connection datetimes.
       if len(c.connection_datetimes) == CONNECTION_DATETIMES_LIMIT:
@@ -340,14 +242,13 @@ def LogClientConnection(
   try:
     db.run_in_transaction(
         __UpdateComputerEntity,
-        event, client_id, user_settings, pkgs_to_install, c=computer,
-        ip_address=ip_address)
-    # to run w/o transaction:
-    # __UpdateComputerEntity(event, client_id, user_settings, pkgs_to_install)
+        event, client_id, user_settings, pkgs_to_install,
+        apple_updates_to_install, c=computer, ip_address=ip_address)
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
     logging.exception('LogClientConnection put() failure; deferring...')
     LogClientConnection(
-        event, client_id, user_settings, pkgs_to_install, ip_address=ip_address,
+        event, client_id, user_settings, pkgs_to_install,
+        apple_updates_to_install, ip_address=ip_address,
         delay=DATASTORE_NOWRITE_DELAY)
 
 
@@ -410,6 +311,7 @@ def WriteBrokenClient(uuid, details):
   bc = models.ComputerClientBroken.get_or_insert(uuid)
   bc.hostname = facts.get('hostname', '')
   bc.owner = facts.get('primary_user', '')
+  bc.serial = facts.get('sp_serial_number', '')
   bc.details = details
   bc.fixed = False
   bc.uuid = uuid
@@ -495,6 +397,14 @@ def ParseClientId(client_id, uuid=None):
     Dict. Client id string "foo=bar|key=|one=1" yields
         {'foo': 'bar', 'key': None, 'one': '1'}.
   """
+  # Convert str input to unicode.
+  if type(client_id) is str:
+    try:
+      client_id = client_id.decode('utf-8')
+    except UnicodeDecodeError:
+      client_id = client_id.decode('utf-8', 'replace')
+      logging.warning('UnicodeDecodeError on client_id: %s', client_id)
+
   out = KeyValueStringToDict(client_id)
 
   # If any required fields were not present in the client id string, add them.
@@ -502,7 +412,7 @@ def ParseClientId(client_id, uuid=None):
   for field, value_type in CLIENT_ID_FIELDS.iteritems():
     if field not in out:
       out[field] = None
-    elif value_type is bool:
+    elif value_type is bool and out[field] is not None:
       out[field] = GetBoolValueFromString(out[field])
     elif out[field] is not None and value_type is not str:
       try:
@@ -666,19 +576,15 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
   manifest_plist = plist_module.MunkiManifestPlist(manifest_plist_xml)
   manifest_plist.Parse()
 
-  catalogs = manifest_plist.GetContents()['catalogs']
+  catalogs = manifest_plist['catalogs']
   packages = {}
 
-  pkginfo_q = models.PackageInfo.all()
-
-  for pkginfo in pkginfo_q:
-    pkginfo_plist = plist_module.MunkiPackageInfoPlist(pkginfo.plist)
-    pkginfo_plist.Parse()
-    pd = pkginfo_plist.GetContents()
-    display_name = pd.get('display_name', pd.get('name')).strip()
-    version = pd.get('version', '')
-    pkg_name = pkginfo.name
-    packages[pkg_name] = '%s-%s' % (display_name, version)
+  query = models.PackageInfo.all()
+  for p in query:
+    display_name = p.plist.get('display_name', None) or p.plist.get('name')
+    display_name = display_name.strip()
+    version = p.plist.get('version', '')
+    packages[p.name] = '%s-%s' % (display_name, version)
 
   return {
       'plist': manifest_plist,
@@ -701,17 +607,17 @@ def _ModifyList(l, value):
     l.append(value)
 
 
-def GenerateDynamicManifest(plist_xml, client_id, user_settings=None):
+def GenerateDynamicManifest(plist, client_id, user_settings=None):
   """Generate a dynamic manifest based on a the various client_id fields.
 
   Args:
-    plist_xml: str XML manifest to start with.
+    plist: str XML or plist_module.ApplePlist object, manifest to start with.
     client_id: dict client_id parsed by common.ParseClientId.
     user_settings: dict UserSettings as defined in Simian client.
   Returns:
     str XML manifest with any custom modifications based on the client_id.
   """
-  plist = None
+  # TODO(user): This function is getting out of control and needs refactoring.
   manifest_changed = False
   manifest = client_id['track']
 
@@ -722,23 +628,32 @@ def GenerateDynamicManifest(plist_xml, client_id, user_settings=None):
       models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
           (('os_version =', client_id['os_version']),))
 
-  try:
-    owner_mods = models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
-        'owner', client_id['owner'])
-  except KeyError:
-    owner_mods = []
+  owner_mods = models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
+      (('owner', client_id['owner']),))
 
-  try:
-    uuid_mods = models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
-        'uuid', client_id['uuid'])
-  except KeyError:
-    uuid_mods = []
+  uuid_mods = models.UuidManifestModification.MemcacheWrappedGetAllFilter(
+      (('uuid', client_id['uuid']),))
+
+  tag_mods = []
+  computer_key = models.db.Key.from_path('Computer', client_id['uuid'])
+  computer_tags = models.Tag.GetAllTagNamesForKey(computer_key)
+  if computer_tags:
+    # NOTE(user): if we feel most computers will have tags, it might make sense
+    #             to regularly fetch and cache all mods.
+    for tag in computer_tags:
+      t = (('tag_key_name', tag),)
+      tag_mods.extend(
+          models.TagManifestModification.MemcacheWrappedGetAllFilter(t))
 
   def __ApplyModifications(manifest, mod, plist):
     """Applies a manifest modification if the manifest matches mod manifest.
 
     NOTE(user): if mod.manifests is empty or None, mod is made to any manifest.
     """
+    plist_xml = None
+    if type(plist) is str:
+      plist_xml = plist
+
     if not mod.enabled:
       return  # return it the mod is disabled
     elif mod.manifests and manifest not in mod.manifests:
@@ -750,10 +665,11 @@ def GenerateDynamicManifest(plist_xml, client_id, user_settings=None):
       plist_module.UpdateIterable(
           plist, install_type, mod.value, default=[], op=_ModifyList)
 
-  if site_mods or owner_mods or os_version_mods or uuid_mods:
+  if site_mods or owner_mods or os_version_mods or uuid_mods or tag_mods:
     manifest_changed = True
-    plist = plist_module.MunkiManifestPlist(plist_xml)
-    plist.Parse()
+    if type(plist) is str:
+      plist = plist_module.MunkiManifestPlist(plist)
+      plist.Parse()
     for mod in site_mods:
       __ApplyModifications(manifest, mod, plist)
     for mod in os_version_mods:
@@ -762,26 +678,38 @@ def GenerateDynamicManifest(plist_xml, client_id, user_settings=None):
       __ApplyModifications(manifest, mod, plist)
     for mod in uuid_mods:
       __ApplyModifications(manifest, mod, plist)
+    for mod in tag_mods:
+      __ApplyModifications(manifest, mod, plist)
 
   if user_settings:
+    flash_developer = user_settings.get('FlashDeveloper', False)
     block_packages = user_settings.get('BlockPackages', [])
-    if block_packages and not plist:
-      plist = plist_module.MunkiManifestPlist(plist_xml)
-      plist.Parse()
+    # If plist is not parsed yet and modifications are required, parse it.
+    if (flash_developer or block_packages) and type(plist) is str:
+      if type(plist) is str:
+        plist = plist_module.MunkiManifestPlist(plist)
+        plist.Parse()
+
+    # If FlashDeveloper is True, replace the regular flash plugin with the
+    # debug version in managed_updates.
+    if flash_developer:
+      manifest_changed = True
+      plist[common.MANAGED_UPDATES].append(FLASH_PLUGIN_DEBUG_NAME)
+      try:
+        plist[common.MANAGED_UPDATES].remove(FLASH_PLUGIN_NAME)
+      except ValueError:
+        pass  # FLASH_PLUGIN_NAME was not in managed_updates to begin with.
+
     # Look for each block package in each install type, remove if found.
     for block_package in block_packages:
       for install_type in common.INSTALL_TYPES:
-        # Former hack here to rename block package with previous packaged
-        # version of Flash.
-        #        if block_package == 'flashplugin':
-        #          block_package = 'Adobe Flash Player'
         if block_package in plist.get(install_type, []):
           manifest_changed = True
           plist[install_type].remove(block_package)
           #logging.debug(
           #    'Removed BlockPackage from %s: %s', block_package, install_type)
 
-  if manifest_changed:
-    plist_xml = plist.GetXml()
-
-  return plist_xml
+  if type(plist) is str:
+    return plist
+  else:
+    return plist.GetXml()

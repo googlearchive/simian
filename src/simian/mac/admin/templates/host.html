@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Host: {{ computer.hostname }}{% endblock %}
+
+{% block page-content %}
+{% if not computer %}
+    <p>No computer with the specified UUID was found.</p>
+{% else %}
+<div class="zippy_toggle expanded sectionheader" title="client_info">Client Information</div>
+<div id="client_info" class="subsection">
+<table class="stats-table">
+  <tr class="multi-header">
+     <th>Hostname</th>
+     <th>Serial</th>
+     {% if uuid_lookup_url %}<th>Host Details</th>{% endif %}
+     <th>Owner</th>
+     {% if owner_lookup_url %}<th>Owner Details</th>{% endif %}
+     <th>Site</th><th>Office</th><th>Config Track</th>
+     <th>OS Version</th><th>HDD Bytes Free</th><th>Uptime</th>
+  </tr>
+  <tr>
+    <td>
+      <a href="/admin?filter-type=hostname&filter={{ computer.hostname }}"
+        >{{ computer.hostname }}</a>
+    </td>
+    <td>{{ computer.serial }}</td>
+    {% if uuid_lookup_url %}
+      <td><a href="{{ uuid_lookup_url }}/{{ computer.uuid }}">view</a></td>
+    {% endif %}
+    <td>
+      <a href="/admin?filter-type=owner&filter={{ computer.owner }}"
+        >{{ computer.owner }}</a>
+    </td>
+    {% if owner_lookup_url %}
+      <td><a href="{{ owner_lookup_url }}/{{ computer.owner }}">view</a></td>
+    {% endif %}
+    <td>{{ computer.site }}</td>
+    <td>{{ computer.office }}</td>
+    <td>{{ computer.config_track }}</td>
+    <td>{{ computer.os_version }}</td>
+    <td>{{ computer.root_disk_free|filesizeformat }}</td>
+    <td>{{ computer.uptime|uptime_from_seconds }}</td>
+  </tr>
+</table>
+
+<table class="stats-table">
+  <tr class="multi-header">
+     {% if not computer.active %}<th>Status</th>{% endif %}
+     <th>UUID</th>
+     <th>Track</th>
+     <th>Munki Version</th>
+     <th>Dynamic Manifest</th>
+     <th>Tags</th>
+     <th>User Settings</th>
+  </tr>
+  <tr>
+    {% if not computer.active %}
+      <td style="color: red;">Inactive</td>
+    {% endif %}
+    <td>
+      <span id="uuid">{{ computer.uuid }}</span>
+    </td>
+    <td>{{ computer.track }}</td>
+    <td>{{ computer.client_version }}</td>
+    <td><a href="/admin/hostmanifest/{{ computer.uuid }}">
+      <img src="/admin/static/file.png" title="view"/></a>
+    </td>
+    <td><div id="host-tags"></div>
+    </td>
+    <td>
+      {% if computer.user_settings %}
+        <pre>{{ computer.user_settings }}</pre>
+      {% else %}
+        None
+      {% endif %}
+    </td>
+</table>
+</div>
+
+
+<div class="zippy_toggle expanded sectionheader" title="conn_detail">Connection Details</div>
+<div id="conn_detail" class="subsection">
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Last Preflight</th>
+      <th>Last Postflight</th>
+      <th>Run Type</th>
+      <th>Avg Download Speed</th>
+      <th>(on/off corp)</th>
+      <th>Last Corp Preflight</th>
+      <th>Last IP Address</th>
+    </tr>
+    <tr>
+      <td>{{ computer.preflight_datetime }}
+          ({{ computer.preflight_datetime|timesince }})</td>
+      <td>{{ computer.postflight_datetime }}
+          ({{ computer.postflight_datetime|timesince }})</td>
+      <td>{{ computer.runtype }}</td>
+      <td>{{ installs|avg_download_speed }}</td>
+      <td>{{ computer.connections_on_corp }} /
+          {{ computer.connections_off_corp }}
+      </td>
+      <td>{{ computer.last_on_corp_preflight_datetime }}
+          ({{ computer.last_on_corp_preflight_datetime|timesince }})</td>
+      {% if is_admin or is_security_user or is_physical_security_user %}
+        <td>{{ computer.ip_address }}</td>
+      {% else %}
+        <td>--redacted--</td>
+      {% endif %}
+    </tr>
+  </table>
+  
+  <div class="subsubsection">
+    <div style="float:left; margin: 5px 20px;">
+      <div><h3>Connection Dates</h3></div>
+      <div class="morebox">
+        <a onclick="simian.addClass(this.parentNode, 'maximized');" class="more">more</a>
+        {% for cd in computer.connection_dates %}
+          {{ cd|date }}<br/>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <div style="float:left; margin: 5px 20px;">
+      <div><h3>Connection Times</h3></div>
+      <div class="morebox">
+        <a onclick="simian.addClass(this.parentNode, 'maximized');" class="more">more</a>
+        {% for cdt in computer.connection_datetimes %}
+          {{ cdt|timesince }} ago<br/>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <div style="clear: both"></div>
+  </div>
+</div>
+
+
+<div class="zippy_toggle sectionheader" title="client_logs">Client Logs</div>
+<div id="client_logs" class="subsection">
+{% if is_admin %}
+<div class="subsubsection">
+  <div><h3>Log Files</h3></div>
+  {% if computer.upload_logs_and_notify %}
+    <span id="logs-to-be-uploaded-note" class="infopanel">
+      <b>Note:</b>
+      Logs are due to upload on the next preflight execution.
+      The following email addresses will be notified:
+      {{ computer.upload_logs_and_notify }}
+    </span>
+  {% else %}
+    <button onclick="simian.hostUploadLogs('{{ computer.uuid }}', this);" style="margin:8px;">
+      Upload logs on next preflight</button>
+  {% endif %}
+
+  {% if client_log_files %}
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Log Name</th><th>Upload Time</th><th>Time Since</th><th>Delete</th>
+    </tr>
+    {% for log in client_log_files %}
+      <tr id="{{ log.key.name }}-row">
+        <td>
+          <a href="/admin/clientlog/{{ log.key.name }}"
+             target="_blank">
+            <img src="/admin/static/file.png" alt="View Log"/>
+            {{ log.name }}
+          </a>
+        </td>
+        <td>{{ log.mtime }}</td>
+        <td>{{ log.mtime|timesince }}</td>
+        <td><input type="button" name="{{ log.key.name }}" value="Delete"
+                   onclick="javascript:simian.deleteClientLogFile(this);" />
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="subsubsection">
+  <div><h3>MSU Logs</h3> <span class="count">({{ msu_log|length }})</span></div>
+  <p style="margin: 10px">
+    Last MSU Popup (from ManagedInstalls.plist):
+    {{ computer.last_notified_datetime }}
+    ({{ computer.last_notified_datetime|timesince }} ago)
+  </p>
+  {% if msu_log %}
+    <table class="stats-table">
+      <tr class="multi-header">
+        <th>Event</th>
+        <th>Source</th>
+        <th>Description</th>
+        <th>Time</th>
+        <th>Time Since</th>
+      </tr>
+      {% for log in msu_log %}
+        <tr>
+          <td>{{ log.event }}</td>
+          <td>{{ log.source }}</td>
+          <td>{{ log.desc }}</td>
+          <td>{{ log.mtime }}</td>
+          <td>{{ log.mtime|timesince }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+</div>
+</div>
+
+
+<div class="zippy_toggle sectionheader" title="packages_detail">Packages, Installs, and Updates</div>
+<div id="packages_detail" class="subsection">
+  <div class="subsubsection">
+    <div>
+      <h3>Remaining Packages To Install</h3>
+      <span class="count">({{ computer.pkgs_to_install|length }})</span>
+    </div>
+    {% if computer.pkgs_to_install %}
+      <table class="stats-table">
+      <tr class="multi-header"><th>Package Name</th></tr>
+      {% for pkg in computer.pkgs_to_install %}
+        <tr><td>{{ pkg }}</td></tr>
+      {% endfor %}
+      </table>
+    {% endif %}
+  </div>
+  <div class="subsubsection">{% include "installs_list.html" %}</div>
+  <div class="subsubsection">{% include "applesus_installs_list.html" %}</div>
+</div>
+
+
+<div class="zippy_toggle sectionheader" title="problems">Problems, Exits, etc.</div>
+<div id="problems" class="subsection">
+  <div class="subsubsection">{% include "install_problems_list.html" %}</div>
+  <div class="subsubsection">{% include "preflight_exits_list.html" %}</div>
+</div>
+
+
+{% if is_admin or is_support_user %}
+<div class="zippy_toggle sectionheader" title="misc_actions">Misc Admin Actions</div>
+<div id="misc_actions" class="subsection">
+  {% if computer.active %}
+    <form method="POST">
+      <input type="hidden" name="action" value="set_inactive"/>
+      <button>Set Client As Inactive</button>
+    </form>
+  {% endif %}
+  <br/>
+  <form method="POST">
+    <input type="hidden" name="action" value="set_loststolen"/>
+    <button>Set Client As Lost/Stolen</button>
+  </form>
+  <br />
+</div>
+{% endif %}
+
+{% endif %}
+
+<script type="text/javascript">
+  simian.zippyfy('content');
+  {% if is_admin or is_security_user or is_physical_security_user %}
+    simian.initHostTags({{ tags|safe }});
+  {% endif %}
+</script>
+{% endblock %}

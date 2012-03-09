@@ -185,6 +185,21 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.c.get(filename)
     self.mox.VerifyAll()
 
+  def testGetFailPackageAndHashNoExist(self):
+    """Test get() with failure."""
+    filename = 'pkgnamenotfound.dmg'
+    self.MockDoAnyAuth()
+    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0, obtain=True)
+    self.MockModelStaticBase(
+        'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
+    self.request.get('hash').AndReturn('1')
+    self._MockReleaseLock('pkgsinfo_%s' % filename)
+    self.response.set_status(404).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c.get(filename)
+    self.mox.VerifyAll()
+
   def testPutFailAuth(self):
     """Test put() with auth failure."""
     self.MockDoMunkiAuth(
@@ -374,15 +389,15 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
-    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
-    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
-      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+      pkgsinfo.models.Catalog.Generate(catalog, delay=1).AndReturn(None)
 
+    mock_mpl.GetXml().AndReturn(body)
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='pkginfo', filename=filename,
         catalogs=catalogs, manifests=manifests, install_types=install_types,
@@ -391,7 +406,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
-    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.plist, mock_mpl)
     self.assertEqual(pkginfo.name, name)
     self.assertEqual(pkginfo.catalogs, catalogs)
     self.assertEqual(pkginfo.manifests, manifests)
@@ -428,15 +443,15 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
-    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
-    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
-      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+      pkgsinfo.models.Catalog.Generate(catalog, delay=1).AndReturn(None)
 
+    mock_mpl.GetXml().AndReturn(body)
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='pkginfo', filename=filename,
         catalogs=catalogs, manifests=manifests, install_types=install_types,
@@ -445,7 +460,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
-    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.plist, mock_mpl)
     self.assertEqual(pkginfo.name, name)
     self.assertEqual(pkginfo.catalogs, catalogs)
     self.assertEqual(pkginfo.manifests, manifests)
@@ -482,15 +497,15 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
-    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
-    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
-      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+      pkgsinfo.models.Catalog.Generate(catalog, delay=1).AndReturn(None)
 
+    mock_mpl.GetXml().AndReturn(body)
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='pkginfo', filename=filename,
         catalogs=catalogs, manifests=pkginfo.manifests,
@@ -499,7 +514,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
-    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.plist, mock_mpl)
     self.assertEqual(pkginfo.name, name)
     self.assertEqual(pkginfo.catalogs, catalogs)
     # since the tested function did not set a pkginfo.manifests value
@@ -538,16 +553,16 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.IsSafeToModify().AndReturn(True)
     self.mox.StubOutWithMock(self.c, '_Hash')
-    pkginfo.plist = mock_mpl.GetXml().AndReturn(body)
     self.c._Hash(pkginfo.plist).AndReturn('goodhash')
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
-    self.mox.StubOutWithMock(pkgsinfo.common, 'CreateCatalog')
+    self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
-      pkgsinfo.common.CreateCatalog(catalog, delay=1).AndReturn(None)
+      pkgsinfo.models.Catalog.Generate(catalog, delay=1).AndReturn(None)
 
+    mock_mpl.GetXml().AndReturn(body)
     mock_log = self.MockModel(
         'AdminPackageLog', user=user, action='pkginfo', filename=filename,
         catalogs=catalogs, manifests=manifests, install_types=install_types,
@@ -556,7 +571,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
-    self.assertEqual(pkginfo.plist, body)
+    self.assertEqual(pkginfo.plist, mock_mpl)
     self.assertEqual(pkginfo.name, name)
     self.assertEqual(pkginfo.catalogs, catalogs)
     self.assertEqual(pkginfo.manifests, manifests)
@@ -626,11 +641,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo.plist = 'foo'
 
     pkginfo.IsSafeToModify().AndReturn(False)
-    mock_existing_pkginfo = self.mox.CreateMockAnything()
-    pkgsinfo.MunkiPackageInfoPlistStrict(pkginfo.plist).AndReturn(
-        mock_existing_pkginfo)
-    mock_existing_pkginfo.Parse().AndReturn(None)
-    mock_mpl.EqualIgnoringManifestsAndCatalogs(mock_existing_pkginfo).AndReturn(
+    mock_mpl.EqualIgnoringManifestsAndCatalogs(pkginfo.plist).AndReturn(
         False)
     self.response.set_status(403).AndReturn(None)
     self.response.out.write('Changes to pkginfo not allowed').AndReturn(
@@ -668,11 +679,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo.plist = 'foo'
 
     pkginfo.IsSafeToModify().AndReturn(False)
-    mock_existing_pkginfo = self.mox.CreateMockAnything()
-    pkgsinfo.MunkiPackageInfoPlistStrict(pkginfo.plist).AndReturn(
-        mock_existing_pkginfo)
-    mock_existing_pkginfo.Parse().AndReturn(None)
-    mock_mpl.EqualIgnoringManifestsAndCatalogs(mock_existing_pkginfo).AndReturn(
+    mock_mpl.EqualIgnoringManifestsAndCatalogs(pkginfo.plist).AndReturn(
         True)
 
     # we've previously tested past hash check, so bail there.

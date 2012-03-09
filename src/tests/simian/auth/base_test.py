@@ -1497,7 +1497,7 @@ class Auth1ClientTest(AuthTestingBase):
     self.ba.Input(m=m)
     self.mox.VerifyAll()
 
-  def testInputWhenStage1LoadOtherCertFails(self):
+  def testInputWhenStage1LoadOtherCertUnknownCA(self):
     """Test Input()."""
     m = 'cn sn s'
     cn = 'cn'
@@ -1522,6 +1522,34 @@ class Auth1ClientTest(AuthTestingBase):
     self.ba.VerifyCertSignedByCA(mock_server_cert).AndReturn(False)
     self.ba._session.DeleteById('cn').AndReturn(None)
     self.ba._AddError('Server cert is not signed by known CA').AndReturn(None)
+    self.ba.AuthFail().AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.ba.Input(m=m)
+    self.mox.VerifyAll()
+
+  def testInputWhenStage1LoadOtherCertFails(self):
+    """Test Input()."""
+    m = 'cn sn s'
+    cn = 'cn'
+    sn = 'sn'
+    s = 's'
+    mock_server_cert = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(self.ba, 'ResetState')
+    self.mox.StubOutWithMock(self.ba, '_AddError')
+    self.mox.StubOutWithMock(self.ba, 'AuthFail')
+    self.mox.StubOutWithMock(self.ba, '_SplitMessage')
+    self.ba._session = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(base.base64, 'urlsafe_b64decode')
+    self.mox.StubOutWithMock(self.ba, 'LoadOtherCert')
+
+    self.ba.ResetState().AndReturn(None)
+    self.ba._SplitMessage(m, 3).AndReturn([cn, sn, s])
+    base.base64.urlsafe_b64decode(s).AndReturn(s)
+    self.ba.LoadOtherCert(self.ba._server_cert_pem).AndRaise(ValueError('a'))
+    self.ba._session.DeleteById('cn').AndReturn(None)
+    self.ba._AddError('Server cert load error: a').AndReturn(None)
     self.ba.AuthFail().AndReturn(None)
 
     self.mox.ReplayAll()

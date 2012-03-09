@@ -23,16 +23,21 @@ Classes:
 
 
 
+
+import datetime
 import logging
 import os
 import re
 import time
+
+from google.appengine.api import mail
 from google.appengine.ext import blobstore
 from google.appengine.ext import webapp
+
+from simian import settings
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import gae_util
-from simian.mac.munki import common
 from simian.mac.munki import plist
 
 
@@ -60,49 +65,13 @@ class MarkComputersInactive(webapp.RequestHandler):
 class UpdateAverageInstallDurations(webapp.RequestHandler):
   """Class to update average install duration pkginfo descriptions reguarly."""
 
-  AVG_DURATION_TEXT = (
-      '%d users have installed this with an average duration of %d seconds.')
-  AVG_DURATION_REGEX = re.compile(
-      '\d+ users have installed this with an average duration of \d+ seconds\.')
-
-  def _GetUpdatedDescription(self, duration_dict, desc):
-    """."""
-    avg_duration_text = self.AVG_DURATION_TEXT % (
-        duration_dict['duration_count'], duration_dict['duration_seconds_avg'])
-    # Add new or replace existing avg duration message with updated one.
-    if self.AVG_DURATION_REGEX.search(desc):
-      desc = self.AVG_DURATION_REGEX.sub(avg_duration_text, desc)
-    else:
-      if desc:
-        desc = '%s\n\n%s' % (desc, avg_duration_text)
-      else:
-        desc = avg_duration_text
-    return desc
-
-  def _ParsePackageInfoPlist(self, plist_xml):
-    """Parses a plist and returns a MunkiPackageInfoPlist object.
-
-    Args:
-      plist_xml: str plist xml.
-    Returns:
-      MunkiPackageInfoPlist object, or None if there were parsing errors.
-    """
-    try:
-      pl = plist.MunkiPackageInfoPlist(plist_xml)
-      pl.Parse()
-      return pl
-    except plist.Error, e:
-      logging.exception('Error parsing pkginfo: %s', str(e))
-      return None
-
   def get(self):
     """Handle GET."""
     pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
 
     for p in models.PackageInfo.all():
-      pl = self._ParsePackageInfoPlist(p.plist)
-      if not pl:
-        continue  # skip over plist parsing errors.
+      if not p.plist:
+        continue  # skip over pkginfos without plists.
 
       if p.munki_name not in pkgs:
         # Skip pkginfos that ReportsCache lacks.
@@ -121,20 +90,20 @@ class UpdateAverageInstallDurations(webapp.RequestHandler):
       # own pkginfo keys so the information can be displayed independantly.
       # This requires MSU changes to read and display such values, so for now
       # simply append text to the description.
-      old_description = pl.get('description', '')
-      new_description = self._GetUpdatedDescription(
-          pkgs[p.munki_name], old_description)
-      if old_description != new_description:
-        pl['description'] = new_description
-        p.plist = pl.GetXml()
-        p.put()
+      old_desc = p.plist['description']
+      avg_duration_text = models.PackageInfo.AVG_DURATION_TEXT % (
+          pkgs[p.munki_name]['duration_count'],
+          pkgs[p.munki_name]['duration_seconds_avg'])
+      p.description = '%s\n\n%s' % (p.description, avg_duration_text)
+      if p.plist['description'] != old_desc:
+        p.put()  # Only bother putting the entity if the description changed.
       gae_util.ReleaseLock(lock)
 
     # Asyncronously regenerate all Catalogs to include updated pkginfo plists.
     delay = 0
     for c in models.Catalog.all():
       delay += 5
-      common.CreateCatalog(c.name, delay=delay)
+      models.Catalog.Generate(c.name, delay=delay)
 
 
 class VerifyPackages(webapp.RequestHandler):
@@ -142,15 +111,23 @@ class VerifyPackages(webapp.RequestHandler):
 
   def get(self):
     """Handle GET."""
-    #logging.debug('Verifying all PackageInfo and Blobstore Blobs....')
-    pkginfo_count = 0
+    # Verify that all PackageInfo entities older than a week have a file in
+    # Blobstore.
     for p in models.PackageInfo.all():
-      blob_info = blobstore.BlobInfo.get(p.blobstore_key)
-      if not blob_info:
-        logging.critical('PackageInfo missing Blob: %s', p.filename)
-      pkginfo_count +=1
+      if p.blobstore_key and blobstore.BlobInfo.get(p.blobstore_key):
+        continue
+      elif p.mtime < (datetime.datetime.utcnow() - datetime.timedelta(days=7)):
+        m = mail.EmailMessage()
+        m.to = [settings.EMAIL_ADMIN_LIST]
+        m.sender = settings.EMAIL_SENDER
+        m.subject = 'Package is lacking a file: %s' % p.filename
+        m.body = (
+            'The following package is lacking a DMG file: \n'
+            'https://%s/admin/package/%s' % (
+                settings.SERVER_HOSTNAME, p.filename))
+        m.send()
 
-    blob_count = 0
+    # Verify all Blobstore Blobs have associated PackageInfo entities.
     for b in blobstore.BlobInfo.all():
       # Filter by blobstore_key as duplicate filenames are allowed in Blobstore.
       key = b.key()
@@ -160,11 +137,14 @@ class VerifyPackages(webapp.RequestHandler):
         if p:
           break
         elif i == max_attempts:
-          logging.critical('Orphaned Blob %s: %s', b.filename, key)
+          m = mail.EmailMessage()
+          m.to = [settings.EMAIL_ADMIN_LIST]
+          m.sender = settings.EMAIL_SENDER
+          m.subject = 'Orphaned Blob in Blobstore: %s' % b.filename
+          m.body = (
+              'An orphaned Blob exists in Blobstore. Use App Engine Admin '
+              'Console\'s "Blob Viewer" to locate and delete this Blob.\n\n'
+              'Filename: %s\nBlobstore Key: %s' % (b.filename, key))
+          m.send()
           break
         time.sleep(1)
-
-      blob_count += 1
-    #logging.debug(
-    #    'Verification of %d PackageInfo entities and %d Blobs complete.',
-    #    pkginfo_count, blob_count)

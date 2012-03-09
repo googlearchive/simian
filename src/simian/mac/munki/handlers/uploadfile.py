@@ -25,17 +25,18 @@ import os
 import re
 import time
 import urllib
-from google.appengine.ext import webapp
+
 from google.appengine.ext import deferred
 from google.appengine.api import mail
+
 from simian import settings
 from simian.auth import gaeserver
-from simian.mac import models
 from simian.mac import common as main_common
+from simian.mac import models
 from simian.mac.munki import handlers
 
 
-class UploadFile(handlers.AuthenticationHandler, webapp.RequestHandler):
+class UploadFile(handlers.AuthenticationHandler):
   """Handler for /uploadfile."""
 
   def put(self, file_type=None, file_name=None):

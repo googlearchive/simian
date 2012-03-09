@@ -63,11 +63,11 @@ class AuthModuleTest(test.RequestHandlerTest):
   def testIsRemoteIpAddressBlocked(self):
     """Test _IsRemoteIpAddressBlocked()."""
     # Mock to detect calling it.
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'IpInList')
     ip = '1.2.3.4'
     # NOTE(user): If this function goes live again, use the below.
-    #auth.models.KeyValueCache.IpInList(
-    #    'auth_bad_ip_blocks', ip).AndReturn(True)
+    # self.mox.StubOutWithMock(auth.models.KeyValueCache, 'IpInList')
+    # auth.models.KeyValueCache.IpInList(
+    #     'auth_bad_ip_blocks', ip).AndReturn(True)
     self.mox.ReplayAll()
     self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
     self.mox.VerifyAll()

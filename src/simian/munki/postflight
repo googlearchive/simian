@@ -54,10 +54,13 @@ def main(args):
   # Post client_id to server.
   # TODO(user): refactor PostReport* to support multiple reports at once
   # and move this into UploadAllManagedInstallReports.
-  client_id = flight_common.GetClientIdentifier()
+  client_id = flight_common.GetClientIdentifier(runtype)
+  pkgs_to_install, apple_updates_to_install = (
+      flight_common.GetRemainingPackagesToInstall())
   params = {
      'client_id': flight_common.DictToStr(client_id),
-     'pkgs_to_install': flight_common.GetRemainingPackagesToInstall(),
+     'pkgs_to_install': pkgs_to_install,
+     'apple_updates_to_install': apple_updates_to_install,
   }
   flight_common.PostReportToServer('postflight', params, logout=False)
 

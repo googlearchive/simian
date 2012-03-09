@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Tags{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  {% if can_mod_tags %}
+  <fieldset>
+  <legend>Add New Tags</legend>
+  {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <input type="hidden" name="action" value="create" />
+    Tag: <input type="text" name="tag" />
+    <button type="submit" style="margin-left: 20px;">Save</button>
+  </form>
+  </fieldset>
+
+  <h3>Existing Tags</h3>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Tags</th><th>Admin</th><th>Hosts</th><th>Delete</th>
+    </tr>
+    {% for t in tags %}
+      <tr>
+        <td>{{ t.key.name }}</td>
+        <td>{{ t.user }}</td>
+        <td><a href="/admin?filter-type=tag&filter={{ t.key.name|urlencode }}"
+             >{{ t.keys|length }}</a></td>
+        <td>
+          {% if can_mod_tags %}
+            <form method="POST">
+              <input type="hidden" name="action" value="delete" />
+              <input type="hidden" name="tag" value="{{ t.key.name }}" />
+              <button>Delete</button>
+            </form>
+          {% else %}
+            N/A
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+</div>
+
+{% endblock %}

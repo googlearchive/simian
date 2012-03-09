@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""Module containing url handler for all Apple SUS related crons.
+"""Module containing url handler for all Apple Updates related crons.
 
 Classes:
   AppleSUSCatalogSync: syncs SUS catalogs from Apple.
@@ -79,7 +79,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
 
   def _NotifyAdminsOfCatalogSync(
       self, catalog, new_products, deprecated_products):
-    """Notifies Simian admins that a new Apple SUS catalog was synced.
+    """Notifies Simian admins that a new Apple Updates catalog was synced.
 
     Args:
       catalog: models.AppleSUSCatalog entity.
@@ -96,13 +96,13 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
     m = mail.EmailMessage()
     m.to = [settings.EMAIL_ADMIN_LIST]
     m.sender = settings.EMAIL_SENDER
-    m.subject = '%s Apple SUS catalog synced to Simian.' % catalog_name
+    m.subject = '%s Apple Updates catalog synced to Simian.' % catalog_name
     new_msg = '\n\nNew Products:\n%s' % '\n'.join(new_products)
     if deprecated_products:
       dep_msg = '\n\nDeprecated Products:\n%s' % '\n'.join(deprecated_products)
     else:
       dep_msg = ''
-    m.body = '%s Apple SUS catalog synced to Simian on %s UTC.%s%s' % (
+    m.body = '%s Apple Updates catalog synced to Simian on %s UTC.%s%s' % (
         catalog_name, catalog.mtime, new_msg, dep_msg)
     try:
       m.send()
@@ -147,7 +147,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
       list of new models.AppleSUSProduct objects, or empty list.
     """
     if not 'Products' in catalog_plist:
-      logging.error('Products not found in Apple SUS catalog')
+      logging.error('Products not found in Apple Updates catalog')
       return []
 
     new_products = []
@@ -158,7 +158,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
     for product in products_query:
       existing_products[product.product_id] = True
 
-    # Loop over all products IDs in the Apple SUS catalog, adding any new
+    # Loop over all products IDs in the Apple Updates catalog, adding any new
     # products to the models.AppleSUSProduct model.
     catalog_product_keys = catalog_plist.get('Products', {}).keys()
     catalog_product_keys.sort()
@@ -215,7 +215,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
         try:
           catalog_plist.Parse()
         except plist.Error:
-          logging.exception('Error parsing Apple SUS catalog plist: %s', key)
+          logging.exception('Error parsing Apple Updates catalog plist: %s', key)
           continue
         for product in catalog_plist.get('Products', []):
           catalog_products[product] = 1
@@ -241,7 +241,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
       catalog_plist.Parse()
     except plist.Error:
       logging.exception(
-          'Error parsing Apple SUS catalog: %s', catalog.key().name())
+          'Error parsing Apple Updates catalog: %s', catalog.key().name())
       return
 
     new_products = self._UpdateProductDataFromCatalog(catalog_plist)
@@ -267,7 +267,30 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
 
 
 class AppleSUSAutoPromote(webapp.RequestHandler):
-  """Class to auto-promote Apple SUS updates."""
+  """Class to auto-promote Apple Updates."""
+
+  def _NotifyAdminsOfAutoPromotions(self, promotions):
+    """Notifies Simian admins that a new Apple Updates were auto-promoted.
+
+    Args:
+      promotions: a dict of track keys with lists of update product entities.
+    """
+    m = mail.EmailMessage()
+    m.to = [settings.EMAIL_ADMIN_LIST]
+    m.sender = settings.EMAIL_SENDER
+    m.subject = 'Apple Updates Auto-Promotion'
+    msg = []
+    for track, updates in promotions.iteritems():
+      msg.append('\n%s:' % track)
+      for u in updates:
+        msg.append('\t%s: %s %s' % (u.product_id, u.name, u.version))
+    msg = '\n'.join(msg)
+    m.body = 'The following Apple Updates were promoted:\n%s' % msg
+    try:
+      m.send()
+    except apiproxy_errors.DeadlineExceededError:
+      #logging.info('Email failed to send; skipping.')
+      pass
 
   def _ReadyToAutoPromote(self, applesus_product, track):
     """Returns boolean whether AppleSUSProduct should be promoted or not.
@@ -286,15 +309,14 @@ class AppleSUSAutoPromote(webapp.RequestHandler):
 
   def get(self):
     """Auto-promote updates that have been on a previous track for N days."""
+    promotions = {}
     for track in [common.TESTING, common.STABLE]:
-      changed = False
       for p in models.AppleSUSProduct.all().filter('tracks !=', track):
         if track in p.tracks:
           continue  # Datastore indexes may not be up to date...
         if not self._ReadyToAutoPromote(p, track):
           continue
 
-        changed = True
         logging.info(
             'AppleSUSProduct being promoted to %s: %s %s',
             track, p.product_id, p.name)
@@ -307,5 +329,12 @@ class AppleSUSAutoPromote(webapp.RequestHandler):
             tracks=p.tracks)
         log.put()
 
-      if changed:
+        if track not in promotions:
+          promotions[track] = []
+        promotions[track].append(p)
+
+      if track in promotions:
         applesus.GenerateAppleSUSCatalogs(track)
+
+    if promotions:
+      self._NotifyAdminsOfAutoPromotions(promotions)

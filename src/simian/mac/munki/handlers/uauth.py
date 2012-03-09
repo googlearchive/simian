@@ -20,14 +20,15 @@
 
 
 import logging
-from google.appengine.ext import webapp
+
 from google.appengine.api import users
+
 from simian import settings
 from simian.auth import base
 from simian.auth import gaeserver
 from simian.auth import settings as auth_settings
-from simian.mac.munki import handlers
 from simian.mac.common import auth
+from simian.mac.munki import handlers
 
 class Error(Exception):
   """Base error."""
@@ -37,7 +38,7 @@ class NotAuthenticated(Error, base.NotAuthenticated):
   """Not Authenticated Error."""
 
 
-class UserAuth(handlers.AuthenticationHandler, webapp.RequestHandler):
+class UserAuth(handlers.AuthenticationHandler):
   """Handle for user auth which provides Auth1 token."""
 
   def get(self):

@@ -24,16 +24,18 @@
 import logging
 import os
 from google.appengine.api import users
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp import template
-from simian.mac import models
+from simian.mac import admin
 from simian.mac import common
+from simian.mac import models
+from simian.mac.common import applesus
 from simian.mac.common import auth
 from simian.mac.common import util
-from simian.mac.common import applesus
 
 
-class AppleSUSAdmin(webapp.RequestHandler):
+DEFAULT_APPLESUS_LOG_FETCH = 25
+
+
+class AppleSUSAdmin(admin.AdminHandler):
   """Handler for /admin/applesus."""
 
   def post(self, report=None, product_id=None):
@@ -56,7 +58,7 @@ class AppleSUSAdmin(webapp.RequestHandler):
     #logging.info('Admin requested catalog regeneration for tracks: %s', tracks)
     if tracks:
       applesus.GenerateAppleSUSCatalogs(tracks=tracks, delay=1)
-      self.redirect('/admin/applesus?regenerated-catalogs=1')
+      self.redirect('/admin/applesus?msg=Catalog regeneration in progress.')
 
   def _ChangeProduct(self, product_id):
     """Method to change properties of a given Apple SUS product."""
@@ -86,7 +88,12 @@ class AppleSUSAdmin(webapp.RequestHandler):
       #    'Manual override on Apple SUS %s: %s',
       #    product_id, manual_override)
       log_action = 'manual_override=%s' % manual_override
-      data.update({'manual_override': manual_override})
+      for track in common.TRACKS:
+        if track not in product.tracks:
+           prom_date = applesus.GetAutoPromoteDate(track, product)
+           if prom_date:
+             data['%s_promote_date' % track] = prom_date.strftime('%b. %d, %Y')
+      data['manual_override'] = manual_override
     # add/remove track to product
     elif enabled is not None:
       enabled = bool(int(enabled))
@@ -125,11 +132,12 @@ class AppleSUSAdmin(webapp.RequestHandler):
       self._DisplayMain()
     if report == 'product':
       self._DisplayProductDescription(product_id)
+    elif report == 'logs':
+      self._DisplayUpdateLog()
     else:
       self.response.set_status(404)
 
   def _DisplayMain(self):
-    regenerated_catalogs = self.request.get('regenerated-catalogs') == '1'
     query = models.AppleSUSProduct.all().filter(
         'deprecated =', False).order('-apple_mtime')
     products = []
@@ -141,29 +149,29 @@ class AppleSUSAdmin(webapp.RequestHandler):
       if common.TESTING not in p.tracks:
         p.testing_promote_date = applesus.GetAutoPromoteDate(common.TESTING, p)
       products.append(p)
+
+    catalogs = []
+    for os_version in applesus.OS_VERSIONS:
+      c = models.AppleSUSCatalog.MemcacheWrappedGet('%s_untouched' % os_version)
+      if c:
+        catalogs.append({'version': os_version, 'download_datetime': c.mtime})
+
     data = {
-        'regenerated_catalogs': regenerated_catalogs,
+        'catalogs': catalogs,
         'products': products,
         'tracks': common.TRACKS,
-        'is_admin': auth.IsAdminUser(),
+        'report_type': 'apple_applesus'
     }
-    self.response.out.write(
-        RenderTemplate('templates/applesus_list.html', data))
+    self.Render('templates/applesus_list.html', data)
 
   def _DisplayProductDescription(self, product):
     product = models.AppleSUSProduct.get_by_key_name(product)
     self.response.out.write(product.description)
 
-
-def RenderTemplate(template_path, values):
-  """Renders a template using supplied data values and returns HTML.
-
-  Args:
-    template_path: str path of template.
-    values: dict of template values.
-  Returns:
-    str HTML of rendered template.
-  """
-  path = os.path.join(
-      os.path.dirname(__file__), template_path)
-  return template.render(path, values)
+  def _DisplayUpdateLog(self):
+    logs = models.AdminAppleSUSProductLog.all().order('-mtime')
+    values = {
+        'logs': self.Paginate(logs, DEFAULT_APPLESUS_LOG_FETCH),
+        'report_type': 'apple_logs',
+    }
+    self.Render('templates/applesus_log.html', values)

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <title>Simian Stats: {% block title %}{% endblock %}</title>
+  <link href="{{ static_path }}/admin/css/base.css" rel="stylesheet" type="text/css" />
+  <script type="text/javascript" src="{{ static_path }}/admin/js/simian.js"></script>
+  <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+  <link rel="icon" href="/admin/static/favicon.ico" type="image/x-icon"/> 
+  <link rel="shortcut icon" href="/admin/static/favicon.ico" type="image/x-icon"/>
+  {% block head-content %}{% endblock %}
+  </head>
+<body>
+{% block body %}
+  <script type="text/javascript">simian.updateMenu();</script>
+  {% block header %}
+    <header>
+      <div class="titlewrap">
+        <a class="title1" href="/admin">Simian</a>
+        <span class="subtitle">&ldquo;All your MAC are belong to us&rdquo;</span>
+      </div>
+      <div id="search">
+        <a href="javascript:simian.closeSearch();void(0);" class="closebutton"></a>
+        <form class="search" action="/admin" method="GET">
+        <table cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="width:110px;text-align:right;">
+              <select name="filter-type">
+                <option value="hostname" {% ifequal search_type "hostname" %}selected{% endifequal %}>Hostname</option>
+                <option value="os_version" {% ifequal search_type "os_version" %}selected{% endifequal %}>OS Version</option>
+                <option value="serial" {% ifequal search_type "serial" %}selected{% endifequal %}>Serial</option>
+                <option value="site" {% ifequal search_type "site" %}selected{% endifequal %}>Site</option>
+                <option value="owner" {% ifequal search_type "owner" %}selected{% endifequal %}
+                        {% if not search_type %}selected{% endif %}>Username</option>
+                <option value="uuid" {% ifequal search_type "uuid" %}selected{% endifequal %}>UUID</option>
+                <option value="tag" {% ifequal search_type "tag" %}selected{% endifequal %}>Tag</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" name="filter" id="search-box" value="{{ search_term }}" />
+            </td>
+            <td style="padding:0 0 0 4px">
+              <button type="submit"><img src="/admin/static/search.svg"></button>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" align="right">
+              <label for="search-inactive">Include Inactive?</label>
+              <input type="checkbox" name="include-inactive" id="search-inactive" />
+            </td>
+            <td>&nbsp;</td>
+          </tr>
+          </table>
+        </form>
+      </div>
+      {% if report_type == "summary" or report_type == "search" %}
+        <script type="text/javascript">
+          document.getElementById('search-box').focus();
+        </script>
+      {% endif %}
+    </header>
+    {% if msg %}
+      <div id="butterbar">{{ msg }}</div>
+      <script type="text/javascript">
+        (function() {
+          var bb = document.getElementById('butterbar');
+          bb.style.top='56px';
+          setTimeout(function(){bb.style.opacity=0;}, 8000);
+        })();
+      </script>
+    {% endif %}
+  {% endblock %}
+
+  {% block menu %}
+    <div id="menu">
+      <a id="menutoggle" onclick="simian.toggleMenu(true);"
+         onMouseOver="simian.toggleMenu()";></a>
+      <a id="menupin" onclick="simian.pinMenu();"></a>
+      <ul>
+        {% for item in menu %}
+          {% if is_admin or not item.admin_only %}
+          {% if item.url %}
+            <li {% ifequal report_type item.type %}class="selected"{% endifequal %}>
+              <a href="{{ item.url }}">{{ item.name }}</a>
+            </li>
+          {% else %}
+            {% if item.subitems %}
+              <li><a class="zippy_toggle
+              {% for subitem in item.subitems %}{% ifequal report_type subitem.type %}expanded{% endifequal %}{% endfor %}"
+                     title="zippy_{{ item.type }}">{{ item.name }}</a>
+                <ul id="zippy_{{ item.type }}">
+                {% for subitem in item.subitems %}
+                  <li {% ifequal report_type subitem.type %}class="selected"{% endifequal %}>
+                    <a href="{{ subitem.url }}">{{ subitem.name }}</a>
+                  </li>
+                {% endfor %}
+                </ul>
+              </li>
+            {% else %}
+              {% if item.title %}<hr><h3>{{ item.title }}</h3>{% endif %}
+            {% endif %}
+          {% endif %}
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    <script type="text/javascript">simian.zippyfy('menu');</script>
+  {% endblock %}
+
+  <div id="content" onMouseOver="simian.hideMenu();">
+    {% block page-content %}{% endblock %}
+  </div>
+
+{% endblock %}
+</body>
+</html>

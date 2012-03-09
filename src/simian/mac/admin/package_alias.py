@@ -24,16 +24,15 @@
 import logging
 import os
 from google.appengine.api import users
-from google.appengine.ext import webapp
 from google.appengine.ext import db
-from google.appengine.ext.webapp import template
-from simian.mac import models
+from simian.mac import admin
 from simian.mac import common
+from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.common import util
 
 
-class PackageAlias(webapp.RequestHandler):
+class PackageAlias(admin.AdminHandler):
   """Handler for /admin/package_alias."""
 
   def post(self):
@@ -54,19 +53,21 @@ class PackageAlias(webapp.RequestHandler):
     package_alias = self.request.get('package_alias').strip()
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
 
-    if not package_alias:
-      self.redirect('/admin/package_alias?error=package_alias is required')
+    if not package_alias or not munki_pkg_name:
+      msg = 'Package Alias and Munki pkg are both required.'
+      self.redirect('/admin/package_alias?msg=%s' % msg)
       return
 
     if not models.PackageInfo.all().filter('name =', munki_pkg_name).get():
-      self.redirect(
-          '/admin/package_alias?error=%s does not exist' % munki_pkg_name)
+      msg = 'Munki pkg %s does not exist.' % munki_pkg_name
+      self.redirect('/admin/package_alias?msg=%s' % msg)
       return
 
     alias = models.PackageAlias(
         key_name=package_alias, munki_pkg_name=munki_pkg_name)
     alias.put()
-    self.redirect('/admin/package_alias')
+    msg = 'Package Alias successfully saved.'
+    self.redirect('/admin/package_alias?msg=%s' % msg)
 
   def _TogglePackageAlias(self):
     """Sets an existing PackageAlias as enabled/disabled."""
@@ -91,29 +92,14 @@ class PackageAlias(webapp.RequestHandler):
     # TODO(user): generate PackageInfo dict so admin select box can use display
     #             names, munki package names can link to installs, etc.
     if is_admin:
-      munki_pkg_names = [e.name for e in models.PackageInfo.all()]
+      munki_pkg_names = models.PackageInfo.GetManifestModPkgNames(
+          common.MANIFEST_MOD_ADMIN_GROUP)
     else:
       munki_pkg_names = None
 
     data = {
       'package_aliases': package_aliases,
-      'error': self.request.get('error'),
-      'is_admin': is_admin,
       'munki_pkg_names': munki_pkg_names,
+      'report_type': 'manifests_aliases',
     }
-    self.response.out.write(
-        RenderTemplate('templates/package_alias.html', data))
-
-
-def RenderTemplate(template_path, values):
-  """Renders a template using supplied data values and returns HTML.
-
-  Args:
-    template_path: str path of template.
-    values: dict of template values.
-  Returns:
-    str HTML of rendered template.
-  """
-  path = os.path.join(
-      os.path.dirname(__file__), template_path)
-  return template.render(path, values)
+    self.Render('templates/package_alias.html', data)

@@ -694,7 +694,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
         (install_counts, None))
     mock_query = self.mox.CreateMockAnything()
     reports_cache.models.InstallLog.all().AndReturn(mock_query)
-    mock_query.order('mtime').AndReturn(mock_query)
+    mock_query.order('server_datetime').AndReturn(mock_query)
     mock_cursor_obj = self.mox.CreateMockAnything()
     mock_cursor_obj.text_value = 'foocursor'
     reports_cache.models.KeyValueCache.get_by_key_name(

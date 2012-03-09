@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Package Logs{% endblock %}
+
+{% block page-content %}
+
+{% include "results_pagination.html" %}
+
+{% if logs %}
+  <table class="stats-table" id="logstable">
+    <tr>
+       <th>Action</th>
+       <th>Plist</th>
+       <th>Diff</th>
+       <th>Filename</th>
+       <th>Install Types</th>
+       <th style="min-width: 60px;">Catalogs</th>
+       <th style="min-width: 60px;">Manifests</th>
+       <th>User</th>
+       <th>Time</th>
+       <th>Time Since</th>
+    </tr>
+    {% for log in logs %}
+      <tr>
+        <td>{{ log.action }}</td>
+        <td style="text-align: center;">
+          {% if log.plist %}
+            <a href="/admin/packages/logs?plist={{ log.key.id }}">
+            <img src="/admin/static/file.png" alt="View plist"/></a>
+          {% endif %}
+        </td>
+        <td><a class="zippy_toggle button" style="padding-left:10px;" title="diff_{{ log.key.id }}">View diff</a></td>
+        <td>
+          {% if is_admin %}
+            <a href="/admin/package/{{ log.filename }}">{{ log.filename }}</a>
+          {% else %}
+            {{ log.filename }}
+          {% endif %}
+        </td>
+        <td>{{ log.install_types|munki_properties }}</td>
+        <td>{{ log.catalogs|tracks_display }}</td>
+        <td>{{ log.manifests|tracks_display }}</td>
+        <td>{{ log.user }}</td>
+        <td>{{ log.mtime }}</td>
+        <td>{{ log.mtime|timesince }}</td>
+      </tr>
+      <tr id="diff_{{ log.key.id }}" class="diffrow">
+        <td colspan="2">&nbsp;</td>
+        <td colspan="8">
+          <span class="diffcode">
+          {% for line in log.plist_diff %}
+            {% if line.start_omitting %}
+              <span class="ellipsis" onclick="simian.addClass(this, 'visible');">&nbsp;&nbsp;&nbsp;&#8942;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+              <span class="omittable">{% endif %}
+            {% if line.end_omitting %}</span>{% endif %}
+            <span class="{{ line.type }}">{{ line.line|spacify }}</span><br/>
+          {% endfor %}
+          </span>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+  <script type="text/javascript">
+    simian.zippyfy('logstable', true);
+  </script>
+
+{% include "results_pagination.html" %}
+
+{% endif %}
+
+{% endblock %}
+
+

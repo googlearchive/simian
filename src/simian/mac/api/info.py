@@ -22,7 +22,12 @@
 import datetime
 import logging
 import urllib
-import icalendar
+
+try:
+  import icalendar
+except ImportError:
+  icalendar = None
+
 from google.appengine.ext import webapp
 from google.appengine.ext import db
 from simian import settings
@@ -114,7 +119,10 @@ class InfoHandler(webapp.RequestHandler):
       self.response.set_status(401)
       return
 
-    if info_type == 'applesus_promo_cal':
+    if not icalendar:
+      logging.warning('icalendar import failed, so feeds are disabled.')
+      self.response.set_status(404)
+    elif info_type == 'applesus_promo_cal':
       self._DisplayAppleSusPromoCalendar()
     else:
       self.response.set_status(404)

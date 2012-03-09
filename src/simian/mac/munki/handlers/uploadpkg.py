@@ -20,18 +20,17 @@
 
 
 import logging
+
 from google.appengine.ext import db
-from google.appengine.ext import webapp
 from google.appengine.ext import blobstore
 from google.appengine.ext.webapp import blobstore_handlers
+
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import gae_util
-from simian.mac.munki import common
 from simian.mac.munki import handlers
-from simian.mac.munki import plist
+from simian.mac.munki import plist as plist_lib
 from simian.mac.munki.handlers import pkgs
-from simian.mac.munki.handlers import pkgsinfo
 
 
 class UploadPackage(
@@ -133,17 +132,17 @@ class UploadPackage(
     blobstore_key = str(blob_info.key())
 
     # Parse, validate, and encode the pkginfo plist.
-    pkginfo = pkgsinfo.plist.MunkiPackageInfoPlist(pkginfo_str)
+    plist = plist_lib.MunkiPackageInfoPlist(pkginfo_str)
     try:
-      pkginfo.Parse()
-    except pkgsinfo.plist.PlistError, e:
+      plist.Parse()
+    except plist_lib.PlistError, e:
       logging.exception('Invalid pkginfo plist uploaded:\n%s\n', pkginfo_str)
       gae_util.SafeBlobDel(blobstore_key)
       self.redirect('/uploadpkg?mode=error&msg=No%20valid%20pkginfo%20received')
       return
 
-    filename = pkginfo.GetContents()['installer_item_location']
-    pkgdata_sha256 = pkginfo.GetContents()['installer_item_hash']
+    filename = plist['installer_item_location']
+    pkgdata_sha256 = plist['installer_item_hash']
 
     # verify the blob was actually written; in case Blobstore failed to write
     # the blob but still POSTed to this handler (very, very rare).
@@ -165,6 +164,7 @@ class UploadPackage(
     old_blobstore_key = None
     pkg = models.PackageInfo.get_or_insert(filename)
     if not pkg.IsSafeToModify():
+      gae_util.ReleaseLock(lock)
       gae_util.SafeBlobDel(blobstore_key)
       self.redirect('/uploadpkg?mode=error&msg=Package%20is%20not%20modifiable')
       return
@@ -174,13 +174,13 @@ class UploadPackage(
       old_blobstore_key = pkg.blobstore_key
 
     pkg.blobstore_key = blobstore_key
-    pkg.name = pkginfo.GetPackageName()
+    pkg.name = plist.GetPackageName()
     pkg.filename = filename
     pkg.user = user
     pkg.catalogs = catalogs
     pkg.manifests = manifests
     pkg.install_types = install_types
-    pkg.plist = pkginfo.GetXml()
+    pkg.plist = plist
     pkg.pkgdata_sha256 = pkgdata_sha256
 
     # update the PackageInfo model with the new plist string and blobstore key.
@@ -209,14 +209,15 @@ class UploadPackage(
 
     gae_util.ReleaseLock(lock)
 
-    # Create catalogs for newly uploaded pkginfo plist.
+    # Generate catalogs for newly uploaded pkginfo plist.
     for catalog in pkg.catalogs:
-      common.CreateCatalog(catalog, delay=1)
+      models.Catalog.Generate(catalog, delay=1)
 
     # Log admin upload to Datastore.
     admin_log = models.AdminPackageLog(
         user=user, action='uploadpkg', filename=filename, catalogs=catalogs,
-        manifests=manifests, install_types=install_types, plist=pkg.plist)
+        manifests=manifests, install_types=install_types,
+        plist=pkg.plist.GetXml())
     admin_log.put()
 
     self.redirect('/uploadpkg?mode=success&key=%s' % blobstore_key)

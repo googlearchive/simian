@@ -1,28 +1,46 @@
-{% extends "stats_base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Apple SUS Admin{% endblock %}
 
 {% block page-content %}
 <div class="wrap">
-  <h2>Apple SUS Admin</h2>
 
   {% if is_admin %}
-  <p>
-    Note: if other admins are changing tracks of below products, select box
-    state may be inaccurate until you refresh the page.
-  </p>
-  <h3>Regenerate Catalogs</h3>
-  {% if regenerated_catalogs %}
-    <p>Catalog regeneration in process!</p>
+    <form method="POST">
+    <fieldset>
+    <legend>Regenerate Catalogs</legend>
+      {% for track in tracks reversed %}
+        <input type="checkbox" class="tags" name="tracks" value="{{ track }}" id="track_{{ track }}"/>
+        <label for="track_{{ track }}">{{ track }}</label>
+      {% endfor %}
+      <button type="submit">Regenerate Catalogs</button>
+    </fieldset>
+    </form>
   {% endif %}
-  <form method="POST">
-    <input type="hidden" name="regenerate-catalogs" value="1" />
-    {% for track in tracks reversed %}
-      {{ track }}<input type="checkbox" name="tracks" value="{{ track }}" />
-    {% endfor %}
-    <input type="submit" value="Regenerate Catalogs" />
-  </form>
-  <h3>Product List</h3>
+
+  <div class="sectionheader">Apple Catalog Sync</div>
+  {% if catalogs %}
+    <table class="stats-table">
+      <tr><th>OS Version</th><th>Synced From Apple</th><th>Time Since</th></tr>
+      {% for catalog in catalogs %}
+        <tr>
+          <td>{{ catalog.version }}</td>
+          <td>{{ catalog.download_datetime }}</td>
+          <td>{{ catalog.download_datetime|timesince }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    No catalogs have been synced.  This may take up to 12 hours after your first deployment.
+  {% endif %}
+
+  <div class="sectionheader">Apple Update List</div>
+
+  {% if is_admin %}
+    <p>
+      Note: if other admins are changing tracks of below products, select box
+      state may be inaccurate until you refresh the page.
+    </p>
   {% endif %}
 
   <table class="stats-table">
@@ -30,12 +48,7 @@
        <th>Name</th><th>Version</th><th>Product ID</th><th>Apple Release</th>
        <th>Testing Auto Promote Date</th><th>Stable Auto Promote Date</th>
        <th>Manual Override</th>
-       {% for track in tracks reversed %}
-         <th>{{ track }}</th>
-       {% endfor %}
-       {% if is_admin %}
-         <th>Change Status</th>
-       {% endif %}
+       <th>Tracks</th>
     </tr>
     {% for p in products %}
       <tr>
@@ -49,53 +62,23 @@
         <td><span id="{{ p.product_id }}-stable-promote-date">
           {{ p.stable_promote_date }}</span>
         </td>
-        {% if is_admin %}
-          <td>
-            {% if p.manual_override %}
-              <input type="checkbox" class="manual-override-checkbox"
-                name="{{ p.product_id }}" checked="checked" />
-            {% else %}
-              <input type="checkbox" class="manual-override-checkbox"
-                name="{{ p.product_id }}" />
-            {% endif %}
-          </td>
-        {% else %}
-          <td>{{ p.manual_override }}</td>
-        {% endif %}
-
-        {% if is_admin %}
+        <td>
+          <span class="ajaxtoggle {% if p.manual_override %}istrue{% endif %}"
+            {% if is_admin %}onclick="applesus.toggleProductManualOverride('{{ p.product_id }}', this);"{% endif %}>
+          </span>
+        </td>
+        <td>
           {% for track in tracks reversed %}
-            <td>
-            {% if track in p.tracks %}
-              <input type="checkbox" class="track-checkbox"
-                     name="{{ p.product_id }}" value="{{ track }}"
-                     checked="checked" />
-            {% else %}
-              <input type="checkbox" class="track-checkbox"
-                     name="{{ p.product_id }}" value="{{ track }}" />
-            {% endif %}
-            </td>
+            <span class="ajaxtags {% if track in p.tracks %}istrue{% endif %}"
+                {% if is_admin %}
+                  onclick="applesus.toggleProductTrack('{{ p.product_id }}', '{{ track }}', this);"
+                {% endif %}
+                >{{ track }}</span>
           {% endfor %}
-          <td><span id='{{ p.product_id }}-change-status'></span></td>
-        {% else %}
-          {% for track in tracks reversed %}
-            {% if track in p.tracks %}
-              <td>YES</td>
-            {% else %}
-              <td>NO</td>
-            {% endif %}
-          {% endfor %}
-        {% endif %}
+        </td>
       </tr>
     {% endfor %}
   </table>
-
 </div>
-
-{% if is_admin %}
-  <script type="text/javascript">
-    applesus.registerCheckboxes();
-  </script>
-{% endif %}
 
 {% endblock %}

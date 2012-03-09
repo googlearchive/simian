@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Lock Admin{% endblock %}
+
+{% block page-content %}
+
+<p>
+  WARNING: Do *NOT* delete locks unless you understand what you're doing! You should only ever have to do this if uploading a package causes a crash, and further upload attempts fail with "xxxxxx is locked!" errors.
+</p>
+
+{% if not locks %}
+  <p>No locks were found.</p>
+{% else %}
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Lock Type</th><th>Lock Value</th><th>Delete</th>
+    </tr>
+    {% for l in locks %}
+      <tr>
+        <td>{{ l.0 }}</td>
+        <td>{{ l.1 }}</td>
+        <td>
+          <form action="/admin/lock_admin" method="POST">
+            <input type="hidden" name="lock_type" value="{{ l.0 }}" />
+            <input type="hidden" name="lock_name" value="{{ l.1 }}" />
+            <button>Delete</button>
+         </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+{% endif %}
+{% endblock %}

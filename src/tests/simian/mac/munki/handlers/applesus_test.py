@@ -243,7 +243,7 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(True)
 
     model = self.MockModelStatic('AppleSUSCatalog', 'get_or_insert', name)
-    model.put().AndRaise(applesus.db.Error)
+    model.put().AndRaise(applesus.models.db.Error)
 
     self.response.set_status(500)
     self.response.out.write('')

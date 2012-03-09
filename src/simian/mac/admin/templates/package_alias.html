@@ -1,4 +1,4 @@
-{% extends "stats_base.html" %}
+{% extends "base.html" %}
 
 {% block title %}Package Alias{% endblock %}
 
@@ -7,21 +7,24 @@
   <h2>Package Alias Admin</h2>
 
   {% if is_admin %}
-  <h3>Add New or Edit Existing Package Alias</h3>
+  <fieldset>
+  <legend>Add New or Edit Existing Package Alias</legend>
   {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
   <form method="POST">
     <input type="hidden" name="create_package_alias" value="1" />
-    Package Alias: <input type="text" name="package_alias" /><br />
+    Package Alias: <input type="text" name="package_alias" />
     Munki Package Name:
     <select name="munki_pkg_name">
       <option selected="selected"/>
-      {% for name in munki_pkg_names %}
-        <option>{{ name }}</option>
+      {% for item in munki_pkg_names %}
+        <option value="{{ item.name }}">{{ item.munki_name }}</option>
       {% endfor %}
     </select>
-    <input type="submit" value="Submit" />
+    <button type="submit">Save</button>
   </form>
-  <h3>Existing Package Aliases</h3>
+  </fieldset>
+
+  <h2>Existing Package Aliases</h2>
   {% endif %}
 
   <table class="stats-table">
@@ -33,22 +36,9 @@
         <td>{{ a.key.name }}</td>
         <td>{% if a.munki_pkg_name %}{{ a.munki_pkg_name }}{% endif %}</td>
         <td>
-          {% if is_admin %}
-            {% if a.enabled %}
-              <input type="checkbox"
-                     onclick="javascript:
-                         simian.togglePackageAlias('{{ a.key.name }}', this.checked);"
-                     checked="checked" />
-            {% else %}
-              <input type="checkbox"
-                     onclick="javascript:
-                         simian.togglePackageAlias('{{ a.key.name }}', this.checked);"
-                  />
-            {% endif %}
-            <span id="enable-status-{{ a.key.name }}"></span>
-          {% else %}
-            {{ a.enabled }}
-          {% endif %}
+          <span class="ajaxtoggle {% if a.enabled %}istrue{% endif %}"
+            {% if is_admin %}onclick="simian.togglePackageAlias('{{ a.key.name }}', this);"{% endif %}>
+          </span>
         </td>
       </tr>
     {% endfor %}

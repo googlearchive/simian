@@ -47,14 +47,14 @@ class HandlersTest(test.RequestHandlerTest):
     reports.common.IsPanicModeNoPackages().AndReturn(panic_mode)
 
   def _MockIsExitFeedbackIpAddress(self, ip_address=None, match=False):
-    """Utility method to mock _IsExitFeedbackIpAddress() calls.
+    """Utility method to mock IsExitFeedbackIpAddress() calls.
 
     Args:
       ip_address: str, optional, IP like '1.2.3.4'
       match: bool, optional, True if the ip_address matches the exit list
     """
-    self.mox.StubOutWithMock(self.c, '_IsExitFeedbackIpAddress')
-    self.c._IsExitFeedbackIpAddress(ip_address).AndReturn(match)
+    self.mox.StubOutWithMock(reports, 'IsExitFeedbackIpAddress')
+    reports.IsExitFeedbackIpAddress(ip_address).AndReturn(match)
 
   def testIsExitFeedbackIpAddress(self):
     """Tests _IsExitFeedbackIpAddress()."""
@@ -65,8 +65,8 @@ class HandlersTest(test.RequestHandlerTest):
         'client_exit_ip_blocks', ip_address).AndReturn(True)
 
     self.mox.ReplayAll()
-    self.assertFalse(self.c._IsExitFeedbackIpAddress(None))
-    self.assertTrue(self.c._IsExitFeedbackIpAddress(ip_address))
+    self.assertFalse(reports.IsExitFeedbackIpAddress(None))
+    self.assertTrue(reports.IsExitFeedbackIpAddress(ip_address))
     self.mox.VerifyAll()
 
   def testGetReportFeedbackWithPassedComputer(self):
@@ -280,6 +280,7 @@ class HandlersTest(test.RequestHandlerTest):
     client_id_dict = {'nothing': True}
     feedback = 'foofeedback'
     pkgs_to_install = ['FooApp1', 'FooApp2']
+    apple_updates_to_install = ['FooUpdate1', 'FooUpdate2']
     ip_address = 'fooip'
     reports.os.environ['REMOTE_ADDR'] = ip_address
     user_settings = None
@@ -302,10 +303,12 @@ class HandlersTest(test.RequestHandlerTest):
         client_id_dict)
     self.request.get('user_settings').AndReturn(user_settings_data)
     self.request.get_all('pkgs_to_install').AndReturn(pkgs_to_install)
+    self.request.get_all('apple_updates_to_install').AndReturn(
+        apple_updates_to_install)
     self.mox.StubOutWithMock(reports.common, 'LogClientConnection')
     reports.common.LogClientConnection(
         report_type, client_id_dict, user_settings, pkgs_to_install,
-        computer=mock_computer, ip_address=ip_address)
+        apple_updates_to_install, computer=mock_computer, ip_address=ip_address)
 
     if report_type != 'preflight':
       self.c.GetReportFeedback(
@@ -346,27 +349,27 @@ class HandlersTest(test.RequestHandlerTest):
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='Foo App1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        mtime=None)
+        dl_kbytes_per_sec=None, mtime=None)
 
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='Foo App2-123123',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        mtime=None)
+        dl_kbytes_per_sec=None, mtime=None)
 
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='Foo App3-2.1.1',
         status='1', on_corp=on_corp, applesus=False, duration_seconds=None,
-        mtime=None)
+        dl_kbytes_per_sec=None, mtime=None)
 
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='Foo App4-456456',
         status='-5', on_corp=on_corp, applesus=False, duration_seconds=None,
-        mtime=None)
+        dl_kbytes_per_sec=None, mtime=None)
 
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package=installs[-1] + '-',
         status='UNKNOWN', on_corp=on_corp, applesus=False,
-        duration_seconds=None, mtime=None)
+        duration_seconds=None, dl_kbytes_per_sec=None, mtime=None)
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])
@@ -388,14 +391,20 @@ class HandlersTest(test.RequestHandlerTest):
     uuid = 'foouuid'
     report_type = 'install_report'
     installs = [
-        'name=FooApp1|version=1.0.0|applesus=0|status=0|duration_seconds=100',
+        ('name=FooApp1|version=1.0.0|applesus=0|status=0|duration_seconds=100'
+         '|download_kbytes_per_sec=225'),
+
         ('name=FooApp2|version=2.1.1|applesus=0|status=2|duration_seconds=200'
-         '|time=1312818179.1415989'),
+         '|time=1312818179.1415989|download_kbytes_per_sec=1024'),
+
         ('name=FutureApp|version=9.9.9|applesus=false|status=0'
-         '|duration_seconds=60|time=9999999999.1415989'),
+         '|duration_seconds=60|time=9999999999.1415989'
+         '|download_kbytes_per_sec=0'),
+
         ('name=iTunes|version=10.2.0|applesus=1|status=0|duration_seconds=300'
          '|time=asdf'),
-        'name=Safari|version=5.1.0|applesus=true|status=0|duration_seconds=4',
+
+         'name=Safari|version=5.1.0|applesus=true|status=0|duration_seconds=4',
     ]
     self.PostSetup(uuid=uuid, report_type=report_type)
     if on_corp:
@@ -407,27 +416,27 @@ class HandlersTest(test.RequestHandlerTest):
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='FooApp1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=100,
-        mtime=None)
+        mtime=None, dl_kbytes_per_sec=225)
     # failed munki install report, with time.
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='FooApp2-2.1.1',
         status='2', on_corp=on_corp, applesus=False, duration_seconds=200,
-        mtime=datetime.datetime(2011, 8, 8, 15, 42, 59))
+        mtime=datetime.datetime(2011, 8, 8, 15, 42, 59), dl_kbytes_per_sec=1024)
     # successful munki install report, with future time.
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='FutureApp-9.9.9',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=60,
-        mtime=None)
+        mtime=None, dl_kbytes_per_sec=None)
     # successful applesus install report with bogus time.
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='iTunes-10.2.0',
         status='0', on_corp=on_corp, applesus=True, duration_seconds=300,
-        mtime=None)
+        mtime=None, dl_kbytes_per_sec=None)
     # successful applesus install report with no time.
     reports.common.WriteClientLog(
         reports.models.InstallLog, uuid, package='Safari-5.1.0',
         status='0', on_corp=on_corp, applesus=True, duration_seconds=4,
-        mtime=None)
+        mtime=None, dl_kbytes_per_sec=None)
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])

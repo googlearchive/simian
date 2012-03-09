@@ -21,17 +21,14 @@
 
 
 import logging
-from google.appengine.ext import db
-from google.appengine.ext import webapp
-from google.appengine.ext import blobstore
+
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import gae_util
-from simian.mac.munki import common
 from simian.mac.munki import handlers
 
 
-class DeletePackage(handlers.AuthenticationHandler, webapp.RequestHandler):
+class DeletePackage(handlers.AuthenticationHandler):
   """Handler for /deletepkg"""
 
   def post(self):
@@ -60,7 +57,7 @@ class DeletePackage(handlers.AuthenticationHandler, webapp.RequestHandler):
     gae_util.SafeBlobDel(blobstore_key)
     # Recreate catalogs so references to this package don't exist anywhere.
     for catalog in catalogs:
-      common.CreateCatalog(catalog)
+      models.Catalog.Generate(catalog)
 
     # Log admin delete to Datastore.
     user = session.uuid

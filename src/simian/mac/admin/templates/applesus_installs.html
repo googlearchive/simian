@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Apple Software Update Installs{% endblock %}
+
+{% block page-content %}
+
+{% ifnotequal pkg "all" %}
+  {% if failures %}
+   <h2>Failed Apple SUS Installs: {{ pkg }}</h2>
+  {% else %}
+    <h2>Successful Apple SUS Installs: {{ pkg }}</h2>
+  {% endif %}
+{% endifnotequal %}
+
+{% include "results_pagination.html" %}
+
+{% include "applesus_installs_list.html" %}
+
+{% include "results_pagination.html" %}
+
+{% endblock %}
+

@@ -62,6 +62,7 @@ class PackagesHandlerTest(PackagesTest):
     blobstore_key = 'fookey'
     mod_since_date = 'foo str date'
     pkg_date = datetime.datetime.utcnow()
+    pkg_size = 12315153
     self.MockDoAnyAuth()
     self.MockQueryFilename(
         filename, blobstore_key=blobstore_key, pkgdata_sha256=supply_etag)
@@ -70,6 +71,7 @@ class PackagesHandlerTest(PackagesTest):
     self.mox.StubOutWithMock(pkgs.blobstore, 'BlobInfo')
     mock_blob_info = self.mox.CreateMockAnything()
     mock_blob_info.creation = pkg_date
+    mock_blob_info.size = pkg_size
     self.mox.StubOutWithMock(pkgs.handlers, 'IsClientResourceExpired')
     self.mox.StubOutWithMock(pkgs.memcache, 'get')
     self.mox.StubOutWithMock(pkgs.memcache, 'set')
@@ -90,6 +92,7 @@ class PackagesHandlerTest(PackagesTest):
       self.response.headers['ETag'] = supply_etag
       self.response.headers['Last-Modified'] = pkg_date.strftime(
           pkgs.handlers.HEADER_DATE_FORMAT)
+      self.response.headers['X-Download-Size'] = pkg_size
       self.c.send_blob(blobstore_key).AndReturn(None)
     else:
       if supply_etag:

@@ -21,16 +21,12 @@
 
 
 
-import os
-from google.appengine.api import users
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp import template
-from simian import settings
+from simian.mac import admin
 from simian.mac.common import auth
 from simian.mac.munki import common
 
 
-class AdminPanic(webapp.RequestHandler):
+class AdminPanic(admin.AdminHandler):
   """Handler for /admin/panic."""
 
   def get(self):
@@ -46,10 +42,8 @@ class AdminPanic(webapp.RequestHandler):
       }
       modes.append(d)
 
-    path = os.path.join(
-        os.path.dirname(__file__), 'templates/panic.html')
-    html = template.render(path, {'modes': modes})
-    self.response.out.write(html)
+    self.Render(
+        'templates/panic.html', {'modes': modes, 'report_type': 'panic'})
 
   def post(self):
     """POST handler."""
@@ -61,11 +55,9 @@ class AdminPanic(webapp.RequestHandler):
     verify = self.request.get('verify')
 
     if not verify:
-      path = os.path.join(
-          os.path.dirname(__file__), 'templates/panic_set_verify.html')
-      html = template.render(path,
-          {'mode': {'name': mode, 'enabled': enabled}})
-      self.response.out.write(html)
+      self.Render(
+          'templates/panic_set_verify.html',
+          {'mode': {'name': mode, 'enabled': enabled}, 'report_type': 'panic'})
     else:
       if enabled == 'disable':
         enabled = False

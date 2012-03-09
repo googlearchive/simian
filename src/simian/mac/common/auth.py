@@ -21,15 +21,18 @@
 
 
 import logging
+
 from google.appengine.api import users
 from google.appengine.api import oauth
 from google.appengine.api import memcache
 from google.appengine.ext import db
+
 from simian import settings
 from simian.auth import gaeserver
 from simian.auth import base
 from simian.mac import models
 from simian.mac.common import util
+
 
 
 class Error(Exception):
@@ -213,7 +216,21 @@ def IsSecurityUser(email=None):
     email: str, fully qualified, e.g. "user@example.com". If not provided then
            then current authenticated user is used.
   Returns:
-    True if user is part of security group, False if not.
+    True if user is part of the security group, False if not.
   """
   return IsGroupMember(
       email=email, group_name='security_users', remote_group_lookup=True)
+
+
+def IsPhysicalSecurityUser(email=None):
+  """Returns True if email is part of the physical security group.
+
+  Args:
+    email: str, fully qualified, e.g. "user@example.com". If not provided then
+           then current authenticated user is used.
+  Returns:
+    True if user is part of the physical security group, False if not.
+  """
+  return IsGroupMember(
+      email=email, group_name='physical_security_users',
+      remote_group_lookup=True)

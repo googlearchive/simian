@@ -105,6 +105,11 @@ class UtilModuleTest(mox.MoxTestBase):
       i = 4294967296L - (long(i) * -1)
     return i
 
+  def testIpToIntWhenIpv6(self):
+    """Test IpToInt() when passed ipv6."""
+    ip_str = '2620::1003:1004:129a:ddff:fe60:fb46'
+    self.assertRaises(ValueError, util.IpToInt, ip_str)
+
   def testIpToInt(self):
     """Test IpToInt()."""
     ip_tests = [

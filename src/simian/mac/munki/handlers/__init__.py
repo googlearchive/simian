@@ -12,6 +12,9 @@ import os
 import sys
 import traceback
 import urllib
+
+from google.appengine.ext import webapp
+
 from simian.auth import base as _auth_base
 from simian.mac.munki import common
 
@@ -137,7 +140,7 @@ def GetClientIdForRequest(request, session=None, client_id_str=None):
   return client_id
 
 
-class AuthenticationHandler(object):
+class AuthenticationHandler(webapp.RequestHandler):
   """Class which handles NotAuthenticated exceptions."""
 
   def handle_exception(self, exception, debug_mode):

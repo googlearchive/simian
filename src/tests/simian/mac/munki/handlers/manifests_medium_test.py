@@ -23,6 +23,8 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
+
+from simian.mac import models
 from simian.mac.common import test
 from simian.mac.munki.handlers import manifests
 
@@ -69,9 +71,9 @@ class HandlersTest(test.RequestHandlerTest):
     site_mod_disabled.enabled = False
     site_mods = [site_mod_one, site_mod_two, site_mod_disabled]
     self.mox.StubOutWithMock(
-        manifests.models.SiteManifestModification,
+        models.SiteManifestModification,
         'MemcacheWrappedGetAllFilter')
-    manifests.models.SiteManifestModification.MemcacheWrappedGetAllFilter(
+    models.SiteManifestModification.MemcacheWrappedGetAllFilter(
         (('site =', site),)).AndReturn(site_mods)
 
     os_version_mod_one = self.mox.CreateMockAnything()
@@ -81,9 +83,9 @@ class HandlersTest(test.RequestHandlerTest):
     os_version_mod_one.value = 'foo os version pkg'
     os_version_mods = [os_version_mod_one]
     self.mox.StubOutWithMock(
-        manifests.models.OSVersionManifestModification,
+        models.OSVersionManifestModification,
         'MemcacheWrappedGetAllFilter')
-    manifests.models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
+    models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
         (('os_version =', os_version),)).AndReturn(os_version_mods)
 
     owner_mod_one = self.mox.CreateMockAnything()
@@ -94,10 +96,10 @@ class HandlersTest(test.RequestHandlerTest):
     owner_mod_one.value = 'foo owner pkg'
     owner_mods = [owner_mod_one]
     self.mox.StubOutWithMock(
-        manifests.models.OwnerManifestModification,
-        'MemcacheWrappedPropMapGetAll')
-    manifests.models.OwnerManifestModification.MemcacheWrappedPropMapGetAll(
-        'owner', owner).AndReturn(owner_mods)
+        models.OwnerManifestModification,
+        'MemcacheWrappedGetAllFilter')
+    models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
+        (('owner', owner),)).AndReturn(owner_mods)
 
     uuid_mod_one = self.mox.CreateMockAnything()
     uuid_mod_one.manifests = [manifest]
@@ -106,10 +108,29 @@ class HandlersTest(test.RequestHandlerTest):
     uuid_mod_one.value = 'foo uuid pkg'
     uuid_mods = [uuid_mod_one]
     self.mox.StubOutWithMock(
-        manifests.models.UuidManifestModification,
-        'MemcacheWrappedPropMapGetAll')
-    manifests.models.UuidManifestModification.MemcacheWrappedPropMapGetAll(
-        'uuid', uuid).AndReturn(uuid_mods)
+        models.UuidManifestModification,
+        'MemcacheWrappedGetAllFilter')
+    models.UuidManifestModification.MemcacheWrappedGetAllFilter(
+        (('uuid', uuid),)).AndReturn(uuid_mods)
+
+    tag_mod_one = self.mox.CreateMockAnything()
+    tag_mod_one.manifests = [manifest]
+    tag_mod_one.enabled = True
+    tag_mod_one.install_types = [install_type_managed_updates]
+    tag_mod_one.value = 'foo tag pkg'
+    tag_mods = [tag_mod_one]
+    computer_tags = ['footag1', 'footag2']
+    self.mox.StubOutWithMock(models.db.Key, 'from_path')
+    self.mox.StubOutWithMock(models.Tag, 'GetAllTagNamesForKey')
+    models.db.Key.from_path('Computer', uuid).AndReturn('k')
+    models.Tag.GetAllTagNamesForKey('k').AndReturn(computer_tags)
+    self.mox.StubOutWithMock(
+        models.TagManifestModification,
+        'MemcacheWrappedGetAllFilter')
+    models.TagManifestModification.MemcacheWrappedGetAllFilter(
+        (('tag_key_name', 'footag1'),)).AndReturn([])
+    models.TagManifestModification.MemcacheWrappedGetAllFilter(
+        (('tag_key_name', 'footag2'),)).AndReturn(tag_mods)
 
     # Setup dict of expected output xml.
     tmp_plist_exp = manifests.plist_module.MunkiManifestPlist(plist_xml)
@@ -123,6 +144,7 @@ class HandlersTest(test.RequestHandlerTest):
         owner_mod_one.value)
     expected_out_dict[install_type_managed_updates].append(owner_mod_one.value)
     expected_out_dict[install_type_managed_updates].append(uuid_mod_one.value)
+    expected_out_dict[install_type_managed_updates].append(tag_mod_one.value)
 
     self.mox.ReplayAll()
     # Generate the dynamic manifest, then get dict output to compare to the

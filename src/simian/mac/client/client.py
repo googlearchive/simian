@@ -77,13 +77,6 @@ def GetMunkiSoftwareRepoURL():
 class BaseSimianClient(object):
   """Base client features in all Mac clients."""
 
-  def _LoadMunkiConfiguration(self):
-    """Load Munki configuration to assist in configuring this Simian client."""
-    self.munki_config_plist = MUNKI_CONFIG_PLIST
-    url = GetMunkiSoftwareRepoURL()
-    if url:
-      if self.IsDefaultHostClient():
-        self._LoadHost(url)
 
   def GetSystemRootCACertChain(self):
     """Load certificate chain from system.
@@ -175,7 +168,6 @@ class SimianClient(BaseSimianClient, client.SimianClient):
 
   def __init__(self, hostname=None, port=None):
     super(SimianClient, self).__init__(hostname, port)
-    self._LoadMunkiConfiguration()
 
   def _LoadPackageInfo(self, filename, description, display_name, catalogs):
     """Load package info from a file and return its package info.
@@ -375,7 +367,6 @@ class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
 
   def __init__(self, hostname=None, port=None):
     super(SimianAuthClient, self).__init__(hostname, port)
-    self._LoadMunkiConfiguration()
 
   def _GetPuppetSslDetails(self, cert_fname=None, interactive_user=False):
     """Get Puppet SSL details.

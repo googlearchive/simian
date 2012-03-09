@@ -27,6 +27,9 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import db
 
 
+LOCK_NAME = 'lock_%s'
+
+
 def BatchDatastoreOp(op, entities_or_keys, batch_size=25):
   """Performs a batch Datastore operation on a sequence of keys or entities.
 
@@ -106,6 +109,13 @@ class QueryIterator(object):
       self._query.with_cursor(self._query.cursor())
 
 
+
+def LockExists(name):
+  """Returns True if a lock with the given str name exists, False otherwise."""
+  memcache_key = LOCK_NAME % name
+  return memcache.get(memcache_key) is not None
+
+
 def ObtainLock(name, timeout=0):
   """Obtain a lock, given a name.
 
@@ -120,7 +130,7 @@ def ObtainLock(name, timeout=0):
     True if lock was obtained
     False if lock was not obtained, some other process has the lock
   """
-  memcache_key = 'lock_%s' % name
+  memcache_key = LOCK_NAME % name
   while 1:
     locked = memcache.incr(memcache_key, initial_value=0) == 1
     timeout -= 1
@@ -136,5 +146,5 @@ def ReleaseLock(name):
   Args:
     name: str, name of lock
   """
-  memcache_key = 'lock_%s' % name
+  memcache_key = LOCK_NAME % name
   memcache.delete(memcache_key)
