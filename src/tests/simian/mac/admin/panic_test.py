@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-#
+# 
 # Copyright 2010 Google Inc. All Rights Reserved.
-#
+# 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,11 +22,11 @@
 import logging
 logging.basicConfig(filename='/dev/null')
 
-import tests.appenginesdk
 from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+import tests.appenginesdk
 from simian.mac.admin import panic
 from simian.mac.common import test
 
@@ -39,26 +39,11 @@ class AdminPanicTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return panic
 
-  def MockTemplate(self, filename, html, args):
-    if not hasattr(self, '_mock_template'):
-      self.mox.StubOutWithMock(panic.os.path, 'join')
-      self.mox.StubOutWithMock(panic.os.path, 'dirname')
-      self.mox.StubOutWithMock(panic.template, 'render')
-      self._mock_template = 1
-
-    dirname = '/tmp'
-    path = '%s/%s' % (dirname, filename)
-
-    panic.os.path.dirname(panic.__file__).AndReturn(dirname)
-    panic.os.path.join(dirname, filename).AndReturn(path)
-    panic.template.render(path, args).AndReturn(html)
-
-    return path
-
   def testGet(self):
     """Test get()."""
     self.mox.StubOutWithMock(panic.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(panic.common, 'IsPanicMode')
+    self.mox.StubOutWithMock(self.c, 'Render')
 
     panic.auth.IsAdminUser().AndReturn(True)
     modes = []
@@ -67,8 +52,8 @@ class AdminPanicTest(test.RequestHandlerTest):
       panic.common.IsPanicMode(mode).AndReturn(False)
       modes.append({'name': mode, 'enabled': False})
 
-    self.MockTemplate('templates/panic.html', 'html', {'modes': modes})
-    self.c.response.out.write('html').AndReturn(None)
+    self.c.Render(
+        'templates/panic.html', {'modes': modes, 'report_type': 'panic'})
 
     self.mox.ReplayAll()
     self.c.get()
@@ -85,10 +70,10 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.request.get('enabled').AndReturn('enable')
     self.request.get('verify').AndReturn(None)
 
-    self.MockTemplate(
-        'templates/panic_set_verify.html', 'html',
-        {'mode': {'name': mode, 'enabled': enabled}})
-    self.c.response.out.write('html')
+    self.mox.StubOutWithMock(self.c, 'Render')
+    self.c.Render(
+        'templates/panic_set_verify.html',
+        {'mode': {'name': mode, 'enabled': enabled}, 'report_type': 'panic'})
 
     self.mox.ReplayAll()
     self.c.post()
