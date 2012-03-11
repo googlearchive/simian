@@ -1,13 +1,13 @@
 #!/bin/bash
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,7 +22,7 @@
 # invoked from CLI
 
 set -e
-set -x 
+set -x
 
 function die() {
   echo ERROR "$@" >&2
@@ -36,94 +36,139 @@ TARGET_PATH="$3"
 RESOURCES="${PKG}/Contents/Resources"
 BASETMPDIR="${TARGET_PATH}/tmp/"
 OSX=$(sw_vers -productVersion | cut -d. -f1-2)
-VERSION="1.5.3"
+VERSION="2.0"
+PYTHON_VERSION=$(egrep '[0-9].[0-9]' "${PKG}/Contents/Resources/python_version")
+PYTHON="python${PYTHON_VERSION}"
+INSTALL_DIR=/usr/local/munki/
+VE_DIR=simian
 
 ### set up sane logging
+
 d=$(date '+%Y%m%d%H%M')
-exec 1> "${BASETMPDIR}/postflight.${d}.$$.log"
+LOGFILE="${BASETMPDIR}/postflight.${d}.$$.log"
+exec 1> "${LOGFILE}"
 exec 2>&1
 echo postflight BEGIN
 
+### find & test python
+
+[[ ! -z "$PYTHON_VERSION" ]] || die "No python version specified in pkg"
+[[ ! -x "$PYTHON" ]] || die "Python is not executable"
+
 ### create temp work directory
+
 TMPDIR=$(mktemp -d ${BASETMPDIR}/postflightXXXXXX)
 ORIGPWD="${PWD}"
 trap "rm -rf ${TMPDIR}" EXIT
 
-### install supplied eggs, like M2Crypto.
+### find & test easy_install
 
-# look for the most recent easy_install
-if [ -x "/usr/local/bin/easy_install" ]; then
-  EZ="/usr/local/bin/easy_install"
-else
-  ez_test=$(/usr/bin/easy_install 2>&1 | \
-  grep '^/usr/bin/easy_install-.*uses python' | \
-  sort -r | head -1 | cut -d' ' -f1)
+# this can be somewhat difficult because the version of easy_install
+# appropriate for our PYTHON_VERSION and setuptools version might be in
+# /usr/local/bin or /usr/bin.
 
-  if [ ! -z "${ez_test}" ]; then
-    EZ="${ez_test}"
-  else
-    EZ="/usr/bin/easy_install"
+EZ="/usr/bin/easy_install"
+
+# the version in /usr/local/bin might be for a newer python with a newer
+# dependency on setuptools. try running it to see if it is willing to run.
+if [[ -f /usr/local/bin/easy_install ]]; then
+  if [[ -x /usr/local/bin/easy_install ]]; then
+    ${PYTHON} /usr/local/bin/easy_install --help 2>/dev/null && \
+      EZ="/usr/local/bin/easy_install"
   fi
 fi
 
-[ -x "${EZ}" ] || die "Cannot execute ${EZ}"
+# easy_install might point the user to easy_install-VERSION instead and fail.
+# look around for a specific version.
+if [[ "$EZ" = "/usr/bin/easy_install" ]]; then
+  if [[ -x "/usr/bin/easy_install-${PYTHON_VERSION}" ]]; then
+    EZ="/usr/bin/easy_install-${PYTHON_VERSION}"
+  fi
+fi
 
-### install dependencies
-# setuptools does not like to upgrade some packages automatically
-# when running setup.py below, e.g. python-dateutil from 1.2 to 1.4.
-# so, just upgrade them all in advance. :(
-${EZ} -U setuptools
-${EZ} -U 'python-dateutil>=1.4,<2'
-${EZ} -U pyasn1
-${EZ} -U tlslite==0.3.8
-${EZ} -U pyyaml
-${EZ} -U google_apputils
+[[ -x "${EZ}" ]] || die "Cannot execute easy_install ${EZ}"
 
-# install supplied eggs also
-for egg in ${RESOURCES}/*-${OSX}-*.egg ; do
-  ${EZ} -N "${egg}"
+### install virtualenv
+
+${PYTHON} ${EZ} -U virtualenv
+
+### find & test newly installed virtualenv
+
+VIRTUALENV=$(PATH=/usr/bin:/usr/local/bin type -p virtualenv)
+[[ -x "${VIRTUALENV}" ]] || die "Cannot execute or find virtualenv"
+
+### create install directory and run virtualenv to create INSTALL_DIR/VE_DIR
+oldpwd="$PWD"
+mkdir -p "${INSTALL_DIR}"
+cd "${INSTALL_DIR}"
+${PYTHON} ${VIRTUALENV} ${VE_DIR}
+VE_PYTHON=${INSTALL_DIR}/${VE_DIR}/bin/python
+VE_EZ=${INSTALL_DIR}/${VE_DIR}/bin/easy_install
+
+### install supplied eggs
+
+for egg in ${RESOURCES}/*.egg ; do
+  echo === Installing egg "${egg}"
+  ${VE_PYTHON} ${VE_EZ} -N "${egg}"
 done
 
-${EZ} ${RESOURCES}/tlslite*.egg
+cd "$oldpwd"
 
-### install main source package
+### install main source package with setup.py
 
 tar -zxf "${RESOURCES}/simian-${VERSION}.tar.gz" -C "${TMPDIR}"
 cd "${TMPDIR}/simian-${VERSION}"
 mkdir -p src/tests  # fake out google test
-python setup.py install 2>&1
+${VE_PYTHON} setup.py install 2>&1
 cd "${ORIGPWD}"
+
+### link simianauth and simianadmin into /usr/local/bin for easier access
+
+for f in simianauth simianadmin ; do
+  rm -f /usr/local/bin/${f}
+  ln -s ${INSTALL_DIR}/${VE_DIR}/bin/${f} /usr/local/bin/
+done
+
+### fix sh-bang line for simianfacter
+
+sed -i .bak "1c\\
+#\!${VE_PYTHON}\\
+" /usr/local/bin/simianfacter
+rm -f /usr/local/bin/simianfacter.bak
 
 ### update munki configuration
 
 echo Begin section: Harmless "configuration not found" messages may follow
-server=`python -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
-defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL https://${server}
+server=`${VE_PYTHON} -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
+defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${server}"
 echo End section
 
 ### small file operations
 
-chmod 750 /etc/simian/ssl/private_keys
+z=$(lsbom ${PKG}/Contents/Archive.bom | grep ssl/private_keys ; true)
+if [[ ! -z "$z" ]]; then
+  chmod 750 /etc/simian/ssl/private_keys
+fi
 
-for f in /etc/simian/{client,common}.cfg; do
-  if [ ! -f "${f}" -a -f "${f}+" ]; then
-    mv "${f}+" "${f}"
-  else
-    rm "${f}+"
-  fi
-done
+z=$(lsbom ${PKG}/Contents/Archive.bom | grep "/etc/simian/.*\.cfg" ; true)
+if [[ ! -z "$z" ]]; then
+  for f in /etc/simian/{client,common}.cfg; do
+    if [ ! -f "${f}" -a -f "${f}+" ]; then
+      mv "${f}+" "${f}"
+    else
+      rm "${f}+"
+    fi
+  done
+fi
 
-# if this is a Simian+Munki package, not just Simian, then perform the
-# following file permissions fix steps.
-
-lsbom "${PKG}/Contents/Archive.bom" | grep -c /Library/LaunchAgents/
-
-if [ "$?" = "0" ]; then
+z=$(lsbom ${PKG}/Contents/Archive.bom | grep /Library/LaunchAgents/ ; true)
+if [[ ! -z "$z" ]]; then
   for f in /Library/Launch{Agents,Daemons}/com.googlecode.munki.*.plist; do
     chown root:wheel "${f}"
     chmod 644 "${f}"
   done
 fi
 
-### TODO: remove any files unnecessary on clients
+### end
 echo postflight END
+rm -f "${LOGFILE}"
