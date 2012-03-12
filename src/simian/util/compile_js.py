@@ -22,7 +22,7 @@ import httplib
 import urllib
 import sys
 
-CLOSURE_SERVICE_DOMAIN = 'release-cl27858223-1330131679.closure-compiler.appspot.com'
+CLOSURE_SERVICE_DOMAIN = 'closure-compiler.appspot.com'
 
 input_js_file = sys.argv[1]
 output_js_file = sys.argv[2]
