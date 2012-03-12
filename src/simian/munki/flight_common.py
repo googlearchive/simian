@@ -45,6 +45,7 @@ try:
   from munkilib import FoundationPlist as fpl
   from munkilib import munkicommon
   from munkilib import updatecheck
+  from munkilib import fetch
   import SystemConfiguration as sys_config
   import Foundation
   import objc
@@ -594,7 +595,7 @@ def GetAppleSUSCatalog():
     sus_catalog['CatalogURL'] = urlparse.urljoin(
         'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
     fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
-  except updatecheck.MunkiDownloadError, e:
+  except fetch.MunkiDownloadError, e:
     logging.exception('MunkiDownloadError getting Apple SUS catalog.')
 
 
@@ -941,7 +942,7 @@ def RepairClient():
   try:
     logging.info('Fetching repair client from: %s/repair', url)
     updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download)
-  except updatecheck.MunkiDownloadError, e:
+  except fetch.MunkiDownloadError, e:
     raise RepairClientError(
         'MunkiDownloadError getting Munki client: %s' % str(e))
 
