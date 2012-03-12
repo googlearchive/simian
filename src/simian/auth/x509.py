@@ -633,7 +633,7 @@ class X509Certificate(BaseDataObject):
 
     if self._cert['issuer'] is None or self._cert['issuer'] != issuer:
       raise CertificateValueError(
-          'Signature issuer does not match required issuer: %s != %s' % (
+          'Issuer does not match required issuer: "%s" != required "%s"' % (
           self._cert['issuer'], issuer))
 
   def CheckAll(self):
