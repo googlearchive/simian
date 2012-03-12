@@ -51,6 +51,8 @@ import tlslite.utils.keyfactory
 OID_NAME = {
     (2, 5, 4, 3): 'CN',
     (2, 5, 4, 6): 'C',
+    (2, 5, 4, 7): 'L',
+    (2, 5, 4, 8): 'S',
     (2, 5, 4, 10): 'O',
     (2, 5, 4, 11): 'OU',
     (1, 2, 840, 113549, 1, 9, 1): 'emailAddress',
