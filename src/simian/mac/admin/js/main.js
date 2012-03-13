@@ -286,6 +286,40 @@ goog.exportSymbol('simian.makeDateInput', simian.makeDateInput);
 
 
 /**
+ * Disables the submit button if an invalid input exists in the form.
+ * @param {Element} form The form with possibly invalid inputs and submit button
+ */
+simian.validateSubmit = function(form) {
+  form.submit.disabled =
+    document.getElementsByClassName('invalid-input').length > 0;
+}
+goog.exportSymbol('simian.validateSubmit', simian.validateSubmit);
+
+
+/**
+ * Adds the 'invalid-input' class to a field if it fails the regular expression.
+ * @param {Element} field The field to validate.
+ * @param {RegExp} regexp The regular expression to match.
+ * @param {Function} opt_altValid an alternative validation function.
+ * @param {Function} opt_callback A callback called after validation.
+ */
+simian.validateField = function(field, regexp, opt_altValid, opt_callback) {
+  if (!regexp.test(field.value) || opt_altValid && !opt_altValid()) {
+    goog.dom.classes.add(field, 'invalid-input');
+  } else {
+    goog.dom.classes.remove(field, 'invalid-input');
+  }
+  if (opt_callback) {
+    opt_callback(false);
+  }
+  if (field.form) {
+    simian.validateSubmit(field.form);
+  }
+}
+goog.exportSymbol('simian.validateField', simian.validateField);
+
+
+/**
  * Sets a cookie to save the pinned/closed state of the menu.
  * @param {boolean} val True to set the menu state as pinned in the cookie.
  */

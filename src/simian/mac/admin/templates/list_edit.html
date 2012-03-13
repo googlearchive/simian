@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block page-content %}
+  <script type="text/javascript">
+    addItem = function(value) {
+      var div = document.createElement('div');
+      div.innerHTML = '\
+        <input type="text" name="item"\
+        {% if regex %}oninput="simian.validateField(this, {{ regex|escapejs }});"{% endif %}\
+        ' + (value ? 'value="'+value+'"' : '') + '/>\
+        <a onclick="delItem(this);">- delete</a>\
+      ';
+      document.getElementById('items').appendChild(div);
+      {% if regex %}simian.validateField(div.getElementsByTagName('input')[0], {{ regex }});{% endif %}
+      updateCount();
+    };
+    delItem = function(button) {
+      button.parentNode.parentNode.removeChild(button.parentNode);
+      updateCount();
+    };
+    updateCount = function() {
+      document.getElementById('itemcount').innerHTML =
+        '(' + document.getElementById('items').getElementsByTagName('div').length + ')';
+    };
+  </script>
+  <div><h2>{{ title }}</h2> <span class="count" id="itemcount">({{ list|length }})</span></div>
+  {% if infopanel %}<div class="infopanel">{{ infopanel }}</div>{% endif %}
+  <form method="post" style="display: inline-block">
+    <div id="items" style="margin: 10px;">
+      <script type="text/javascript">
+        var items = ['{{ list|join:"', '"}}'];
+        items.map(addItem);
+      </script>
+    </div>
+      <a onclick="addItem();">+ Add</a>
+    <br/>
+    <div style="text-align:right;">
+      <button type="button" onclick="{% if back %}location.href='{{ back }}';{% else %}location.reload(true);{% endif %}">Cancel</a>
+      <button type="submit" name="submit">Save</button>
+    </div>
+  </form>
+{% endblock %}

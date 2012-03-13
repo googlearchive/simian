@@ -35,6 +35,7 @@ Functions:
 import array
 import base64
 import datetime
+import re
 import time
 import pyasn1
 import pyasn1.error
@@ -97,6 +98,10 @@ OID_X509V3_SUBJECT_ALT_NAME = (2, 5, 29, 17)
 
 # Certificate versions that X509Certificate can load
 X509_CERT_VERSION_3 = 0x2
+
+
+# Regex for valid, standard base64 characters. (i.e. not websafe)
+BASE64_RE = re.compile(r'^[0-9A-Za-z/+=]+$')
 
 
 class Error(Exception):
@@ -676,11 +681,20 @@ def LoadCertificateFromBase64(s):
   """Load a certificate from base64 format.
 
   Args:
-    s: str, certificate in base64 format, no newlines
+    s: str, certificate in base64 format, no newlines, no non-b64 chars
   Returns:
     X509Certificate object
+  Raises:
+    CertificatePEMFormatError: When the base64 body cannot be decoded.
   """
-  d = base64.b64decode(s)
+  if not BASE64_RE.search(s):
+    raise CertificatePEMFormatError('Not valid base64')
+
+  try:
+    d = base64.b64decode(s)
+  except TypeError, e:
+    raise CertificatePEMFormatError('base64 decode error: %s' % str(e))
+
   x = X509Certificate()
   x.LoadFromByteString(d)
   return x
@@ -698,13 +712,23 @@ def LoadCertificateFromPEM(s):
   """
   lines = s.strip().split('\n')
 
-  if lines[0] != '-----BEGIN CERTIFICATE-----':
+  if len(lines) < 3:
+    raise CertificatePEMFormatError('Certificate truncated/too few lines')
+
+  begin = None
+  end = None
+
+  for i in xrange(len(lines)):
+    lines[i] = lines[i].strip()
+    if lines[i] == '-----BEGIN CERTIFICATE-----':
+      begin = i
+    elif begin is not None and lines[i] == '-----END CERTIFICATE-----':
+      end = i
+
+  if begin is None:
     raise CertificatePEMFormatError('Missing begin certificate header')
 
-  if lines[-1] != '-----END CERTIFICATE-----':
+  if end is None:
     raise CertificatePEMFormatError('Missing end certificate header')
 
-  if len(lines) < 3:
-    raise CertificatePEMFormatError('Missing certificate body')
-
-  return LoadCertificateFromBase64(''.join(lines[1:-1]))
+  return LoadCertificateFromBase64(''.join(lines[begin+1:end]))

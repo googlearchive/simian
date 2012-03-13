@@ -39,7 +39,7 @@ class Tags(admin.AdminHandler):
     tags = sorted(tags, key=lambda t: unicode.lower(t.key().name()))
     d = {'tags': tags, 'can_mod_tags': auth.IsAdminUser(),
          'report_type': 'tags'}
-    self.Render('templates/tags.html', d)
+    self.Render('tags.html', d)
 
   def post(self):
     """POST handler."""

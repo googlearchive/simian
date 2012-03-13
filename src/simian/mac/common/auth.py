@@ -34,6 +34,12 @@ from simian.mac import models
 from simian.mac.common import util
 
 
+ACL_GROUPS = {
+    # 'admins': 'Admins',
+    'support_users': 'Support Users',
+    'security_users': 'Security Users',
+    'physical_security_users': 'Physical Security Users',
+}
 
 class Error(Exception):
   """Base"""

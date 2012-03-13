@@ -102,4 +102,4 @@ class PackageAlias(admin.AdminHandler):
       'munki_pkg_names': munki_pkg_names,
       'report_type': 'manifests_aliases',
     }
-    self.Render('templates/package_alias.html', data)
+    self.Render('package_alias.html', data)

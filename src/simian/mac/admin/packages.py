@@ -80,7 +80,7 @@ class Packages(admin.AdminHandler):
       packages.append(pkg)
 
     packages.sort(key=lambda pkg: pkg['munki_name'].lower())
-    self.Render('templates/packages.html',
+    self.Render('packages.html',
         {'packages': packages, 'counts_mtime': counts_mtime,
          'pending_mtime': pending_mtime, 'report_type': 'packages',
          'active_pkg': self.request.GET.get('activepkg'),
@@ -111,7 +111,7 @@ class Packages(admin.AdminHandler):
       report_type = 'apple_historical'
     else:
       report_type = 'packages_historical'
-    self.Render('templates/packages.html',
+    self.Render('packages.html',
         {'packages': pkgs, 'counts_mtime': counts_mtime,
          'applesus': applesus, 'cached_pkgs_list': True,
          'report_type': report_type})
@@ -133,14 +133,18 @@ class Packages(admin.AdminHandler):
         time = datetime.datetime.strftime(log.mtime, '%Y-%m-%d %H:%M:%S')
         title = 'plist for Package Log <b>%s - %s</b>' % (log.filename, time)
         raw_xml = '/admin/packages/logs?plist=%d&format=xml' % key_id
-        self.Render('templates/plist.html',
+        self.Render('plist.html',
             {'plist_type': 'package_log',
              'xml': admin.XmlToHtml(log.plist.GetXml()),
              'title': title,
              'raw_xml_link': raw_xml,
              })
     else:
-      query = models.AdminPackageLog.all().order('-mtime')
+      filename = self.request.get('filename')
+      query = models.AdminPackageLog.all()
+      if filename:
+        query.filter('filename =', filename)
+      query.order('-mtime')
       logs = self.Paginate(query, DEFAULT_PACKAGE_LOG_FETCH_LIMIT)
-      self.Render('templates/package_logs.html',
-          {'logs': logs, 'report_type': 'package_logs'})
+      self.Render('package_logs.html',
+          {'logs': logs, 'report_type': 'package_logs', 'filename': filename})

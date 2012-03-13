@@ -50,16 +50,51 @@ class X509ModuleTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(x509, 'LoadCertificateFromBase64')
     x509.LoadCertificateFromBase64('base64').AndReturn('ok')
     x509.LoadCertificateFromBase64('base64').AndReturn('ok')
+    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
+    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
+    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
 
     self.mox.ReplayAll()
+
+    # This pem input is well formed.
+    self.assertEqual(
+        x509.LoadCertificateFromPEM(
+            '%s\nbase64\n%s\n' % (header, footer)),
+        'ok')
+
+    # Add extra spaces on the end of the string to test that
+    # LoadCertificateFromPEM will strip them.
+    self.assertEqual(
+        x509.LoadCertificateFromPEM(
+            '\n \n\t\n%s\nbase64\n%s\n\t\n   ' % (header, footer)),
+        'ok')
+
+    # Add extra newlines on the beginning of the string to test that
+    # LoadCertificateFromPEM will strip them.
+    self.assertEqual(
+        x509.LoadCertificateFromPEM(
+            '\n\n\n \n\t\n%s\nbase64\n%s\n\t\n   ' % (header, footer)),
+        'ok')
+
+    # Add extra newlines on the end of the string to test that
+    # LoadCertificateFromPEM will strip them.
+    self.assertEqual(
+        x509.LoadCertificateFromPEM(
+            '\n\n\n \n\t\n%s\nbase64\n%s\n\t\n\n\n' % (header, footer)),
+        'ok')
+
+    # A missing newline on the end is tolerated.
     self.assertEqual(
         x509.LoadCertificateFromPEM(
             '%s\nbase64\n%s' % (header, footer)),
         'ok')
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '\n \n\t\n%s\nbase64\n%s\n\t\n ' % (header, footer)),
-        'ok')
+
+    # Just a bunch of newlines.
+    self.assertRaises(
+        x509.CertificatePEMFormatError,
+        x509.LoadCertificateFromPEM,
+        '\n\n\n\n')
+
     self.mox.VerifyAll()
 
   def testLoadCertificateFromPEMWhenBadHeader(self):
@@ -101,6 +136,9 @@ class X509ModuleTest(mox.MoxTestBase):
   def testLoadCertificateFromBase64(self):
     """Test LoadCertificateFromBase64()."""
     self.mox.StubOutWithMock(x509.base64, 'b64decode')
+    self.mox.StubOutWithMock(x509, 'BASE64_RE')
+
+    x509.BASE64_RE.search('b64str').AndReturn(True)
     x509.base64.b64decode('b64str').AndReturn('binary')
 
     mock_x509 = self.mox.CreateMockAnything()
@@ -112,6 +150,33 @@ class X509ModuleTest(mox.MoxTestBase):
     self.assertEqual(
         mock_x509,
         x509.LoadCertificateFromBase64('b64str'))
+    self.mox.VerifyAll()
+
+  def testLoadCertificateFromBase64WhenBase64CharacterCheckFail(self):
+    """Test LoadCertificateFromBase64()."""
+    self.mox.StubOutWithMock(x509.base64, 'b64decode')
+    self.mox.StubOutWithMock(x509, 'BASE64_RE')
+
+    x509.BASE64_RE.search('b64str').AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        x509.CertificatePEMFormatError,
+        x509.LoadCertificateFromBase64, 'b64str')
+    self.mox.VerifyAll()
+
+  def testLoadCertificateFromBase64WhenBase64DecodeFail(self):
+    """Test LoadCertificateFromBase64()."""
+    self.mox.StubOutWithMock(x509.base64, 'b64decode')
+    self.mox.StubOutWithMock(x509, 'BASE64_RE')
+
+    x509.BASE64_RE.search('b64str').AndReturn(True)
+    x509.base64.b64decode('b64str').AndRaise(TypeError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        x509.CertificatePEMFormatError,
+        x509.LoadCertificateFromBase64, 'b64str')
     self.mox.VerifyAll()
 
 

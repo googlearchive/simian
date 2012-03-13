@@ -35,10 +35,10 @@ MENU = [
         {'type': 'package_logs', 'url': '/admin/packages/logs', 'name': 'Logs'},
         {'type': 'packages_historical', 'url': '/admin/packages?historical=1',
          'name': 'Historical List'},
-        {'type': 'packages_installs', 'url': '/admin/installs?pkg=all',
+        {'type': 'packages_installs', 'url': '/admin/installs',
          'name': 'Installs'},
         {'type': 'packages_failures',
-         'url': '/admin/installs?pkg=all&failures=1', 'name': 'Failures'},
+         'url': '/admin/installs?failures=1', 'name': 'Failures'},
         {'type': 'packages_problems', 'url': '/admin/installproblems',
          'name': 'Other Install Problems'}
     ]},
@@ -50,10 +50,10 @@ MENU = [
          'name': 'Logs'},
         {'type': 'apple_historical', 'url': '/admin/packages?applesus=1',
          'name': 'Historical List'},
-        {'type': 'apple_installs', 'url': '/admin/installs?pkg=all&applesus=1',
+        {'type': 'apple_installs', 'url': '/admin/installs?applesus=1',
          'name': 'Installs'},
         {'type': 'apple_failures',
-         'url': '/admin/installs?pkg=all&applesus=1&failures=1',
+         'url': '/admin/installs?applesus=1&failures=1',
          'name': 'Failures'}
     ]},
 
@@ -72,9 +72,13 @@ MENU = [
 
     {'type': 'admin_tools', 'name': 'Admin Tools', 'admin_only': True,
      'subitems': [
-        {'type': 'lock_admin', 'url': '/admin/lock_admin',
-         'name': 'Lock Admin'},
-        {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'},
+         {'type': 'acl_groups', 'url': '/admin/acl_groups',
+          'name': 'ACL Groups'},
+         {'type': 'ip_blacklist', 'url': '/admin/ip_blacklist',
+          'name': 'IP Blacklist'},
+         {'type': 'lock_admin', 'url': '/admin/lock_admin',
+          'name': 'Lock Admin'},
+         {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'},
     ]},
 
     {'type': 'tags', 'url': '/admin/tags', 'name': 'Tags'},
@@ -153,7 +157,7 @@ class AdminHandler(webapp.RequestHandler):
       str HTML of rendered template.
     """
     path = os.path.join(
-        os.path.dirname(__file__), template_path)
+        os.path.dirname(__file__), 'templates', template_path)
 
     if not settings.DEV_APPSERVER:
       values['static_path'] = 'myapp/%s' % os.getenv('CURRENT_VERSION_ID')

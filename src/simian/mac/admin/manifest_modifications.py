@@ -197,4 +197,4 @@ class ManifestModifications(admin.AdminHandler):
       'manifests': common.TRACKS,
       'report_type': 'manifests_admin',
     }
-    self.Render('templates/manifest_modifications.html', data)
+    self.Render('manifest_modifications.html', data)

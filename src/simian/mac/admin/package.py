@@ -62,7 +62,7 @@ class Package(admin.AdminHandler):
               force_install_after_date, '%H:%M')
 
     if self.request.get('plist_xml'):
-      self.Render('templates/plist.html',
+      self.Render('plist.html',
           {'report_type': 'packages',
            'plist_type': 'package_plist',
            'xml': admin.XmlToHtml(p.plist.GetXml()),
@@ -77,7 +77,7 @@ class Package(admin.AdminHandler):
           'pkg_safe_to_modify': p.IsSafeToModify(),
           'editxml': self.request.get('editxml')}
 
-      self.Render('templates/package.html', data)
+      self.Render('package.html', data)
 
   def post(self, filename=None):
     """POST handler."""

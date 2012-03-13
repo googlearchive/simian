@@ -23,17 +23,23 @@ Classes:
 
 
 
+
 import datetime
 import logging
 import os
 import time
+
 from google.appengine.ext import deferred
 from google.appengine.ext import webapp
 from google.appengine.api import taskqueue
+
 from simian.mac import models
+from simian.mac.common import gae_util
 from simian.mac.admin import summary as summary_module
 
 
+TRENDING_INSTALLS_LIMIT = 5
+RUNTIME_MAX_SECS = 30
 
 
 class ReportsCache(webapp.RequestHandler):
@@ -59,6 +65,15 @@ class ReportsCache(webapp.RequestHandler):
       models.ReportsCache.SetStatsSummary(summary)
     elif name == 'installcounts':
       _GenerateInstallCounts()
+    elif name == 'trendinginstalls':
+      if arg:
+        try:
+          kwargs = {'since_hours': int(arg)}
+        except ValueError:
+          kwargs = {}
+      else:
+        kwargs = {}
+      _GenerateTrendingInstallsCache(**kwargs)
     elif name == 'pendingcounts':
       self._GeneratePendingCounts()
     elif name == 'msu_user_summary':
@@ -82,28 +97,30 @@ class ReportsCache(webapp.RequestHandler):
       now: datetime.datetime, optional, supply an alternative
         value for the current date/time
     """
-    # TODO: when running from a taskqueue, this value could be higher.
-    RUNTIME_MAX_SECS = 15
-
+    lock_name = 'msu_user_summary_lock'
     cursor_name = 'msu_user_summary_cursor'
-
     if since_days is None:
       since = None
     else:
       since = '%dD' % since_days
+      lock_name = '%s_%s' % (lock_name, since)
       cursor_name = '%s_%s' % (cursor_name, since)
+
+    lock = gae_util.ObtainLock(lock_name)
+    if not lock:
+      logging.warning('GenerateMsuUserSummary lock found; exiting.')
+      return
 
     interested_events = self.USER_EVENTS
 
     lquery = models.ComputerMSULog.all()
     cursor = models.KeyValueCache.MemcacheWrappedGet(
         cursor_name, 'text_value')
-    summary = models.ReportsCache.GetMsuUserSummary(
+    summary, unused_dt = models.ReportsCache.GetMsuUserSummary(
         since=since, tmp=True)
 
     if cursor and summary:
       lquery.with_cursor(cursor)
-      summary = summary[0]
     else:
       summary = {}
       for event in interested_events:
@@ -191,6 +208,8 @@ class ReportsCache(webapp.RequestHandler):
       summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
           since=since, tmp=True)
 
+    gae_util.ReleaseLock(lock_name)
+
   def _GeneratePendingCounts(self):
     """Generates a dictionary of all install names and their pending count."""
     d = {}
@@ -205,13 +224,9 @@ def _GenerateInstallCounts():
     #logging.debug('Generating install counts....')
 
     # Obtain a lock.
-    lock = models.KeyValueCache.get_by_key_name('pkgs_list_cron_lock')
-    utcnow = datetime.datetime.utcnow()
-    if not lock or lock.mtime < (utcnow - datetime.timedelta(minutes=30)):
-      # There is no lock or it's old so continue.
-      lock = models.KeyValueCache(key_name='pkgs_list_cron_lock')
-      lock.put()
-    else:
+    lock_name = 'pkgs_list_cron_lock'
+    lock = gae_util.ObtainLock(lock_name)
+    if not lock:
       logging.warning('GenerateInstallCounts: lock found; exiting.')
       return
 
@@ -230,7 +245,7 @@ def _GenerateInstallCounts():
     if not installs:
       #logging.debug('No more installs to process.')
       models.ReportsCache.SetInstallCounts(pkgs)
-      lock.delete()
+      gae_util.ReleaseLock(lock_name)
       return
 
     i = 0
@@ -277,9 +292,45 @@ def _GenerateInstallCounts():
     cursor_obj.put()
 
     # Delete the lock.
-    lock.delete()
+    gae_util.ReleaseLock(lock_name)
 
     deferred.defer(_GenerateInstallCounts)
+
+
+def _GenerateTrendingInstallsCache(since_hours=None):
+  """Generates trending install and failure data."""
+  trending = {'success': {}, 'failure': {}}
+  total_success = 0
+  total_failure = 0
+  if not since_hours:
+    since_hours = 1
+  dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=since_hours * 60)
+  query = models.InstallLog.all().filter('mtime >', dt)
+  for install in gae_util.QueryIterator(query):
+    pkg = str(install.package)
+    if install.IsSuccess():
+      trending['success'][pkg] = trending['success'].setdefault(pkg, 0) + 1
+      total_success += 1
+    else:
+      trending['failure'][pkg] = trending['failure'].setdefault(pkg, 0) + 1
+      total_failure +=1
+
+  # Get the top trending installs and failures.
+  success = sorted(
+      trending['success'].items(), key=lambda i: i[1], reverse=True)
+  success = success[:TRENDING_INSTALLS_LIMIT]
+  success = [(pkg, count, float(count) / total_success * 100)
+             for pkg, count in success]
+  failure = sorted(
+      trending['failure'].items(), key=lambda i: i[1], reverse=True)
+  failure = failure[:TRENDING_INSTALLS_LIMIT]
+  failure = [(pkg, count, float(count) / total_failure * 100)
+             for pkg, count in failure]
+  trending = {
+      'success': {'packages': success, 'total': total_success},
+      'failure': {'packages': failure, 'total': total_failure},
+  }
+  models.ReportsCache.SetTrendingInstalls(since_hours, trending)
 
 
 def IsTimeDelta(dt1, dt2, seconds=None, minutes=None, hours=None, days=None):

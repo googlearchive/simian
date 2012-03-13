@@ -53,6 +53,7 @@
     <table class="stats-table" id="pkg-table">
     <tr>
       <th>Package</th>
+      <th>Logs</th>
       {% if is_admin or is_support_user %}
         <th style="min-width: 120px;">Files</th>
       {% else %}
@@ -80,6 +81,7 @@
             </span>
           {% endif %}
         </td>
+        <td><a href="/admin/packages/logs?filename={{ pkg.filename }}">logs</a></td>
           {% if is_admin or is_support_user %}
           <td>
             <a href="/admin/package/{{ pkg.filename }}?plist_xml=1"

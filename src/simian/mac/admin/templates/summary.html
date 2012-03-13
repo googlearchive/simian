@@ -14,7 +14,7 @@
 
   <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader"
        title="summary">Summary
-    {% if cached_mtime %}<div class="last-cached"> - Last cached {{ cached_mtime|timesince }} ago.</div>{% endif %}
+    {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
   </div>
   <div id="summary">
     <div id="activeclients" style="float:left; margin: 5px;">
@@ -138,6 +138,49 @@
 
   <script type="text/javascript">simian.renderCharts('summary');</script>
 
+  {% if trending_installs %}
+    {% for hours, sections, cached_mtime in trending_installs %}
+      <div class="zippy_toggle expanded sectionheader" title="trending_installs_{{ hours }}">
+        {{ hours }} Hour Trending Installs<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>
+      </div>
+      <div id="trending_installs_{{ hours }}">
+        <div style="float: left;">
+        {% for section, section_data in sections.items %}
+          <div style="float: left; margin: 5px 20px;">
+          <table class="minimal-table">
+            <tr>
+              <th>Package</th>
+              <th style="text-align: right;">{% ifequal section "success" %}Installs{% else %}Failures{% endifequal %}</th>
+            </tr>
+            {% for package in section_data.packages %}
+              <tr>
+                <td>{{ package.0 }}</td>
+                <td style="text-align: right">
+                  <a href="/admin/installs?pkg={{ package.0 }}{% ifequal section "failure" %}&failures=1{% endifequal %}">{{ package.1 }}</a>
+                </td>
+                <td style="text-align: right;">
+                  <span class="note2">({{ package.2|floatformat:"1"}}%)</span>
+                </td>
+              </tr>
+            {% endfor %}
+             <tr><td>... more ...</td><td>&nbsp;</td></tr>
+             <tr>
+               <td>(all packages)</td>
+               <td style="text-align: right;">
+                 <a href="/admin/installs{% ifequal section "failure" %}?failures=1{% endifequal %}">{{ section_data.total }}</a>
+               </td>
+               <td style="text-align: right;">
+                 <span class="note2">(100%)</span>
+               </td>
+             </tr>
+          </table>
+          </div>
+        {% endfor %}
+        </div>
+      </div><div style="clear: both;"/>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   {% ifnotequal report_type "site" %}
     <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site</div>

@@ -43,7 +43,7 @@ class AdminPanic(admin.AdminHandler):
       modes.append(d)
 
     self.Render(
-        'templates/panic.html', {'modes': modes, 'report_type': 'panic'})
+        'panic.html', {'modes': modes, 'report_type': 'panic'})
 
   def post(self):
     """POST handler."""
@@ -56,7 +56,7 @@ class AdminPanic(admin.AdminHandler):
 
     if not verify:
       self.Render(
-          'templates/panic_set_verify.html',
+          'panic_set_verify.html',
           {'mode': {'name': mode, 'enabled': enabled}, 'report_type': 'panic'})
     else:
       if enabled == 'disable':

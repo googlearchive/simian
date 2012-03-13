@@ -76,4 +76,4 @@ class LockAdmin(admin.AdminHandler):
         locks.append((MANIFEST, manifest))
 
     values = {'report_type': 'lock_admin', 'locks': locks}
-    self.Render('templates/lock_admin.html', values)
+    self.Render('lock_admin.html', values)

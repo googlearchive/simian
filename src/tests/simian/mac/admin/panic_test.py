@@ -53,7 +53,7 @@ class AdminPanicTest(test.RequestHandlerTest):
       modes.append({'name': mode, 'enabled': False})
 
     self.c.Render(
-        'templates/panic.html', {'modes': modes, 'report_type': 'panic'})
+        'panic.html', {'modes': modes, 'report_type': 'panic'})
 
     self.mox.ReplayAll()
     self.c.get()
@@ -72,7 +72,7 @@ class AdminPanicTest(test.RequestHandlerTest):
 
     self.mox.StubOutWithMock(self.c, 'Render')
     self.c.Render(
-        'templates/panic_set_verify.html',
+        'panic_set_verify.html',
         {'mode': {'name': mode, 'enabled': enabled}, 'report_type': 'panic'})
 
     self.mox.ReplayAll()

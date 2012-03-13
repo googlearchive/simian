@@ -115,6 +115,12 @@ indexes:
   - name: mtime
     direction: desc
 
+- kind: InstallLog
+  properties:
+  - name: status
+  - name: mtime
+    direction: desc
+
 - kind: PreflightExitLog
   properties:
   - name: uuid
@@ -144,4 +150,10 @@ indexes:
   properties:
   - name: deprecated
   - name: apple_mtime
-    direction: desc 
+    direction: desc
+
+- kind: AdminPackageLog
+  properties:
+  - name: filename
+  - name: mtime
+    direction: desc

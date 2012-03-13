@@ -27,16 +27,18 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 
 from simian import settings
+from simian.mac.admin import acl_groups
 from simian.mac.admin import applesus
 from simian.mac.admin import broken_clients
 from simian.mac.admin import host
+from simian.mac.admin import ip_blacklist
 from simian.mac.admin import lock_admin
 from simian.mac.admin import manifest_modifications
+from simian.mac.admin import misc
 from simian.mac.admin import panic
 from simian.mac.admin import package_alias
 from simian.mac.admin import packages
 from simian.mac.admin import package
-from simian.mac.admin import misc
 from simian.mac.admin import summary
 from simian.mac.admin import tags
 from simian.mac.admin import uploadpkg
@@ -49,27 +51,31 @@ webapp.template.register_template_library(
 application = webapp.WSGIApplication([
     (r'/admin/?$', summary.Summary),
 
+    (r'/admin/acl_groups/?$', acl_groups.ACLGroups),
+    (r'/admin/acl_groups/([\w\-\_\.\s\%]+)/?$', acl_groups.ACLGroups),
+
     (r'/admin/applesus/?$', applesus.AppleSUSAdmin),
     (r'/admin/applesus/([\w\-]+)/?$', applesus.AppleSUSAdmin),
     (r'/admin/applesus/([\w\-]+)/([\d\w\-]+)$', applesus.AppleSUSAdmin),
 
     (r'/admin/brokenclients/?$', broken_clients.BrokenClients),
 
-    (r'/admin/host/([\w\-\_\.\=\|\%]+)/?$', host.Host),
+    (r'/admin/host/([\w\-\_\.\=\|\%, ]+)/?$', host.Host),
+
+    (r'/admin/ip_blacklist/?$', ip_blacklist.IPBlacklist),
 
     (r'/admin/lock_admin/?$', lock_admin.LockAdmin),
 
     (r'/admin/manifest_modifications/?$',
      manifest_modifications.ManifestModifications),
 
+    (r'/admin/package/?$', package.Package),
+    (r'/admin/package/([\w\-\_\.\s\%]+)/?$', package.Package),
+
     (r'/admin/package_alias/?$', package_alias.PackageAlias),
 
     (r'/admin/packages/?$', packages.Packages),
     (r'/admin/packages/([\w\-]+)/?', packages.Packages),
-
-    (r'/admin/package/?$', package.Package),
-
-    (r'/admin/package/([\w\-\_\.\s\%]+)/?$', package.Package),
 
     (r'/admin/panic/?$', panic.AdminPanic),
 

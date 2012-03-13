@@ -1326,11 +1326,11 @@ class HttpsAuthClient(HttpsClient):
       f.close()
       x = x509.LoadCertificateFromPEM(s)
       issuer = x.GetIssuer()
-      if issuer != auth_settings.REQUIRED_ISSUER:                                                                                                                                  
-        msg = 'Skipping cert %s, unknown issuer' % cert_fname                                                                                                                      
-        logging.debug(msg)                                                                                                                                                         
-        logging.debug(                                                                                                                                                             
-            'Expected: "%s" Received: "%s"',                                                                                                                                       
+      if issuer != auth_settings.REQUIRED_ISSUER:
+        msg = 'Skipping cert %s, unknown issuer' % cert_fname
+        logging.warning(msg)
+        logging.warning(
+            'Expected: "%s" Received: "%s"',
             auth_settings.REQUIRED_ISSUER, issuer)
         raise PuppetSslCertError(msg)
     except IOError, e:

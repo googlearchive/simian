@@ -103,7 +103,7 @@ class BrokenClients(admin.AdminHandler):
     pf_computers.sort(key=lambda x: x.preflight_datetime, reverse=True)
 
     self.Render(
-        'templates/broken_clients.html',
+        'broken_clients.html',
         {'py_computers': py_computers,
          'zero_conn_computers': zero_conn_computers,
          'pf_computers': pf_computers,

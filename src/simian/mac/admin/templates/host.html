@@ -91,17 +91,20 @@
       <th>Last IP Address</th>
     </tr>
     <tr>
-      <td>{{ computer.preflight_datetime }}
-          ({{ computer.preflight_datetime|timesince }})</td>
-      <td>{{ computer.postflight_datetime }}
-          ({{ computer.postflight_datetime|timesince }})</td>
+      <td>{{ computer.preflight_datetime }}<br/>
+          <span class="note2">{{ computer.preflight_datetime|timesince }} ago</span>
+      </td>
+      <td>{{ computer.postflight_datetime }}<br/>
+          <span class="note2">{{ computer.postflight_datetime|timesince }} ago</span>
+      </td>
       <td>{{ computer.runtype }}</td>
       <td>{{ installs|avg_download_speed }}</td>
       <td>{{ computer.connections_on_corp }} /
           {{ computer.connections_off_corp }}
       </td>
-      <td>{{ computer.last_on_corp_preflight_datetime }}
-          ({{ computer.last_on_corp_preflight_datetime|timesince }})</td>
+      <td>{{ computer.last_on_corp_preflight_datetime }}<br/>
+          <span class="note2">{{ computer.last_on_corp_preflight_datetime|timesince }} ago</span>
+      </td>
       {% if is_admin or is_security_user or is_physical_security_user %}
         <td>{{ computer.ip_address }}</td>
       {% else %}
@@ -109,7 +112,7 @@
       {% endif %}
     </tr>
   </table>
-  
+
   <div class="subsubsection">
     <div style="float:left; margin: 5px 20px;">
       <div><h3>Connection Dates</h3></div>
@@ -120,17 +123,17 @@
         {% endfor %}
       </div>
     </div>
-    
+
     <div style="float:left; margin: 5px 20px;">
       <div><h3>Connection Times</h3></div>
       <div class="morebox">
         <a onclick="simian.addClass(this.parentNode, 'maximized');" class="more">more</a>
         {% for cdt in computer.connection_datetimes %}
-          {{ cdt|timesince }} ago<br/>
+          {{ cdt }} <span class="note2">({{ cdt|timesince }} ago)</span><br/>
         {% endfor %}
       </div>
     </div>
-    
+
     <div style="clear: both"></div>
   </div>
 </div>

@@ -4,6 +4,13 @@
 
 {% block page-content %}
 
+{% if filename %}
+  <h2>Package Logs: {{ filename }}</h2>
+  {% if is_admin %}
+    <a href="/admin/package/{{ filename }}">(edit)</a>
+  {% endif %}
+{% endif %}
+
 {% include "results_pagination.html" %}
 
 {% if logs %}
@@ -12,7 +19,12 @@
        <th>Action</th>
        <th>Plist</th>
        <th>Diff</th>
-       <th>Filename</th>
+       {% if not filename %}
+         <th>Filename</th>
+       {% endif %}
+       {% if is_admin %}
+         <th>Edit Package</th>
+       {% endif %}
        <th>Install Types</th>
        <th style="min-width: 60px;">Catalogs</th>
        <th style="min-width: 60px;">Manifests</th>
@@ -22,21 +34,30 @@
     </tr>
     {% for log in logs %}
       <tr>
-        <td>{{ log.action }}</td>
-        <td style="text-align: center;">
-          {% if log.plist %}
-            <a href="/admin/packages/logs?plist={{ log.key.id }}">
-            <img src="/admin/static/file.png" alt="View plist"/></a>
-          {% endif %}
-        </td>
-        <td><a class="zippy_toggle button" style="padding-left:10px;" title="diff_{{ log.key.id }}">View diff</a></td>
         <td>
-          {% if is_admin %}
-            <a href="/admin/package/{{ log.filename }}">{{ log.filename }}</a>
-          {% else %}
-            {{ log.filename }}
-          {% endif %}
+          {{ log.action }}
         </td>
+        {% if log.plist and log.action == "pkginfo" %}
+          <td style="text-align: center;">
+            <a href="/admin/packages/logs?plist={{ log.key.id }}">
+              <img src="/admin/static/file.png" alt="View plist"/></a>
+          </td>
+          <td>
+            <a class="zippy_toggle button" style="padding-left:10px;" title="diff_{{ log.key.id }}">View diff</a>
+          </td>
+        {% else %}
+          <td>&nbsp;</td><td>&nbsp;</td>
+        {% endif %}
+        {% if not filename %}
+          <td>
+            <a href="/admin/packages/logs?filename={{ log.filename }}">{{ log.filename }}</a>
+          </td>
+        {% endif %}
+        {% if is_admin %}
+          <td>
+            <a href="/admin/package/{{ log.filename }}">(edit)</a>
+          </td>
+        {% endif %}
         <td>{{ log.install_types|munki_properties }}</td>
         <td>{{ log.catalogs|tracks_display }}</td>
         <td>{{ log.manifests|tracks_display }}</td>
@@ -44,6 +65,7 @@
         <td>{{ log.mtime }}</td>
         <td>{{ log.mtime|timesince }}</td>
       </tr>
+      {% if log.plist and log.action == "pkginfo" %}
       <tr id="diff_{{ log.key.id }}" class="diffrow">
         <td colspan="2">&nbsp;</td>
         <td colspan="8">
@@ -58,6 +80,7 @@
           </span>
         </td>
       </tr>
+      {% endif %}
     {% endfor %}
   </table>
   <script type="text/javascript">

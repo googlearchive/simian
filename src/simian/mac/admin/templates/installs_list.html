@@ -22,7 +22,8 @@
     {% for install in installs %}
     <tr>
       {% if host_report or pkg == "all" %}
-        <td><a href="/admin/installs?pkg={{ install.package }}&applesus={{ applesus|yesno:"1,0" }}">{{ install.package }}</a></td>
+        <td><a href="/admin/installs?pkg={{ install.package }}{% if install.applesus %}&applesus=1{% endif %}{% if not install.success %}&failures=1{% endif %}"
+            >{{ install.package }}</a></td>
       {% endif %}
       {% if not host_report %}
       <td>

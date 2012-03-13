@@ -162,7 +162,7 @@ class AppleSUSAdmin(admin.AdminHandler):
         'tracks': common.TRACKS,
         'report_type': 'apple_applesus'
     }
-    self.Render('templates/applesus_list.html', data)
+    self.Render('applesus_list.html', data)
 
   def _DisplayProductDescription(self, product):
     product = models.AppleSUSProduct.get_by_key_name(product)
@@ -174,4 +174,4 @@ class AppleSUSAdmin(admin.AdminHandler):
         'logs': self.Paginate(logs, DEFAULT_APPLESUS_LOG_FETCH),
         'report_type': 'apple_logs',
     }
-    self.Render('templates/applesus_log.html', values)
+    self.Render('applesus_log.html', values)

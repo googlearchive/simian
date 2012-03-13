@@ -71,7 +71,7 @@ class Misc(admin.AdminHandler):
       self._DisplayHostManifest(uuid=uuid)
     elif report == 'installs':
       pending = self.request.get('pending') == '1'
-      pkg = self.request.get('pkg')
+      pkg = self.request.get('pkg', 'all')
       if pending:
         self._DisplayHostsPendingPkg(pkg)
       else:
@@ -149,12 +149,12 @@ class Misc(admin.AdminHandler):
       values['applesus_installs'] = installs
       values['report_type'] = (
           failures and 'apple_failures' or 'apple_installs')
-      self.Render('templates/applesus_installs.html', values)
+      self.Render('applesus_installs.html', values)
     else:
       values['installs'] = installs
       values['report_type'] = (
           failures and 'packages_failures' or 'packages_installs')
-      self.Render('templates/installs.html', values)
+      self.Render('installs.html', values)
 
   def _DisplayHostsPendingPkg(self, pkg):
     """Displays a list of hosts where pkg is pending installation."""
@@ -163,7 +163,7 @@ class Misc(admin.AdminHandler):
     computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
     values = {'computers': computers, 'pkg': pkg, 'cached': False,
               'report_type': 'pkgs_to_install'}
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
   def _DisplayInstallProblems(self):
     """Displays all installation problems."""
@@ -171,14 +171,14 @@ class Misc(admin.AdminHandler):
         '-mtime')
     problems = self.Paginate(query, DEFAULT_INSTALL_LOG_FETCH_LIMIT)
     values = {'install_problems': problems, 'report_type': 'packages_problems'}
-    self.Render('templates/install_problems.html', values)
+    self.Render('install_problems.html', values)
 
   def _DisplayPreflightExits(self):
     """Displays all preflight exits."""
     query = models.PreflightExitLog.all().order('-mtime')
     exits = self.Paginate(query, DEFAULT_PREFLIGHT_EXIT_LOG_FETCH_LIMIT)
     values = {'preflight_exits': exits,  'report_type': 'preflight_exits'}
-    self.Render('templates/preflight_exits.html', values)
+    self.Render('preflight_exits.html', values)
 
   def _DisplayLowDiskFree(self):
     """Displays a report of machines with lowest disk space."""
@@ -186,26 +186,26 @@ class Misc(admin.AdminHandler):
     computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
     values = {'computers': computers, 'report_type': 'diskfree',
               'cached': False}
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
   def _DisplayLongestUptime(self):
     """Displays a report of machines with longest uptime."""
     query = models.Computer.AllActive().order('-uptime')
     computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
     values = {'computers': computers, 'report_type': 'uptime', 'cached': False}
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
   def _DisplayLongestOffCorp(self):
     """Displays a report of machines with longest off corp time."""
     query = models.Computer.AllActive().order('last_on_corp_preflight_datetime')
     computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
     values = {'computers': computers, 'report_type': 'offcorp', 'cached': False}
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
   def _DisplayManifest(self, track):
     """Displays Manifests in a template"""
     m = models.Manifest.get_by_key_name(track)
-    self.Render('templates/plist.html',
+    self.Render('plist.html',
                 {'plist_type': 'manifests',
                  'xml': admin.XmlToHtml(m.plist.GetXml()),
                  'title': track + ' manifest',
@@ -238,7 +238,7 @@ class Misc(admin.AdminHandler):
 
     # TODO(user): Since the above is a list now, memcache here.
 
-    self.Render('templates/msu_log_summary.html',
+    self.Render('msu_log_summary.html',
         {'summaries': summaries,  'report_type': 'msu_gui_logs'})
 
   def _DisplayMsuLogEvent(self):
@@ -248,7 +248,7 @@ class Misc(admin.AdminHandler):
         'event =', event_name).order('-mtime')
     msu_events = self.Paginate(query, DEFAULT_MSU_LOG_EVENT_LIMIT)
     values = {'msu_event_name': event_name, 'msu_events': msu_events}
-    self.Render('templates/msu_log_summary.html', values)
+    self.Render('msu_log_summary.html', values)
 
   def _DisplayHostManifest(self, uuid):
     """Display live manifest view for a host.
@@ -268,7 +268,7 @@ class Misc(admin.AdminHandler):
       self.response.out.write(manifest_str)
     else:
       manifest_html = admin.XmlToHtml(manifest_str)
-      self.Render('templates/plist.html',
+      self.Render('plist.html',
           {'plist_type': 'host_manifest',
            'title': 'Host Manifest: %s' % uuid,
            'xml': manifest_html,
@@ -279,12 +279,12 @@ class Misc(admin.AdminHandler):
     """Displays a list of hosts with user_settings configured."""
     query = models.Computer.AllActive().filter('user_settings_exist =', True)
     computers = self.Paginate(query, DEFAULT_USER_SETTINGS_FETCH_LIMIT)
-    self.Render('templates/user_settings.html',
+    self.Render('user_settings.html',
         {'computers': computers, 'report_type': 'usersettings_knobs'})
 
   def _DisplayLostStolen(self):
     """Displays all models.ComputerLostStolen entities."""
     query = models.ComputerLostStolen.all().order('-mtime')
     computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
-    self.Render('templates/lost_stolen.html',
+    self.Render('lost_stolen.html',
         {'computers': computers, 'report_type': 'loststolen'})

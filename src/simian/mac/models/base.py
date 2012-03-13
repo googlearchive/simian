@@ -618,8 +618,9 @@ class AdminPackageLog(AdminLogBase, BasePlistModel):
 
   def _GetPlistDiff(self):
     """Returns a generator of diff lines between original and new plist."""
+    new_plist = self.plist.GetXml().splitlines()
     if not self.original_plist:
-      return
+      return [{'type': 'diff_add', 'line': line} for line in new_plist]
 
     original_plist = self.original_plist.splitlines()
     new_plist = self.plist.GetXml().splitlines()
@@ -735,6 +736,7 @@ class ReportsCache(KeyValueCache):
 
   _SUMMARY_KEY = 'summary'
   _INSTALL_COUNTS_KEY = 'install_counts'
+  _TRENDING_INSTALLS_KEY = 'trending_installs_%d_hours'
   _PENDING_COUNTS_KEY = 'pending_counts'
   _MSU_USER_SUMMARY_KEY = 'msu_user_summary'
 
@@ -744,13 +746,29 @@ class ReportsCache(KeyValueCache):
   # TODO(user): migrate reports cache to properties.SerializedProperty()
 
   @classmethod
-  def GetStatsSummary(cls):
-    """Returns tuples (stats summary dictionary, datetime) from Datastore."""
-    entity = cls.get_by_key_name(cls._SUMMARY_KEY)
+  def _GetCacheItem(cls, key):
+    """Returns the deserialized value of a serialized cache."""
+    entity = cls.MemcacheWrappedGet(key)
     if entity and entity.blob_value:
       return util.Deserialize(entity.blob_value), entity.mtime
     else:
       return {}, None
+
+  @classmethod
+  def _SetCacheItem(cls, key, value):
+    """Serializes a value and caches it to an entity with a given key.
+
+    Args:
+      key: str, key_name for the ReportsCache entity.
+      value: any, a value of any kind to serialize and cache.
+    """
+    value = util.Serialize(value)
+    cls.MemcacheWrappedSet(key, 'blob_value', value)
+
+  @classmethod
+  def GetStatsSummary(cls):
+    """Returns tuples (stats summary dictionary, datetime) from Datastore."""
+    return cls._GetCacheItem(cls._SUMMARY_KEY)
 
   @classmethod
   def SetStatsSummary(cls, d):
@@ -759,20 +777,12 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    entity = cls.get_by_key_name(cls._SUMMARY_KEY)
-    if not entity:
-      entity = cls(key_name=cls._SUMMARY_KEY)
-    entity.blob_value = util.Serialize(d)
-    entity.put()
+    return cls._SetCacheItem(cls._SUMMARY_KEY, d)
 
   @classmethod
   def GetInstallCounts(cls):
     """Returns tuple (install counts dict, datetime) from Datastore."""
-    entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
-    if entity and entity.blob_value:
-      return util.Deserialize(entity.blob_value), entity.mtime
-    else:
-      return {}, None
+    return cls._GetCacheItem(cls._INSTALL_COUNTS_KEY)
 
   @classmethod
   def SetInstallCounts(cls, d):
@@ -781,20 +791,22 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    entity = cls.get_by_key_name(cls._INSTALL_COUNTS_KEY)
-    if not entity:
-      entity = cls(key_name=cls._INSTALL_COUNTS_KEY)
-    entity.blob_value = util.Serialize(d)
-    entity.put()
+    return cls._SetCacheItem(cls._INSTALL_COUNTS_KEY, d)
+
+  @classmethod
+  def GetTrendingInstalls(cls, since_hours):
+    key = cls._TRENDING_INSTALLS_KEY % since_hours
+    return cls._GetCacheItem(key)
+
+  @classmethod
+  def SetTrendingInstalls(cls, since_hours, d):
+    key = cls._TRENDING_INSTALLS_KEY % since_hours
+    return cls._SetCacheItem(key, d)
 
   @classmethod
   def GetPendingCounts(cls):
     """Returns tuple (pending counts dict, datetime) from Datastore."""
-    entity = cls.get_by_key_name(cls._PENDING_COUNTS_KEY)
-    if entity and entity.blob_value:
-      return util.Deserialize(entity.blob_value), entity.mtime
-    else:
-      return {}, None
+    return cls._GetCacheItem(cls._PENDING_COUNTS_KEY)
 
   @classmethod
   def SetPendingCounts(cls, d):
@@ -803,11 +815,15 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    entity = cls.get_by_key_name(cls._PENDING_COUNTS_KEY)
-    if not entity:
-      entity = cls(key_name=cls._PENDING_COUNTS_KEY)
-    entity.blob_value = util.Serialize(d)
-    entity.put()
+    return cls._SetCacheItem(cls._PENDING_COUNTS_KEY, d)
+
+  @classmethod
+  def _GetMsuUserSummaryKey(cls, since, tmp):
+    if since is not None:
+      since = '_since_%s_' % since
+    else:
+      since = ''
+    return '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
 
   @classmethod
   def SetMsuUserSummary(cls, d, since=None, tmp=False):
@@ -819,16 +835,8 @@ class ReportsCache(KeyValueCache):
       tmp: bool, default False, retrieve tmp summary (in process of
         calculation)
     """
-    if since is not None:
-      since = '_since_%s_' % since
-    else:
-      since = ''
-    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
-    entity = cls.get_by_key_name(key)
-    if not entity:
-      entity = cls(key_name=key)
-    entity.blob_value = util.Serialize(d)
-    entity.put()
+    key = cls._GetMsuUserSummaryKey(since, tmp)
+    return cls._SetCacheItem(key, d)
 
   @classmethod
   def GetMsuUserSummary(cls, since, tmp=False):
@@ -839,16 +847,8 @@ class ReportsCache(KeyValueCache):
     Returns:
       (dict of summary data, datetime mtime) or None if no summary
     """
-    if since is not None:
-      since = '_since_%s_' % since
-    else:
-      since = ''
-    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
-    entity = cls.get_by_key_name(key)
-    if entity and entity.blob_value:
-      return util.Deserialize(entity.blob_value), entity.mtime
-    else:
-      return None
+    key = cls._GetMsuUserSummaryKey(since, tmp)
+    return cls._GetCacheItem(key)
 
   @classmethod
   def DeleteMsuUserSummary(cls, since, tmp=False):
@@ -857,11 +857,7 @@ class ReportsCache(KeyValueCache):
     Args:
       since: str, summary since date
     """
-    if since is not None:
-      since = '_since_%s_' % since
-    else:
-      since = ''
-    key = '%s%s%s' % (cls._MSU_USER_SUMMARY_KEY, since, tmp * '_tmp')
+    key = cls._GetMsuUserSummaryKey(since, tmp)
     entity = cls.get_by_key_name(key)
     if not entity:
       return

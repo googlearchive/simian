@@ -60,10 +60,18 @@ class Summary(admin.AdminHandler):
   def _DisplayCachedSummary(self):
     """Displays stats summary from cached dict."""
     summary, mtime = models.ReportsCache.GetStatsSummary()
+
+    trend_hour, trend_hour_mtime = models.ReportsCache.GetTrendingInstalls(1)
+    trend_day, trend_day_mtime = models.ReportsCache.GetTrendingInstalls(24)
+    trending_installs = [
+      (1, trend_hour, trend_hour_mtime),
+      (24, trend_day, trend_day_mtime),
+    ]
     values = {
         'summary': summary, 'cached_mtime': mtime, 'report_type': 'summary',
+        'trending_installs': trending_installs,
     }
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
   def _DisplaySummary(self, report_type, report_filter, include_inactive):
     """Displays stats summary for a given track or site.
@@ -117,7 +125,7 @@ class Summary(admin.AdminHandler):
         'search_type': report_type, 'search_term': report_filter,
         'owner_lookup_url': settings.OWNER_LOOKUP_URL,
     }
-    self.Render('templates/summary.html', values)
+    self.Render('summary.html', values)
 
 
 def GetComputerSummary(computers=None, query=None):

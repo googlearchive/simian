@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}ACL Groups{% endblock %}
+
+{% block page-content %}
+  <div><h2>ACL Groups</h2></div>
+  {% for g in groups %}
+    <div style="float: left; margin: 15px;">
+      <h3>{{ g.title }}</h3> <a href="/admin/acl_groups/{{ g.name }}">- Edit</a>
+      <ul style="list-style-type: none;padding: 0 5px;">
+        {% for m in g.members %}<li style="margin-bottom: 5px;">{{ m }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+{% endblock %}

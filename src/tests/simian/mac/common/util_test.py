@@ -265,6 +265,12 @@ class UtilModuleTest(mox.MoxTestBase):
     self.assertTrue(util.USE_JSON)
     self.assertFalse(util.USE_PICKLE)
 
+  def testUrlUnquote(self):
+    """Test UrlUnquote()."""
+    self.assertEqual(util.UrlUnquote('foo'), 'foo')
+    self.assertEqual(util.UrlUnquote('foo%2F'), 'foo/')
+    self.assertEqual(util.UrlUnquote('foo<ohcrap>'), 'foo<ohcrap>')
+
 
 def main(unused_argv):
   basetest.main()

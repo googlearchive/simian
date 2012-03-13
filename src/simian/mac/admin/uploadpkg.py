@@ -99,7 +99,7 @@ class UploadPackage(
           'filename': filename,
           'file_size_kbytes': p.plist['installer_item_size'],
       }
-      self.Render('templates/upload_pkg_form.html', values)
+      self.Render('upload_pkg_form.html', values)
 
   def post(self):
     """POST Handler.

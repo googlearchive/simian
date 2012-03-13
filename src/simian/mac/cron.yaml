@@ -7,7 +7,7 @@ cron:
   url: /cron/maintenance/mark_computers_inactive
   schedule: every 9 hours
 
-- description: Update Average Install Durations 
+- description: Update Average Install Durations
   url: /cron/maintenance/update_avg_install_durations
   schedule: every 1 hours
 
@@ -33,6 +33,14 @@ cron:
 
 - description: Pending Counts Cache
   url: /cron/reports_cache/pendingcounts
+  schedule: every 15 minutes
+
+- description: Trending Installs - 24 hours
+  url: /cron/reports_cache/trendinginstalls/24
+  schedule: every 2 hours
+
+- description: Trending Installs - 1 hour
+  url: /cron/reports_cache/trendinginstalls/1
   schedule: every 15 minutes
 
 - description: MSU User Logs Summary - all

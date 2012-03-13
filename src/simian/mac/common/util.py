@@ -24,6 +24,7 @@ import datetime
 import cPickle as pickle
 import re
 import time
+import urllib
 
 
 USE_JSON = False
@@ -241,3 +242,8 @@ def Deserialize(
       raise DeserializeError('Serialization format unknown')
   except (pickle.UnpicklingError, ValueError), e:
     raise DeserializeError(e)
+
+
+def UrlUnquote(s):
+  """Return unquoted version of a url string."""
+  return urllib.unquote(s)

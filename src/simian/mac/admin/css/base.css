@@ -12,6 +12,7 @@ body {
 a {
   color: #1155CC;
   text-decoration: none;
+  cursor: pointer;
 }
 
 header {
@@ -920,7 +921,7 @@ li {
 
 .count {
   color: #666;
-  font-size: .9em;
+  font-size: 0.9em;
 }
 
 .success {
@@ -931,6 +932,10 @@ li {
 .note {
   font-size: 0.8em;
   color: #999;
+}
+.note2 {
+  color: #666;
+  font-size: 0.9em;
 }
 
 /** Tables **/
@@ -1047,6 +1052,10 @@ tr.multi-header th {
   margin: .75em 0 0 0;
   font-weight: normal;
   color: rgba(0, 0, 0, .5);
+}
+.last-cached {
+  font-size: 0.9em;
+  margin-left: 10px;
 }
 .clients-by-site {
   margin: 0;

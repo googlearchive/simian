@@ -38,6 +38,8 @@ class Host(admin.AdminHandler):
 
   def get(self, uuid=None):
     """GET handler."""
+    if uuid:
+      uuid = util.UrlUnquote(uuid)
     auth.DoUserAuth()
     self._DisplayHost(uuid=uuid)
 
@@ -140,4 +142,4 @@ class Host(admin.AdminHandler):
         'is_security_user': auth.IsSecurityUser(),
         'is_physical_security_user': auth.IsPhysicalSecurityUser(),
     }
-    self.Render('templates/host.html', values)
+    self.Render('host.html', values)
