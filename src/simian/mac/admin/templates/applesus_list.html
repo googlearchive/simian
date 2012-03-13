@@ -8,7 +8,8 @@
   {% if is_admin %}
     <form method="POST">
     <fieldset>
-    <legend>Regenerate Catalogs</legend>
+      <legend>Regenerate Catalogs</legend>
+      <input type="hidden" name="regenerate-catalogs" value="1"/>
       {% for track in tracks reversed %}
         <input type="checkbox" class="tags" name="tracks" value="{{ track }}" id="track_{{ track }}"/>
         <label for="track_{{ track }}">{{ track }}</label>
