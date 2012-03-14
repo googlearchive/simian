@@ -122,7 +122,7 @@ contents.tar.gz: client_config
 	# add simianfacter
 	cp ./src/simian/util/simianfacter tmpcontents/usr/local/bin
 	# build targz
-	cd tmpcontents && tar -cf ../contents.tar .
+	cd tmpcontents && tar -c --exclude .svn -f ../contents.tar .
 	gzip contents.tar
 	
 ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz
