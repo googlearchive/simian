@@ -70,12 +70,15 @@ class Package(admin.AdminHandler):
            'raw_xml_link': "/pkgsinfo/%s" % filename,
            })
     else:
+      manifests_and_catalogs_unlocked = (
+          p.blob_info or p.plist.get('PackageCompleteURL'))
       data = {
           'pkg': p, 'report_type': 'package', 'tracks': common.TRACKS,
           'install_types': common.INSTALL_TYPES,
           'manifest_mod_groups': common.MANIFEST_MOD_GROUPS,
           'pkg_safe_to_modify': p.IsSafeToModify(),
-          'editxml': self.request.get('editxml')}
+          'editxml': self.request.get('editxml'),
+          'manifests_and_catalogs_unlocked': manifests_and_catalogs_unlocked}
 
       self.Render('package.html', data)
 

@@ -200,7 +200,7 @@
 
   <div class="formcolumn">
     <label>Catalogs</label>
-    {% if not pkg.blob_info %}
+    {% if not manifests_and_catalogs_unlocked %}
     <div style="position:relative;z-index:1100">
       <div class="infopanel" style="position:absolute; top:0; right:0; margin:0; padding: 4px 6px; width: 80px;">
         Locked until a package file is uploaded.
@@ -211,7 +211,7 @@
     {% for track in tracks reversed %}
       <input type="checkbox" name="catalogs" class="tags formfield" value="{{ track }}" id="catalog_{{ track }}"
         {% if track in pkg.catalogs %} checked{% endif %}
-        {% if not pkg.blob_info %} disabled{% endif %}
+        {% if not manifests_and_catalogs_unlocked %} disabled{% endif %}
         onchange="alsoCheck(this, 'manifest_{{ track }}', false)"
       />
       <label for="catalog_{{ track }}">{{ track }}</label>
@@ -222,7 +222,7 @@
     {% for track in tracks reversed %}
       <input type="checkbox" name="manifests" class="tags formfield" value="{{ track }}" id="manifest_{{ track }}"
         {% if track in pkg.manifests %} checked{% endif %}
-        {% if not pkg.blob_info %} disabled{% endif %}
+        {% if not manifests_and_catalogs_unlocked %} disabled{% endif %}
         onchange="alsoCheck(this, 'catalog_{{ track }}', true)"
       />
       <label for="manifest_{{ track }}">{{ track }}</label>
