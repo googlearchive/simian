@@ -635,15 +635,16 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
       (('uuid', client_id['uuid']),))
 
   tag_mods = []
-  computer_key = models.db.Key.from_path('Computer', client_id['uuid'])
-  computer_tags = models.Tag.GetAllTagNamesForKey(computer_key)
-  if computer_tags:
-    # NOTE(user): if we feel most computers will have tags, it might make sense
-    #             to regularly fetch and cache all mods.
-    for tag in computer_tags:
-      t = (('tag_key_name', tag),)
-      tag_mods.extend(
-          models.TagManifestModification.MemcacheWrappedGetAllFilter(t))
+  if client_id['uuid']:
+    computer_key = models.db.Key.from_path('Computer', client_id['uuid'])
+    computer_tags = models.Tag.GetAllTagNamesForKey(computer_key)
+    if computer_tags:
+      # NOTE(user): if we feel most computers will have tags, it might make sense
+      #             to regularly fetch and cache all mods.
+      for tag in computer_tags:
+        t = (('tag_key_name', tag),)
+        tag_mods.extend(
+            models.TagManifestModification.MemcacheWrappedGetAllFilter(t))
 
   def __ApplyModifications(manifest, mod, plist):
     """Applies a manifest modification if the manifest matches mod manifest.
