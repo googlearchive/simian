@@ -37,17 +37,24 @@
 
   <div class="sectionheader">Apple Update List</div>
 
-  {% if is_admin %}
-    <p>
-      Note: if other admins are changing tracks of below products, select box
-      state may be inaccurate until you refresh the page.
-    </p>
-  {% endif %}
+  <div class="infopanel">
+    Unless "Manual Override" is enabled, Apple Updates will auto-promote from unstable to testing after 4 days (excluding weekends) and from testing to stable on the next Wednesday that is 7+ days past the testing promotion date.
+    {% if is_admin %}
+      <p>
+        Note: if other admins are changing tracks of below products, select box
+        state may be inaccurate until you refresh the page.
+      </p>
+    {% endif %}
+  </div>
 
   <table class="stats-table">
     <tr class="multi-header">
-       <th>Name</th><th>Version</th><th>Product ID</th><th>Apple Release</th>
-       <th>Testing Auto Promote Date</th><th>Stable Auto Promote Date</th>
+       <th>Name</th>
+       <th>Version</th>
+       <th>Product ID</th>
+       <th>Apple Release</th>
+       <th>Testing Date</th>
+       <th>Stable Date</th>
        <th>Manual Override</th>
        <th>Tracks</th>
     </tr>
