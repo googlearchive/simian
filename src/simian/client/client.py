@@ -49,9 +49,9 @@ except ImportError:
 
 from google.appengine.tools import appengine_rpc
 
+from simian import auth
 from simian import settings
 from simian.auth import client as auth_client
-from simian.auth import settings as auth_settings
 from simian.auth import x509
 
 warnings.filterwarnings(
@@ -66,12 +66,11 @@ else:
   import os as _stdio  # pylint: disable-msg=C6204,W0404
 
 
-SERVER_HOSTNAME_REGEX = settings.SERVER_HOSTNAME_REGEX
 SERVER_HOSTNAME = settings.SERVER_HOSTNAME
 SERVER_PORT = settings.SERVER_PORT
 AUTH_DOMAIN = settings.AUTH_DOMAIN
 FACTER_CMD = ['/usr/local/bin/simianfacter']
-CLIENT_SSL_PATH = auth_settings.CLIENT_SSL_PATH
+CLIENT_SSL_PATH = settings.CLIENT_SSL_PATH
 SEEK_SET = _stdio.SEEK_SET
 SEEK_CUR = _stdio.SEEK_CUR
 SEEK_END = _stdio.SEEK_END
@@ -79,6 +78,48 @@ DEBUG = False
 if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
 URL_UPLOADPKG = '/uploadpkg'
+
+# SERVER_CERT_VALID_SUBJECTS
+#
+# The following list of subjects is validated against each cert subject in
+# the chain during a Simian client SSL connection startup and certificate
+# validation.
+#
+# If any connection cert subject does not match one of the following, an
+# error WILL be raised.
+#
+# If any subject listed below is not present in any of the connection cert
+# subjects, an error WILL NOT be raised.  This is a matching list, not a
+# requirement list.
+#
+# However, if NO cert subject listed below is matched during the connection,
+# an error WILL be raised.
+
+if settings.DOMAIN == 'appspot.com':
+  CERT_DOMAIN = '*.appspot.com'
+else:
+  CERT_DOMAIN = 'sandbox.google.com'
+
+SERVER_CERT_VALID_SUBJECTS = [
+    '/C=US/O=Equifax/OU=Equifax Secure Certificate Authority',
+    '/C=US/O=Google Inc/CN=Google Internet Authority',
+    '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN,
+]
+
+# SERVER_CERT_REQUIRE_SUBJECTS
+#
+# The following list of subjects is validated against the list of all
+# matched cert subjects after the SSL connection has started.  Each of the
+# following subjects must also appear in SERVER_CERT_VALID_SUBJECTS for them
+# to have been initially matched.
+#
+# If one of the following subjects was not matched, an error WILL be raised
+# which will take down the connection.
+
+SERVER_CERT_REQUIRE_SUBJECTS = [
+    '/C=US/O=Google Inc/CN=Google Internet Authority',
+    '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN,
+]
 
 
 class Error(Exception):
@@ -557,59 +598,6 @@ class HttpsClient(object):
     """
     self._ca_cert_chain = certs
 
-  def _EnableRFC2818Workaround(self):
-    """Enable non-RFC2818 behavior to be less strict about DNS cert checks.
-
-    Per RFC2818 a * in the cert DNS name only wildcards one DNS subdomain
-    level, but this breaks matching versioned AppEngine domains, e.g.
-        X.latest.APPID.example.com should match *.example.com
-    """
-    if hasattr(SSL.Checker.Checker, '_orig_match'):
-      return
-
-    logging.debug('EnableRFC2818Workaround(): overriding Checker._match')
-
-    def _replacement_match(x, host, cert_host):
-      """Replacement DNS match function to be less RFC compliant.
-
-      Args:
-        x: instance of SSL.Checker.Checker
-        host: str, hostname to look at, e.g. "X.latest.APPID.example.com"
-        cert_host: str, domain to match against, e.g.
-            "exact.example.com" or "*.example.com"
-      Returns:
-        True or False
-      """
-      if SSL.Checker.Checker._orig_match(x, host, cert_host):
-        return True
-
-      cert_host = cert_host.replace('.', '\\.')
-      cert_host = cert_host.replace('*', '.*')
-
-      if re.search('^%s$' % cert_host, host, re.IGNORECASE):
-        logging.debug(
-            ('EnableRFC2818Workaround(): Matched positive %s against %s when '
-             'default would not have'),
-            host, cert_host)
-        return True
-      return False
-
-    SSL.Checker.Checker._orig_match = SSL.Checker.Checker._match
-    SSL.Checker.Checker._match = _replacement_match
-    logging.debug('EnableRFC2818Workaround(): enabled')
-
-  def _DisableRFC2818Workaround(self):
-    """Disable non-RFC2818 behavior to be less strict about DNS cert checks.
-
-    See _EnableRFC2818Workaround() for full explanation.
-    """
-    if not hasattr(SSL.Checker.Checker, '_orig_match'):
-      return
-
-    SSL.Checker.Checker._match = SSL.Checker.Checker._orig_match
-    del SSL.Checker.Checker._orig_match
-    logging.debug('DisableRFC2818Workaround(): disabled')
-
   def _LoadHost(self, hostname, port=None, proxy=None):
     """Load hostname and port to connect to.
 
@@ -674,11 +662,6 @@ class HttpsClient(object):
       self.proxy_port = int(self.proxy_port)
       logging.debug('LoadHost(): proxy host = %s, proxy port = %s',
                     self.proxy_hostname, self.proxy_port)
-
-    if SERVER_HOSTNAME_REGEX.search(hostname):
-      self._EnableRFC2818Workaround()
-    else:
-      self._DisableRFC2818Workaround()
 
   def _AdjustHeaders(self, headers):
     """Adjust headers before a request.
@@ -1029,8 +1012,8 @@ class HttpsAuthClient(HttpsClient):
   def _LoadCertSubjectLists(self):
     """Load a predefined lists of cert subjects."""
     logging.debug('_LoadCertSubjectLists()')
-    self._cert_valid_subjects = auth_settings.SERVER_CERT_VALID_SUBJECTS
-    self._cert_require_subjects = auth_settings.SERVER_CERT_REQUIRE_SUBJECTS
+    self._cert_valid_subjects = SERVER_CERT_VALID_SUBJECTS
+    self._cert_require_subjects = SERVER_CERT_REQUIRE_SUBJECTS
 
   def _PlatformSetup(self):
     """Platform specific instance setup."""
@@ -1045,7 +1028,10 @@ class HttpsAuthClient(HttpsClient):
     Returns:
       str, all x509 root ca certs, or '' if none can be found
     """
-    contents = auth_settings.ROOT_CA_CERT_CHAIN_PEM
+    try:
+      contents = settings.ROOT_CA_CERT_CHAIN_PEM
+    except AttributeError:
+      contents = None  # ROOT_CA_CERT_CHAIN is optional
     if contents:
       logging.debug('Got Root CA Cert Chain: %s', contents)
       return contents
@@ -1326,12 +1312,11 @@ class HttpsAuthClient(HttpsClient):
       f.close()
       x = x509.LoadCertificateFromPEM(s)
       issuer = x.GetIssuer()
-      if issuer != auth_settings.REQUIRED_ISSUER:
+      if issuer != settings.REQUIRED_ISSUER:
         msg = 'Skipping cert %s, unknown issuer' % cert_fname
         logging.warning(msg)
         logging.warning(
-            'Expected: "%s" Received: "%s"',
-            auth_settings.REQUIRED_ISSUER, issuer)
+            'Expected: "%s" Received: "%s"', settings.REQUIRED_ISSUER, issuer)
         raise PuppetSslCertError(msg)
     except IOError, e:
       logging.debug('Skipped cert %s, IO Error %s', cert_fname, str(e))
@@ -1491,7 +1476,7 @@ class HttpsAuthClient(HttpsClient):
 
     tokens = tokens.split(',')  # split multiple cookies
     for token in tokens:
-      if token.startswith(auth_settings.AUTH_TOKEN_COOKIE):
+      if token.startswith(auth.AUTH_TOKEN_COOKIE):
         self._cookie_token = token
         logging.debug('Found cookie token: %s', token)
         break
@@ -1989,7 +1974,7 @@ class SimianAuthClient(SimianClient):
     Args:
       token: str, token
     """
-    self._cookie_token = str('%s=%s' % (auth_settings.AUTH_TOKEN_COOKIE, token))
+    self._cookie_token = str('%s=%s' % (auth.AUTH_TOKEN_COOKIE, token))
 
   def LogoutAuthToken(self):
     """Given a token, make logout request to end that token.

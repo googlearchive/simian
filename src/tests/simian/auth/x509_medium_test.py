@@ -41,6 +41,88 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
+  def testX509WithSloppyInput(self):
+    """Test LoadCertificateFromPEM with various forms of sloppy input."""
+
+    # This cert is identical to testX509WithSelfSignedCertificate data.
+    pem = """
+-----BEGIN CERTIFICATE-----
+MIICDTCCAXagAwIBAgICMDkwDQYJKoZIhvcNAQEFBQAwFDESMBAGA1UEAxMJVGVz
+dENlcnQxMB4XDTExMDkwNjE5NTMyNVoXDTIxMDkwMzE5NTMyNVowFDESMBAGA1UE
+AxMJVGVzdENlcnQxMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCa7S9PpvYh
+Utkw9Wu4pnV4B/kD0BaGU3irDZWhIwVEmmFkcF2GtPhSvy12Jthj1M45ME8wpyzW
+svXcUMhYac12WsgFXEjqjeWhztlUZVeSUAZQW3MierrDhAR/LAeWyBGYUf6CGan6
+O44OCELGJSTEg44/f1Ivj8aPYV7BuSlHawIDAQABo24wbDAdBgNVHQ4EFgQUMhwL
+eP1SzD8YCkUFvX+3kC/2iYEwPQYDVR0jBDYwNIAUMhwLeP1SzD8YCkUFvX+3kC/2
+iYGhGKQWMBQxEjAQBgNVBAMTCVRlc3RDZXJ0MYICMDkwDAYDVR0TBAUwAwEB/zAN
+BgkqhkiG9w0BAQUFAAOBgQAsMvV0CygBEY2jkTnD/rJ4JbN+yAbpHt17FUi1k972
+ww4F3igrInfF6pgk+x866HWQvrZvAXJPdMkG6V0GIaORmNaFVyAHu9bAbDTCYMri
+hIYnz+CPRvK8o5NWjeGSDKZ/z5PV8j1jaKcy2S0N5pm3izDQayQdc4chRfInqkzN
+Xw==
+-----END CERTIFICATE-----"""
+
+    # Missing end newline
+    s = pem
+    x = x509.LoadCertificateFromPEM(s)
+
+    # Well formed input
+    s = '%s\n' % pem
+    x = x509.LoadCertificateFromPEM(s)
+
+    # Extra newlines and spaces
+    s = '\n  \n%s \n\n' % pem
+    x = x509.LoadCertificateFromPEM(s)
+
+  def testX509WithSelfSignedCertificate(self):
+    """Use a self-generated cert and load it.
+
+    The cert was generated as follows:
+       openssl genrsa 1024 > host.key
+       openssl req -new -x509 -subj /CN=TestCert1 -nodes -sha1 \
+         -days 365 -key host.key -set_serial 12345 > host.cert
+    """
+    s = """
+-----BEGIN CERTIFICATE-----
+MIICDTCCAXagAwIBAgICMDkwDQYJKoZIhvcNAQEFBQAwFDESMBAGA1UEAxMJVGVz
+dENlcnQxMB4XDTExMDkwNjE5NTMyNVoXDTIxMDkwMzE5NTMyNVowFDESMBAGA1UE
+AxMJVGVzdENlcnQxMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCa7S9PpvYh
+Utkw9Wu4pnV4B/kD0BaGU3irDZWhIwVEmmFkcF2GtPhSvy12Jthj1M45ME8wpyzW
+svXcUMhYac12WsgFXEjqjeWhztlUZVeSUAZQW3MierrDhAR/LAeWyBGYUf6CGan6
+O44OCELGJSTEg44/f1Ivj8aPYV7BuSlHawIDAQABo24wbDAdBgNVHQ4EFgQUMhwL
+eP1SzD8YCkUFvX+3kC/2iYEwPQYDVR0jBDYwNIAUMhwLeP1SzD8YCkUFvX+3kC/2
+iYGhGKQWMBQxEjAQBgNVBAMTCVRlc3RDZXJ0MYICMDkwDAYDVR0TBAUwAwEB/zAN
+BgkqhkiG9w0BAQUFAAOBgQAsMvV0CygBEY2jkTnD/rJ4JbN+yAbpHt17FUi1k972
+ww4F3igrInfF6pgk+x866HWQvrZvAXJPdMkG6V0GIaORmNaFVyAHu9bAbDTCYMri
+hIYnz+CPRvK8o5NWjeGSDKZ/z5PV8j1jaKcy2S0N5pm3izDQayQdc4chRfInqkzN
+Xw==
+-----END CERTIFICATE-----
+"""
+    x = x509.LoadCertificateFromPEM(s)
+    x.CheckAll()
+    self.assertEqual(12345, x.GetSerialNumber())
+    self.assertEqual('CN=TestCert1', x.GetIssuer())
+    self.assertEqual('CN=TestCert1', x.GetSubject())
+    # note: the default when creating a x509 cert with openssl(1) is True
+    self.assertTrue(x.GetMayActAsCA())
+    self.assertEqual(x.GetKeyUsage(), None)
+    self.assertEqual(
+        _b64(x.GetFieldsData()),
+        ('MIIBdqADAgECAgIwOTANBgkqhkiG9w0BAQUFADAUMRIwEAYDVQQDEwlUZXN0Q2Vyd'
+         'DEwHhcNMTEwOTA2MTk1MzI1WhcNMjEwOTAzMTk1MzI1WjAUMRIwEAYDVQQDEwlUZX'
+         'N0Q2VydDEwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAJrtL0+m9iFS2TD1a7i'
+         'mdXgH+QPQFoZTeKsNlaEjBUSaYWRwXYa0+FK/LXYm2GPUzjkwTzCnLNay9dxQyFhp'
+         'zXZayAVcSOqN5aHO2VRlV5JQBlBbcyJ6usOEBH8sB5bIEZhR/oIZqfo7jg4IQsYlJ'
+         'MSDjj9/Ui+Pxo9hXsG5KUdrAgMBAAGjbjBsMB0GA1UdDgQWBBQyHAt4/VLMPxgKRQ'
+         'W9f7eQL/aJgTA9BgNVHSMENjA0gBQyHAt4/VLMPxgKRQW9f7eQL/aJgaEYpBYwFDE'
+         'SMBAGA1UEAxMJVGVzdENlcnQxggIwOTAMBgNVHRMEBTADAQH/')
+         )
+    self.assertEqual(
+        _b64(x.GetSignatureData()),
+        ('LDL1dAsoARGNo5E5w/6yeCWzfsgG6R7dexVItZPe9sMOBd4oKyJ3xeqYJPsfOuh1k'
+         'L62bwFyT3TJBuldBiGjkZjWhVcgB7vWwGw0wmDK4oSGJ8/gj0byvKOTVo3hkgymf8'
+         '+T1fI9Y2inMtktDeaZt4sw0GskHXOHIUXyJ6pMzV8=')
+        )
+
 
   def testLoadCertificateFromPEMWhenGarbageInput(self):
     """Test LoadCertificateFromPEM() with garbage input."""

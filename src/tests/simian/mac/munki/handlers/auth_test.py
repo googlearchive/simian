@@ -39,10 +39,8 @@ class AuthModuleTest(test.RequestHandlerTest):
     """Tests GetAuth1Instance()."""
     auth_one = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(auth.gaeserver, 'AuthSimianServer')
-    self.mox.StubOutWithMock(auth.gaeserver, 'GetSimianPrivateKey')
     auth.gaeserver.AuthSimianServer().AndReturn(auth_one)
-    auth.gaeserver.GetSimianPrivateKey().AndReturn('key')
-    auth_one.LoadSelfKey('key')
+    auth_one.LoadSelfKey(auth.settings.SERVER_PRIVATE_KEY_PEM)
     self.mox.ReplayAll()
     self.assertEqual(auth_one, self.c.GetAuth1Instance())
     self.mox.VerifyAll()
@@ -51,10 +49,9 @@ class AuthModuleTest(test.RequestHandlerTest):
     """Tests GetAuth1Instance() failure."""
     auth_one = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(auth.gaeserver, 'AuthSimianServer')
-    self.mox.StubOutWithMock(auth.gaeserver, 'GetSimianPrivateKey')
     auth.gaeserver.AuthSimianServer().AndReturn(auth_one)
-    auth.gaeserver.GetSimianPrivateKey().AndRaise(
-        auth.gaeserver.ServerCertMissing)
+    auth_one.LoadSelfKey(auth.settings.SERVER_PRIVATE_KEY_PEM).AndRaise(
+        ValueError)
     self.mox.ReplayAll()
     self.assertRaises(
         auth.base.NotAuthenticated, self.c.GetAuth1Instance)
@@ -167,8 +164,8 @@ class AuthModuleTest(test.RequestHandlerTest):
     mock_auth1.Output().AndReturn('foo')
     mock_auth1.AuthState().AndReturn(auth.gaeserver.base.AuthState.OK)
     self.response.headers['Set-Cookie'] = '%s=%s; secure; httponly;' % (
-        auth.auth_settings.AUTH_TOKEN_COOKIE, 'foo')
-    self.response.out.write(auth.auth_settings.AUTH_TOKEN_COOKIE)
+        auth.auth.AUTH_TOKEN_COOKIE, 'foo')
+    self.response.out.write(auth.auth.AUTH_TOKEN_COOKIE)
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()

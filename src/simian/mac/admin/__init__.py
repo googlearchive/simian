@@ -17,6 +17,7 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 
 from simian import settings
+from simian.mac.admin import xsrf
 from simian.mac.common import auth
 
 
@@ -74,6 +75,8 @@ MENU = [
      'subitems': [
          {'type': 'acl_groups', 'url': '/admin/acl_groups',
           'name': 'ACL Groups'},
+         {'type': 'config', 'url': '/admin/config',
+          'name': 'Configuration'},
          {'type': 'ip_blacklist', 'url': '/admin/ip_blacklist',
           'name': 'IP Blacklist'},
          {'type': 'lock_admin', 'url': '/admin/lock_admin',
@@ -172,6 +175,12 @@ class AdminHandler(webapp.RequestHandler):
 
     if 'msg' not in values:
       values['msg'] = self.request.GET.get('msg')
+
+    if 'report_type' not in values:
+      values['report_type'] = 'undefined_report'
+
+    # TODO(user): Pass XSRF token only to reports that need it.
+    values['xsrf_token'] = xsrf.XsrfTokenGenerate(values['report_type'])
 
     if hasattr(self, '_page'):
       values['limit'] = self._page.get('limit')

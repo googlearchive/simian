@@ -2,22 +2,18 @@
 <html lang="en">
   <head>
   <title>Simian Stats: {% block title %}{% endblock %}</title>
-  <link href="{{ static_path }}/admin/css/base.css" rel="stylesheet" type="text/css" />
+  <link href="{{ static_path }}/admin/css/main.css" rel="stylesheet" type="text/css" />
   <script type="text/javascript" src="{{ static_path }}/admin/js/simian.js"></script>
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-  <link rel="icon" href="/admin/static/favicon.ico" type="image/x-icon"/> 
+  <link rel="icon" href="/admin/static/favicon.ico" type="image/x-icon"/>
   <link rel="shortcut icon" href="/admin/static/favicon.ico" type="image/x-icon"/>
   {% block head-content %}{% endblock %}
   </head>
 <body>
 {% block body %}
-  <script type="text/javascript">simian.updateMenu();</script>
+  <script type="text/javascript">simian.menu.updateMenu();</script>
   {% block header %}
     <header>
-      <div class="titlewrap">
-        <a class="title1" href="/admin">Simian</a>
-        <span class="subtitle">&ldquo;All your Mac are belong to us&rdquo;</span>
-      </div>
       <div id="search">
         <a href="javascript:simian.closeSearch();void(0);" class="closebutton"></a>
         <form class="search" action="/admin" method="GET">
@@ -49,7 +45,7 @@
             </td>
             <td>&nbsp;</td>
           </tr>
-          </table>
+        </table>
         </form>
       </div>
       {% if report_type == "summary" or report_type == "search" %}
@@ -59,7 +55,7 @@
       {% endif %}
     </header>
     {% if msg %}
-      <div id="butterbar">{{ msg }}</div>
+      <div id="butterbar">{{ msg|escape }}</div>
       <script type="text/javascript">
         (function() {
           var bb = document.getElementById('butterbar');
@@ -68,13 +64,19 @@
         })();
       </script>
     {% endif %}
+
+  <div class="head" onMouseOver="simian.menu.toggleMenu();">
+    <a class="title1" href="/admin">Simian</a>
+    <span class="subtitle">&ldquo;All your Mac are belong to us&rdquo;</span>
+  </div>
   {% endblock %}
 
   {% block menu %}
     <div id="menu">
-      <a id="menutoggle" onclick="simian.toggleMenu(true);"
-         onMouseOver="simian.toggleMenu()";></a>
-      <a id="menupin" onclick="simian.pinMenu();"></a>
+      <a id="menutoggle" onclick="simian.menu.toggleMenu(true);" onMouseOver="simian.menu.toggleMenu();"></a>
+      <a id="menucollapse" onclick="simian.menu.toggleMenu(true);">&laquo; collapse</a>
+      <a id="menupin" onclick="simian.menu.pinMenu();"></a>
+      <div id="menuwrap">
       <ul>
         {% for item in menu %}
           {% if is_admin or not item.admin_only %}
@@ -102,11 +104,12 @@
           {% endif %}
         {% endfor %}
       </ul>
+      </div>
     </div>
     <script type="text/javascript">simian.zippyfy('menu');</script>
   {% endblock %}
 
-  <div id="content" onMouseOver="simian.hideMenu();">
+  <div id="content" onMouseOver="simian.menu.hideMenu();">
     {% block page-content %}{% endblock %}
   </div>
 

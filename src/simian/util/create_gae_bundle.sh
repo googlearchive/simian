@@ -19,6 +19,7 @@ touch $BUNDLE_ROOT/simian/__init__.py
 # Symlink simian namespace.
 ln -s ../$SIMIAN_REL_PATH/auth $BUNDLE_ROOT/simian/auth
 ln -s ../$SIMIAN_REL_PATH/mac $BUNDLE_ROOT/simian/mac
+ln -s ../$SIMIAN_REL_PATH/settings.py $BUNDLE_ROOT/simian/settings.py
 
 # Symlink necessary files at the root of the bundle.
 ln -s $SIMIAN_REL_PATH/mac/app.yaml $BUNDLE_ROOT/app.yaml

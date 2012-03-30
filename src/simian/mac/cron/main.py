@@ -34,7 +34,6 @@ from simian import settings
 from simian.mac.cron import applesus
 from simian.mac.cron import maintenance
 from simian.mac.cron import reports_cache
-from simian.mac.cron import welcome_email
 
 
 application = webapp.WSGIApplication([
@@ -53,9 +52,6 @@ application = webapp.WSGIApplication([
     # Reports Cache
     (r'/cron/reports_cache/([a-z_]+)$', reports_cache.ReportsCache),
     (r'/cron/reports_cache/([a-z_]+)/(.*)$', reports_cache.ReportsCache),
-
-    # Welcome Email
-    (r'/cron/welcome_email$', welcome_email.WelcomeEmail),
 ], debug=settings.DEBUG)
 
 

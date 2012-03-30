@@ -81,8 +81,7 @@ class UserAuthTest(test.RequestHandlerTest):
 
   def testGetWhenUserNotMacAdminOrSupportUser(self):
     """Test get()."""
-    user = 'not_%s' % uauth.settings.ADMINS[0]
-    self.assertFalse(user in uauth.settings.ADMINS)
+    user = 'foo-user-does-not-exist'
     mock_user = self.mox.CreateMockAnything()
 
     self.MockDoMunkiAuth(fail=True)
@@ -106,7 +105,7 @@ class UserAuthTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(uauth.users, 'get_current_user')
     self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
 
-    user = uauth.settings.ADMINS[0]
+    user = 'foo-user-does-not-exist'
     mock_user = self.mox.CreateMockAnything()
 
     self.MockDoMunkiAuth(fail=True)
@@ -131,7 +130,7 @@ class UserAuthTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(uauth.users, 'get_current_user')
     self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
 
-    user = uauth.settings.ADMINS[0]
+    user = 'foo-user-does-not-exist'
     mock_user = self.mox.CreateMockAnything()
     token = 'token'
 
@@ -147,9 +146,9 @@ class UserAuthTest(test.RequestHandlerTest):
         user, level=uauth.gaeserver.LEVEL_ADMIN).AndReturn(token)
     self.response.headers.__setitem__(
         'Set-Cookie', '%s=%s; secure; httponly;' % (
-            uauth.auth_settings.AUTH_TOKEN_COOKIE, token)).AndReturn(None)
+            uauth.auth_init.AUTH_TOKEN_COOKIE, token)).AndReturn(None)
     self.response.out.write(
-        uauth.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(None)
+        uauth.auth_init.AUTH_TOKEN_COOKIE).AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertEqual(None, self.ua.get())
@@ -161,7 +160,7 @@ class UserAuthTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(uauth.auth, 'IsAdminUser')
     self.mox.StubOutWithMock(uauth.auth, 'IsSupportUser')
 
-    user = uauth.settings.ADMINS[0]
+    user = 'foo-user-does-not-exist'
     mock_user = self.mox.CreateMockAnything()
     token = 'token'
 
@@ -178,9 +177,9 @@ class UserAuthTest(test.RequestHandlerTest):
         user, level=uauth.gaeserver.LEVEL_BASE).AndReturn(token)
     self.response.headers.__setitem__(
         'Set-Cookie', '%s=%s; secure; httponly;' % (
-            uauth.auth_settings.AUTH_TOKEN_COOKIE, token)).AndReturn(None)
+            uauth.auth_init.AUTH_TOKEN_COOKIE, token)).AndReturn(None)
     self.response.out.write(
-        uauth.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(None)
+        uauth.auth_init.AUTH_TOKEN_COOKIE).AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertEqual(None, self.ua.get())

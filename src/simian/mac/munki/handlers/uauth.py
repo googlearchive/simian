@@ -23,10 +23,9 @@ import logging
 
 from google.appengine.api import users
 
-from simian import settings
+from simian import auth as auth_init
 from simian.auth import base
 from simian.auth import gaeserver
-from simian.auth import settings as auth_settings
 from simian.mac.common import auth
 from simian.mac.munki import handlers
 
@@ -71,8 +70,8 @@ class UserAuth(handlers.AuthenticationHandler):
     if output:
       #logging.info('Uauth: success, token = %s', output)
       self.response.headers['Set-Cookie'] = '%s=%s; secure; httponly;' % (
-          auth_settings.AUTH_TOKEN_COOKIE, output)
-      self.response.out.write(auth_settings.AUTH_TOKEN_COOKIE)
+          auth_init.AUTH_TOKEN_COOKIE, output)
+      self.response.out.write(auth_init.AUTH_TOKEN_COOKIE)
     else:
       #logging.info('Uauth: unknown token')
       raise NotAuthenticated

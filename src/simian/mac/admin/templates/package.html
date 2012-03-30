@@ -45,9 +45,12 @@
 
 <form method="post" action="/admin/package/{{ pkg.filename }}?delete=1" id="deleteform"
       onsubmit="return confirm('This will DELETE the Package. This action is not revertable.\nAre you sure?') && confirm('..sure?');">
+  <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
 </form>
 {% if not pkg_safe_to_modify %}
-  <form method="post" action="/admin/package/{{ pkg.filename }}?unlock=1" id="unlockform"></form>
+  <form method="post" action="/admin/package/{{ pkg.filename }}?unlock=1" id="unlockform">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+  </form>
 {% endif %}
 
 <form method="post" class="form" id="editform" {% if editxml %}style="bottom:0"{% endif %}>
@@ -58,6 +61,7 @@
        onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/packages'">
        &laquo; Back to package list</a>
 
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
     <button type="submit" name="submit" value="save" class="rightbutton">Save</button>
 
     <h3 style="display: inline; font-size: 1.3em; margin: 0 10px;">

@@ -26,6 +26,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+
 from simian.client import client
 
 if hasattr(mox.MockAnything, '__str__'): del(mox.MockAnything.__str__)
@@ -35,6 +36,26 @@ logging.basicConfig(filename='/dev/null')
 class GenericException(Exception):
   """A generic exception that can be used for mocks."""
   pass
+
+
+class ClientModuleTest(mox.MoxTestBase):
+  """Test the client module."""
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testConstants(self):
+    for a in [
+        'SERVER_HOSTNAME', 'SERVER_PORT', 'AUTH_DOMAIN',
+        'FACTER_CMD', 'CLIENT_SSL_PATH', 'SEEK_SET', 'SEEK_CUR', 'SEEK_END',
+        'DEBUG', 'URL_UPLOADPKG', 'CERT_DOMAIN', 'SERVER_CERT_VALID_SUBJECTS',
+        'SERVER_CERT_REQUIRE_SUBJECTS']:
+      self.assertTrue(hasattr(client, a))
 
 
 class MultiBodyConnectionTest(mox.MoxTestBase):
@@ -551,20 +572,6 @@ class HttpsClientTest(mox.MoxTestBase):
 
   def testLoadHost(self):
     """Test _LoadHost()."""
-
-    self.mox.StubOutWithMock(self.client, '_EnableRFC2818Workaround')
-    self.mox.StubOutWithMock(self.client, '_DisableRFC2818Workaround')
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._EnableRFC2818Workaround().AndReturn(None)
-    self.client._EnableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
-    self.client._DisableRFC2818Workaround().AndReturn(None)
 
     self.mox.ReplayAll()
 

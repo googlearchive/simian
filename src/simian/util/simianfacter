@@ -4,13 +4,13 @@
 
 """Script to output Simian dependent facter-like output of various variables."""
 
-
+import re
 import subprocess
 from simian import settings
 
 
 SETTINGS_FACTER = {
-    'certname': settings.CERTNAME,
+    'certname': settings.CERTNAME or GetSerialNumber(),
     'primary_user': settings.PRIMARY_USER,
     'sp_local_host_name': settings.HOSTNAME,
     'configtrack': settings.CONFIGTRACK,
@@ -41,6 +41,27 @@ def Exec(cmd):
     return p.returncode, stdout, stderr
   except (IOError, OSError), e:
     return (99, '', str(e))
+    
+
+def GetSerialNumber():
+  """Returns the machine serial number."""
+  return_code, stdout, unused_stderr = Exec(
+      ['system_profiler', 'SPHardwareDataType'])
+
+  serial_number = 'UNKNOWN_SERIAL_NUMBER'
+  
+  if return_code != 0:
+    return serial_number
+
+  serial_number_re = re.compile('Serial number[^:]+:\s+(.*)', re.IGNORECASE)  
+  
+  for l in stdout.splitlines():
+    m = serial_number_re.search(l)
+    if m:
+      serial_number = m.group(1)
+      break
+  
+  return serial_number
 
 
 def GetFacterFacts():

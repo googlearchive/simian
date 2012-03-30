@@ -30,6 +30,7 @@ from simian import settings
 from simian.mac.admin import acl_groups
 from simian.mac.admin import applesus
 from simian.mac.admin import broken_clients
+from simian.mac.admin import config
 from simian.mac.admin import host
 from simian.mac.admin import ip_blacklist
 from simian.mac.admin import lock_admin
@@ -59,6 +60,8 @@ application = webapp.WSGIApplication([
     (r'/admin/applesus/([\w\-]+)/([\d\w\-]+)$', applesus.AppleSUSAdmin),
 
     (r'/admin/brokenclients/?$', broken_clients.BrokenClients),
+
+    (r'/admin/config/?$', config.Config),
 
     (r'/admin/host/([\w\-\_\.\=\|\%, ]+)/?$', host.Host),
 

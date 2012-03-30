@@ -38,11 +38,11 @@ class GaeUtilModuleTest(mox.MoxTestBase):
 
   def testSafeBlobDel(self):
     """Test SafeBlobDel()."""
-    self.mox.StubOutWithMock(gae_util.blobstore, 'delete')
+    self.mox.StubOutWithMock(gae_util.blobstore, 'delete_async')
     self.mox.StubOutWithMock(gae_util.logging, 'info')
     blobstore_key = 'key'
-    gae_util.blobstore.delete(blobstore_key).AndReturn(None)
-    gae_util.blobstore.delete(blobstore_key).AndRaise(
+    gae_util.blobstore.delete_async(blobstore_key).AndReturn(None)
+    gae_util.blobstore.delete_async(blobstore_key).AndRaise(
         gae_util.blobstore.Error)
     exc = ''
     gae_util.logging.warning((
@@ -58,7 +58,7 @@ class GaeUtilModuleTest(mox.MoxTestBase):
     key_name = 'fookeyname'
     self.mox.StubOutWithMock(gae_util.logging, 'info')
     entity = self.mox.CreateMockAnything()
-    entity.delete().AndRaise(gae_util.db.Error)
+    entity.delete_async().AndRaise(gae_util.db.Error)
     key = self.mox.CreateMockAnything()
     entity.key().AndReturn(key)
     key.name().AndReturn(key_name)

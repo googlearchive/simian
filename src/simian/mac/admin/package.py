@@ -28,6 +28,7 @@ from google.appengine.api import users
 from simian.mac import admin
 from simian.mac import models
 from simian.mac import common
+from simian.mac.admin import xsrf
 from simian.mac.common import auth
 from simian.mac.common import gae_util
 from simian.mac.munki import common as munki_common
@@ -87,6 +88,13 @@ class Package(admin.AdminHandler):
     if not auth.IsAdminUser():
       self.error(403)
       self.response.out.write('Access Denied for current user')
+      return
+
+    xsrf_token = self.request.get('xsrf_token', None)
+    report_type = filename and 'package' or 'packages'
+    if not xsrf.XsrfTokenValidate(xsrf_token, report_type):
+      self.error(400)
+      self.response.out.write("Invalid XSRF token. Please refresh and retry.")
       return
 
     if filename:

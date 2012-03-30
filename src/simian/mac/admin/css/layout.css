@@ -1,0 +1,237 @@
+/**
+ * Copyright 2012 Google Inc. All Rights Reserved.
+ *
+ * Main structural/navigation styles (Header, menu, etc).
+ *
+ */
+
+header {
+  display: block;
+  background-color: #F1F1F1;
+  border-bottom: 1px solid #E5E5E5;
+  padding: 10px 0;
+  -moz-box-shadow: 0 -1px 10px #ccc;
+  -webkit-box-shadow: 0 -1px 10px #ccc;
+  box-shadow: 0 -1px 10px #ccc;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 51px;
+  z-index: 100;
+}
+
+#content {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 72px;
+  padding: 5px 15px;
+  -webkit-transition: left 130ms ease-in-out;
+  -moz-transition: left 130ms ease-in-out;
+  -o-transition: left 130ms ease-in-out;
+  -ms-transition: left 130ms ease-in-out;
+}
+body.menupinned #content {
+  margin-left: 200px;
+  left: 0;
+}
+
+#search {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+
+.head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: #F1F1F1;
+  background-image: url('/admin/static/simian_header.png');
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  border-bottom: 1px solid #E5E5E5;
+  height: 63px;
+  width: 118px;
+  padding-top: 8px;
+  padding-left: 92px;
+  z-index: 1100;
+}
+body.menuopen .head, body.menupinned .head {
+  position: fixed;
+}
+
+.title1 {
+  display: block;
+  margin: 0;
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 20px;
+  color: #DD4B39;
+  text-decoration: none;
+  font-style: normal;
+  font-weight: normal;
+}
+.subtitle {
+  display: block;
+  font-style:italic;
+  font-size:12px;
+  color:#999;
+  margin-top: -4px;
+}
+
+#menu {
+  width: 218px;
+  padding: 0;
+  margin: 0;
+  position: fixed;
+  left: -200px;
+  top: 72px;
+  bottom: 0;
+  background: #FFF;
+  overflow: hidden;
+  -webkit-transition: left 130ms ease-in-out;
+  -moz-transition: left 130ms ease-in-out;
+  -o-transition: left 130ms ease-in-out;
+  -ms-transition: left 130ms ease-in-out;
+  z-index: 500;
+}
+body.menuopen #menu, body.menupinned #menu {
+  left: 0px;
+  width: 210px;
+}
+body.menupinned #menu {
+  background: transparent;
+}
+body.menuopen #menu {
+  -moz-box-shadow: 8px 0 6px -6px #ccc;
+  -webkit-box-shadow: 8px 0 6px -6px #ccc;
+  box-shadow: 8px 0 6px -6px #ccc;
+}
+#menu #menuwrap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 10px;
+  overflow: auto;
+}
+#menu ul {
+  list-style-type: none;
+  margin: 20px 0 0 0;
+  padding: 0;
+  border: none;
+}
+#menu ul ul {
+  list-style-type: none;
+  margin: 0;
+  padding-left: 10px;
+}
+#menu li {
+  margin: 0;
+}
+#menu li.selected {
+  border-left: 5px solid #DD4B39;
+}
+#menu li a {
+  display: block;
+  padding: 7px 0 6px 35px;
+  line-height: 16px;
+  color: #333;
+  text-decoration: none;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+#menu li.selected a {
+  color: #DD4B39;
+  padding-left: 30px;
+}
+#menu li a:hover {
+  background-color: #EBEBEB;
+}
+#menu ul ul li a {
+  line-height: 16px;
+  font-size: .95em;
+}
+#menu li a.goog-zippy-header {
+  background-position: 22px 50%;
+}
+#menu h3 {
+  margin: 15px 0 10px 14px;
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 16px;
+  color: #222;
+  font-weight: normal;
+}
+#menu hr {
+  width: 90%;
+  border: 0;
+  color: #E5E5E5;
+  background-color: #E5E5E5;
+  height: 1px;
+  margin-top: 25px;
+}
+
+#menupin {
+  display: block;
+  position: absolute;
+  top: 2px;
+  right: 20px;
+  z-index: 902;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  background-image: url('/admin/static/pinyellow.png');
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+}
+body.menupinned #menupin{
+  display: none;
+}
+
+#menucollapse {
+  display: none;
+  position: absolute;
+  top: 2px;
+  left: 25px;
+  color: #222;
+  font-size: 12px;
+  z-index: 902;
+  cursor: pointer;
+}
+body.menupinned #menu:hover #menucollapse, body.menuopen #menu #menucollapse {
+  display: block;
+}
+
+#menu #menutoggle {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  background-image: url('/admin/static/menutoggle.png');
+  background-repeat: no-repeat;
+  background-position: 0 2px;
+  background-color: #FFF;
+  z-index: 900;
+  cursor: pointer;
+}
+body.menupinned #menu #menutoggle {
+  display: none;
+}
+body.menupinned #menu:hover #menutoggle {
+  display: block;
+}
+body.menupinned #menu #menutoggle, body.menuopen #menu #menutoggle {
+  background-image: none;
+  background-color: transparent;
+  width: 10px;
+}
+body.menupinned #menutoggle:hover, body.menuopen #menutoggle:hover {
+  background-color: #EEE !important;
+  background-image: url('/admin/static/disclosure_arrow_back.png') !important;
+  background-position: 50% 50% !important;
+}

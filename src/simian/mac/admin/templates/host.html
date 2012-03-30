@@ -172,8 +172,8 @@
         </td>
         <td>{{ log.mtime }}</td>
         <td>{{ log.mtime|timesince }}</td>
-        <td><input type="button" name="{{ log.key.name }}" value="Delete"
-                   onclick="javascript:simian.deleteClientLogFile(this);" />
+        <td><button type="button" name="{{ log.key.name }}" class="red delete"
+                   onclick="javascript:simian.deleteClientLogFile(this);">Delete</button>
         </td>
       </tr>
     {% endfor %}

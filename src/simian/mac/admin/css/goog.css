@@ -1,0 +1,497 @@
+/**
+ * Copyright 2012 Google Inc. All Rights Reserved.
+ *
+ * Styles for Closure and other Google related.
+ *
+ */
+
+.goog-menu {
+  background: #fff;
+  border-color: #ccc #666 #666 #ccc;
+  border-style: solid;
+  border-width: 1px;
+  cursor: default;
+  font: normal 13px "Arial", sans-serif;
+  margin: 0;
+  outline: none;
+  padding: 4px 0;
+  position: absolute;
+  z-index: 20000; /* Arbitrary, but some apps depend on it... */
+}
+.goog-menu-filter {
+  margin: 2px;
+  border: 1px solid silver;
+  background: white;
+  overflow: hidden;
+}
+.goog-menu-filter div {
+  color: gray;
+  position: absolute;
+  padding: 1px;
+}
+.goog-menu-filter input {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  width: 100%;
+}
+.goog-tristatemenuitem {
+  padding: 2px 5px;
+  margin: 0;
+  list-style: none;
+}
+.goog-tristatemenuitem-highlight {
+  background-color: #4279A5;
+  color: #FFF;
+}
+.goog-tristatemenuitem-disabled {
+  color: #999;
+}
+.goog-tristatemenuitem-checkbox {
+  float: left;
+  width: 10px;
+  height: 1.1em;
+}
+.goog-tristatemenuitem-partially-checked {
+  background-image: url(//ssl.gstatic.com/closure/check-outline.gif);
+  background-position: 4px 50%;
+  background-repeat: no-repeat;
+}
+.goog-tristatemenuitem-fully-checked {
+  background-image: url(//ssl.gstatic.com/closure/check.gif);
+  background-position: 4px 50%;
+  background-repeat: no-repeat;
+}
+.goog-filterobsmenuitem {
+  padding: 2px 5px;
+  margin: 0;
+  list-style: none;
+}
+.goog-filterobsmenuitem-highlight {
+  background-color: #4279A5;
+  color: #FFF;
+}
+.goog-filterobsmenuitem-disabled {
+  color: #999;
+}
+/* State: resting. */
+.goog-menu-button {
+  /* Client apps may override the URL at which they serve the image. */
+  background: #ddd url(//ssl.gstatic.com/editor/button-bg.png) repeat-x top left;
+  border: 0;
+  color: #000;
+  cursor: pointer;
+  list-style: none;
+  margin: 2px;
+  outline: none;
+  padding: 0;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+/* Pseudo-rounded corners. */
+.goog-menu-button-outer-box,
+.goog-menu-button-inner-box {
+  border-style: solid;
+  border-color: #aaa;
+  vertical-align: top;
+}
+.goog-menu-button-outer-box {
+  margin: 0;
+  border-width: 1px 0;
+  padding: 0;
+}
+.goog-menu-button-inner-box {
+  margin: 0 -1px;
+  border-width: 0 1px;
+  padding: 3px 4px;
+}
+
+/* Pre-IE7 IE hack; ignored by IE7 and all non-IE browsers. */
+* html .goog-menu-button-inner-box {
+  /* IE6 needs to have the box shifted to make the borders line up. */
+  left: -1px;
+}
+
+/* Pre-IE7 BiDi fixes. */
+* html .goog-menu-button-rtl .goog-menu-button-outer-box {
+  /* @noflip */ left: -1px;
+  /* @noflip */ right: auto;
+}
+* html .goog-menu-button-rtl .goog-menu-button-inner-box {
+  /* @noflip */ right: auto;
+}
+
+/* IE7-only hack; ignored by all other browsers. */
+*:first-child+html .goog-menu-button-inner-box {
+  /* IE7 needs to have the box shifted to make the borders line up. */
+  left: -1px;
+}
+/* IE7 BiDi fix. */
+*:first-child+html .goog-menu-button-rtl .goog-menu-button-inner-box {
+  /* @noflip */ left: 1px;
+  /* @noflip */ right: auto;
+}
+
+/* Safari-only hacks. */
+::root .goog-menu-button,
+::root .goog-menu-button-outer-box,
+::root .goog-menu-button-inner-box {
+  /* Required to make pseudo-rounded corners work on Safari. */
+  line-height: 0;
+}
+::root .goog-menu-button-caption,
+::root .goog-menu-button-dropdown {
+  /* Required to make pseudo-rounded corners work on Safari. */
+  line-height: normal;
+}
+
+/* State: disabled. */
+.goog-menu-button-disabled {
+  background-image: none !important;
+  opacity: 0.3;
+  -moz-opacity: 0.3;
+  filter: alpha(opacity=30);
+}
+.goog-menu-button-disabled .goog-menu-button-outer-box,
+.goog-menu-button-disabled .goog-menu-button-inner-box,
+.goog-menu-button-disabled .goog-menu-button-caption,
+.goog-menu-button-disabled .goog-menu-button-dropdown {
+  color: #333 !important;
+  border-color: #999 !important;
+}
+
+/* Pre-IE7 IE hack; ignored by IE7 and all non-IE browsers. */
+* html .goog-menu-button-disabled {
+  margin: 2px 1px !important;
+  padding: 0 1px !important;
+}
+
+/* IE7-only hack; ignored by all other browsers. */
+*:first-child+html .goog-menu-button-disabled {
+  margin: 2px 1px !important;
+  padding: 0 1px !important;
+}
+
+/* State: hover. */
+.goog-menu-button-hover .goog-menu-button-outer-box,
+.goog-menu-button-hover .goog-menu-button-inner-box {
+  border-color: #9cf #69e #69e #7af !important; /* Hover border wins. */
+}
+
+/* State: active, open. */
+.goog-menu-button-active,
+.goog-menu-button-open {
+  background-color: #bbb;
+  background-position: bottom left;
+}
+
+/* State: focused. */
+.goog-menu-button-focused .goog-menu-button-outer-box,
+.goog-menu-button-focused .goog-menu-button-inner-box {
+  border-color: orange;
+}
+
+/* Caption style. */
+.goog-menu-button-caption {
+  padding: 0 4px 0 0;
+  vertical-align: top;
+}
+
+/* Dropdown arrow style. */
+.goog-menu-button-dropdown {
+  height: 15px;
+  width: 7px;
+  /* Client apps may override the URL at which they serve the sprite. */
+  background: url(//ssl.gstatic.com/editor/editortoolbar.png) no-repeat -388px 0;
+  vertical-align: top;
+}
+
+/* Pill (collapsed border) styles. */
+/* TODO(gboyer): Remove specific menu button styles and have any button support being a menu button. */
+.goog-menu-button-collapse-right,
+.goog-menu-button-collapse-right .goog-menu-button-outer-box,
+.goog-menu-button-collapse-right .goog-menu-button-inner-box {
+  margin-right: 0;
+}
+
+.goog-menu-button-collapse-left,
+.goog-menu-button-collapse-left .goog-menu-button-outer-box,
+.goog-menu-button-collapse-left .goog-menu-button-inner-box {
+  margin-left: 0;
+}
+
+.goog-menu-button-collapse-left .goog-menu-button-inner-box  {
+  border-left: 1px solid #fff;
+}
+
+.goog-menu-button-collapse-left.goog-menu-button-checked
+.goog-menu-button-inner-box {
+  border-left: 1px solid #ddd;
+}
+
+dy .goog-inline-block {
+  display: -moz-inline-box; /* This is ignored by FF3 and later*/
+  display: inline-block; /* This is ignored by pre-FF3 Gecko */
+}
+
+/* Default rule; only Safari, Webkit, and Opera handle it without hacks. */
+.goog-inline-block {
+  position: relative;
+  display: inline-block;
+}
+
+/*
+ * Pre-IE7 IE hack.  On IE, "display: inline-block" only gives the element
+ * layout, but doesn't give it inline behavior.  Subsequently setting display
+ * to inline does the trick.
+ */
+* html .goog-inline-block {
+  display: inline;
+}
+
+/*
+ * IE7-only hack.  On IE, "display: inline-block" only gives the element
+ * layout, but doesn't give it inline behavior.  Subsequently setting display
+ * to inline does the trick.
+ */
+*:first-child+html .goog-inline-block {
+  display: inline;
+}
+
+.goog-css3-button {
+  margin: 0 2px;
+  padding: 3px 6px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: default;
+  outline: none;
+  font-family: "Arial", sans-serif;
+  color: #000;
+  border: 1px solid #bbb;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  /* TODO(eae): Change this to -webkit-linear-gradient once
+                https://bugs.webkit.org/show_bug.cgi?id=28152 is resolved. */
+  background: -webkit-gradient(linear, 0% 40%, 0% 70%, from(#f9f9f9),
+      to(#e3e3e3));
+  background: -moz-linear-gradient(top, #f9f9f9, #e3e3e3);
+}
+
+
+/* Styles for different states (hover, active, focused, open, checked). */
+.goog-css3-button-hover {
+  border-color: #939393 !important;
+}
+
+.goog-css3-button-focused {
+  border-color: #444;
+}
+
+.goog-css3-button-active, .goog-css3-button-open {
+  border-color: #444 !important;
+  background: -webkit-gradient(linear, 0% 40%, 0% 70%, from(#e3e3e3),
+      to(#f9f9f9));
+  background: -moz-linear-gradient(top, #e3e3e3, #f9f9f9);
+}
+
+.goog-css3-button-disabled {
+  color: #888;
+}
+
+.goog-css3-button-primary {
+  font-weight: bold;
+}
+
+
+/*
+ * Pill (collapsed border) styles.
+ */
+.goog-css3-button-collapse-right {
+  margin-right: 0 !important;
+  border-right: 1px solid #bbb;
+  -webkit-border-top-right-radius: 0px;
+  -webkit-border-bottom-right-radius: 0px;
+  -moz-border-radius-topright: 0px;
+  -moz-border-radius-bottomright: 0px;
+}
+
+.goog-css3-button-collapse-left {
+  border-left: 1px solid #f9f9f9;
+  margin-left: 0 !important;
+  -webkit-border-top-left-radius: 0px;
+  -webkit-border-bottom-left-radius: 0px;
+  -moz-border-radius-topleft: 0px;
+  -moz-border-radius-bottomleft: 0px;
+}
+
+/* Dropdown arrow style. */
+.goog-css3-button-dropdown {
+  height: 16px;
+  width: 7px;
+  /* Client apps may override the URL at which they serve the sprite. */
+  background: url(//ssl.gstatic.com/editor/editortoolbar.png) no-repeat -388px 0;
+  vertical-align: top;
+  margin-left: 3px;
+}
+
+
+/*
+ * Standard styling for a goog.ui.DatePicker.
+ *
+ * @author  
+ */
+
+.goog-date-picker {
+  position: absolute;
+}
+
+.goog-date-picker,
+.goog-date-picker th,
+.goog-date-picker td {
+  font: 13px Arial, sans-serif;
+}
+
+.goog-date-picker {
+  -moz-user-focus: normal;
+  -moz-user-select: none;
+  position: relative;
+  border: 1px solid #000;
+  float: left;
+  padding: 2px;
+  color: #000;
+  background: #c3d9ff;
+  cursor: default;
+}
+
+.goog-date-picker th {
+  text-align: center;
+}
+
+.goog-date-picker td {
+  text-align: center;
+  vertical-align: middle;
+  padding: 1px 3px;
+}
+
+
+.goog-date-picker-menu {
+  position: absolute;
+  background: threedface;
+  border: 1px solid gray;
+  -moz-user-focus: normal;
+  z-index: 1;
+  outline: none;
+}
+
+.goog-date-picker-menu ul {
+  list-style: none;
+  margin: 0px;
+  padding: 0px;
+}
+
+.goog-date-picker-menu ul li {
+  cursor: default;
+}
+
+.goog-date-picker-menu-selected {
+  background: #ccf;
+}
+
+.goog-date-picker th {
+  font-size: .9em;
+}
+
+.goog-date-picker td div {
+  float: left;
+}
+
+.goog-date-picker button {
+  min-width: 0px;
+  font-size: 1em;
+  height: auto;
+  padding: auto;
+  margin: 0;
+  line-height: auto;
+  padding: 0px;
+  margin: 1px 0;
+  border: 0;
+  color: #20c;
+  font-weight: bold;
+  background: transparent;
+}
+
+.goog-date-picker button:hover {
+  border: 0;
+  -webkit-box-shadow: none;
+  -moz-box-shadow: none;
+  box-shadow: none;
+}
+
+.goog-date-picker-date {
+  background: #fff;
+}
+
+.goog-date-picker-week,
+.goog-date-picker-wday {
+  padding: 1px 3px;
+  border: 0;
+  border-color: #a2bbdd;
+  border-style: solid;
+}
+
+.goog-date-picker-week {
+  border-right-width: 1px;
+}
+
+.goog-date-picker-wday {
+  border-bottom-width: 1px;
+}
+
+.goog-date-picker-head td {
+  text-align: center;
+}
+
+/** Use td.className instead of !important */
+td.goog-date-picker-today-cont {
+  text-align: center;
+}
+
+/** Use td.className instead of !important */
+td.goog-date-picker-none-cont {
+  text-align: center;
+}
+
+.goog-date-picker-month {
+  width: 12ex;
+}
+
+.goog-date-picker-year {
+  width: 6ex;
+}
+
+.goog-date-picker table {
+  border-collapse: collapse;
+}
+
+.goog-date-picker-other-month {
+  color: #888;
+}
+
+.goog-date-picker-wkend-start,
+.goog-date-picker-wkend-end {
+  background: #eee;
+}
+
+/** Use td.className instead of !important */
+td.goog-date-picker-selected {
+  background: #c3d9ff;
+}
+
+.goog-date-picker-today {
+  background: #9ab;
+  font-weight: bold !important;
+  border-color: #246 #9bd #9bd #246;
+  color: #fff;
+}

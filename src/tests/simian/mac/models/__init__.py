@@ -10,3 +10,4 @@
 # TODO(user): eventually, base should not be exposed.
 from simian.mac.models.base import *
 from simian.mac.models.munki import *
+from simian.mac.models.settings import *

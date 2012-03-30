@@ -112,24 +112,48 @@ class CertificateError(Error):
   """Certificate Error."""
 
 
+class FormatError(Error):
+  """Format error."""
+
+
 class CertificateValueError(CertificateError):
   """Error in a certificate value."""
 
 
-class CertificateFormatError(CertificateError):
+class CertificateParseError(CertificateError):
+  """Certificate cannot be parsed, an error in its structure."""
+
+
+class CertificateFormatError(CertificateError, FormatError):
   """Certificate Format Error."""
+
+
+class PEMFormatError(FormatError):
+  """PEM Format Error."""
+
+
+class HeaderMissingPEMFormatError(PEMFormatError):
+  """Header is missing PEM Format Error."""
+
+
+class FooterMissingPEMFormatError(PEMFormatError):
+  """Footer is missing PEM Format Error."""
 
 
 class CertificateASN1FormatError(CertificateFormatError):
   """Certificate ASN1 Format Error."""
 
 
-class CertificatePEMFormatError(CertificateFormatError):
+class CertificatePEMFormatError(CertificateFormatError, PEMFormatError):
   """Certificate PEM Format Error."""
 
 
-class CertificateParseError(CertificateError):
-  """Certificate cannot be parsed, an error in its structure."""
+class RSAKeyPEMFormatError(PEMFormatError):
+  """RSA Key PEM Format Error."""
+
+
+class RSAPrivateKeyPEMFormatError(RSAKeyPEMFormatError):
+  """RSA Private Key PEM Format Error."""
 
 
 class BaseDataObject(object):
@@ -140,7 +164,7 @@ class BaseDataObject(object):
     raise NotImplementedError
 
   @classmethod
-  def CreateGetMethod(cls, name, key, _setattr=None):
+  def CreateGetMethod(cls, name, key, setattr_=None):
     """Create a get method for a key which returns its value.
 
     Args:
@@ -148,9 +172,9 @@ class BaseDataObject(object):
       key: str, key in dict to retrieve, e.g. "foo"
       setattr: function, optional, used to set attribute on class
     """
-    if _setattr is None:
-      _setattr = setattr
-    _setattr(cls, 'Get%s' % name, lambda self: self._GetDataDict()[key])
+    if setattr_ is None:
+      setattr_ = setattr
+    setattr_(cls, 'Get%s' % name, lambda self: self._GetDataDict()[key])
 
 
 class X509Certificate(BaseDataObject):
@@ -567,39 +591,39 @@ class X509Certificate(BaseDataObject):
     cert.update(sig)
     return cert
 
-  def _GetPublicKeyFromByteString(self, bytes):
+  def _GetPublicKeyFromByteString(self, bytes_str):
     """Get the public key from a byte string.
 
     Args:
-      bytes: str, byte string for entire certificate
+      bytes_str: str, byte string for entire certificate
     Returns:
       dictionary like = {
           'public_key': tlslite.utils.RSAKey.RSAKey object
       }
     """
     cert = tlslite.X509.X509()
-    cert.parseBinary(bytes)
+    cert.parseBinary(bytes_str)
     return {
         'public_key': cert.publicKey,
     }
 
-  def LoadFromByteString(self, bytes):
+  def LoadFromByteString(self, bytes_str):
     """Load certificate contents from a byte string.
 
     Args:
-      bytes: str, bytes
+      bytes_str: str, bytes
     """
     # break the client cert into pieces
     try:
-      c = der_decoder.decode(bytes)
+      c = der_decoder.decode(bytes_str)
     except pyasn1.error.PyAsn1Error, e:
       raise CertificateASN1FormatError('DER decode: %s' % str(e))
 
     cert = {
-        'entire_byte_string': bytes,
+        'entire_byte_string': bytes_str,
     }
     cert.update(self._GetCertSequencesFromTopSequence(c))
-    cert.update(self._GetPublicKeyFromByteString(bytes))
+    cert.update(self._GetPublicKeyFromByteString(bytes_str))
     self.Reset()
     self._cert.update(cert)
 
@@ -639,7 +663,7 @@ class X509Certificate(BaseDataObject):
     if self._cert['issuer'] is None or self._cert['issuer'] != issuer:
       raise CertificateValueError(
           'Issuer does not match required issuer: "%s" != required "%s"' % (
-          self._cert['issuer'], issuer))
+              self._cert['issuer'], issuer))
 
   def CheckAll(self):
     """Check all.
@@ -672,9 +696,56 @@ class X509Certificate(BaseDataObject):
     if not other_cert.GetMayActAsCA():
       raise CertificateValueError('Other cert is not a CA cert')
 
+    # pylint: disable-msg=E1101
     return other_cert.GetPublicKey().hashAndVerify(
         self._StrToArray(self.GetSignatureData()),
         self._StrToArray(self.GetFieldsData()))
+
+
+def LoadPemGeneric(s, header, footer, skip_info=True):
+  """Load a generic pem format string.
+
+  Args:
+    s: str, item in pem format
+    header: str, header type to look for, e.g. "BEGIN CERTIFICATE"
+    footer: str, footer type to look for, e.g. "END CERTIFICATE"
+    skip_info: bool, default True, skip info lines like "Info...: .."
+  Returns:
+    list, lines of PEM format, including headers, no newlines.
+  Raises:
+    PEMFormatError: general format error.
+    HeaderMissingPEMFormatError: header is missing.
+    FooterMissingPEMFormatError: footer is missing.
+  """
+  lines = s.strip().split('\n')
+
+  if len(lines) < 3:
+    raise PEMFormatError('Certificate truncated/too few lines')
+
+  begin = None
+  end = None
+  header = '-----%s-----' % header
+  footer = '-----%s-----' % footer
+
+  i = 0
+  while i < len(lines):
+    lines[i] = lines[i].strip()
+    if lines[i] == header:
+      begin = i
+    elif begin is not None:
+      if lines[i] == footer:
+        end = i
+      elif skip_info and lines[i].find(':') > -1:
+        del(lines[i])
+    i += 1
+
+  if begin is None:
+    raise HeaderMissingPEMFormatError('PEM header is missing: %s' % header)
+
+  if end is None:
+    raise FooterMissingPEMFormatError('PEM footer is missing: %s' % footer)
+
+  return lines[begin:end+1]
 
 
 def LoadCertificateFromBase64(s):
@@ -685,15 +756,16 @@ def LoadCertificateFromBase64(s):
   Returns:
     X509Certificate object
   Raises:
-    CertificatePEMFormatError: When the base64 body cannot be decoded.
+    PEMFormatError: When the base64 body cannot be decoded.
+    CertificateError: From LoadFromByteString(), certificate specific error.
   """
   if not BASE64_RE.search(s):
-    raise CertificatePEMFormatError('Not valid base64')
+    raise PEMFormatError('Not valid base64')
 
   try:
     d = base64.b64decode(s)
   except TypeError, e:
-    raise CertificatePEMFormatError('base64 decode error: %s' % str(e))
+    raise PEMFormatError('base64 decode error: %s' % str(e))
 
   x = X509Certificate()
   x.LoadFromByteString(d)
@@ -708,27 +780,35 @@ def LoadCertificateFromPEM(s):
   Returns:
     X509Certificate object
   Raises:
-    CertificatePEMFormatError: When the certificate cannot be loaded.
+    PEMFormatError: general format error.
+    HeaderMissingPEMFormatError: header is missing.
+    FooterMissingPEMFormatError: footer is missing.
+    CertificateError: error in the certificate itself (not the way it is
+      armored into PEM).
   """
-  lines = s.strip().split('\n')
+  lines = LoadPemGeneric(s, 'BEGIN CERTIFICATE', 'END CERTIFICATE')
+  # LoadCertificateFromBase64 func does not expect to receive the headers.
+  pem_cert = ''.join(lines[1:-1])
+  return LoadCertificateFromBase64(pem_cert)
 
-  if len(lines) < 3:
-    raise CertificatePEMFormatError('Certificate truncated/too few lines')
 
-  begin = None
-  end = None
+def LoadRSAPrivateKeyFromPEM(s):
+  """Load a RSA Private key from PEM format.
 
-  for i in xrange(len(lines)):
-    lines[i] = lines[i].strip()
-    if lines[i] == '-----BEGIN CERTIFICATE-----':
-      begin = i
-    elif begin is not None and lines[i] == '-----END CERTIFICATE-----':
-      end = i
-
-  if begin is None:
-    raise CertificatePEMFormatError('Missing begin certificate header')
-
-  if end is None:
-    raise CertificatePEMFormatError('Missing end certificate header')
-
-  return LoadCertificateFromBase64(''.join(lines[begin+1:end]))
+  Args:
+    s: str, key in PEM format, including newlines
+  Returns:
+    X509Certificate object
+  Raises:
+    PEMFormatError: general format error.
+    HeaderMissingPEMFormatError: header is missing.
+    FooterMissingPEMFormatError: footer is missing.
+    RSAPrivateKeyPEMFormatError: the RSA priv key cannot be loaded.
+  """
+  lines = LoadPemGeneric(s, 'BEGIN RSA PRIVATE KEY', 'END RSA PRIVATE KEY')
+  # tlslite expects to see the header too.
+  pem_rsa_key = '\n'.join(lines)
+  try:
+    return tlslite.utils.keyfactory.parsePEMKey(pem_rsa_key)
+  except SyntaxError, e:
+    raise RSAPrivateKeyPEMFormatError(str(e))

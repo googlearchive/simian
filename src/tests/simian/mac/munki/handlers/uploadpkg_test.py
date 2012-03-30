@@ -23,8 +23,8 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
-from simian.mac.munki.handlers import uploadpkg
 from simian.mac.common import test
+from simian.mac.munki.handlers import uploadpkg
 
 
 class UploadPackageTest(test.RequestHandlerTest):

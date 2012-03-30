@@ -395,12 +395,7 @@ class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
       cert_name = facts.get('certname', None)
       logging.debug('Certname from facter: "%s"', cert_name)
       if not cert_name:
-        logging.debug('facter broken; retrieve certname from machineinfo plist')
-        info_domain = '/Library/Preferences/com.google.corp.machineinfo'
-        cert_name, unused_stderr = self._SudoExec(
-            ['/usr/bin/defaults', 'read', info_domain, 'MachineUUID'])
-        logging.debug('Certname from machineinfo plist: %s', cert_name)
-        cert_name = cert_name.lower().strip()
+        logging.warning('Certname was not found in facter!')
       cert_fname = '%s.pem' % cert_name
     return super(SimianAuthClient, self)._GetPuppetSslDetails(
         cert_fname=cert_fname, interactive_user=interactive_user)

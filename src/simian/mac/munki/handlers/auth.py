@@ -24,9 +24,10 @@ import os
 
 from google.appengine.ext import blobstore
 
+from simian import auth
+from simian import settings
 from simian.auth import base
 from simian.auth import gaeserver
-from simian.auth import settings as auth_settings
 from simian.mac.common import util
 from simian.mac.munki import handlers
 
@@ -37,11 +38,11 @@ class Auth(handlers.AuthenticationHandler):
   def GetAuth1Instance(self):
     auth1 = gaeserver.AuthSimianServer()
     try:
-      #TODO(user): This needs a testing framework that is setup
-      #when running in dev_appserver.
-      auth1.LoadSelfKey(gaeserver.GetSimianPrivateKey())
-    except gaeserver.ServerCertMissing, e:
-      logging.critical('ServerCertMissing details %s' % e)
+      key = settings.SERVER_PRIVATE_KEY_PEM
+      auth1.LoadSelfKey(key)
+    except (AttributeError, ValueError):
+      logging.critical('SERVER_PRIVATE_KEY_PEM error')
+      logging.exception('SERVER_PRIVATE_KEY_PEM error')
       raise base.NotAuthenticated
     return auth1
 
@@ -94,8 +95,8 @@ class Auth(handlers.AuthenticationHandler):
     if auth_state == gaeserver.base.AuthState.OK:
       if output:
         self.response.headers['Set-Cookie'] = '%s=%s; secure; httponly;' % (
-            auth_settings.AUTH_TOKEN_COOKIE, output)
-        self.response.out.write(auth_settings.AUTH_TOKEN_COOKIE)
+            auth.AUTH_TOKEN_COOKIE, output)
+        self.response.out.write(auth.AUTH_TOKEN_COOKIE)
       else:
         logging.critical('Auth is OK but there is no output.')
         raise base.NotAuthenticated

@@ -39,11 +39,12 @@
   <div id="newpackage" class="modaldialog">
   <form action="/admin/package" method="post">
     <h2>Create PackageInfo</h2><br/><br/>
-    <label for="new_pkginfo_plist" style="text-align:left">PackageInfo PList (XML)</label>
+    <label for="new_pkginfo_plist" style="text-align:left">PackageInfo Plist (XML)</label>
     <textarea name="new_pkginfo_plist" style="width:450px"></textarea><br/><br/>
     <div style="text-align:right">
     <input type="button" class="button" value="Close"
            onclick="simian.removeClass(document.getElementById('newpackage'), 'visible'); void(0);"/>
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
     <button type="submit">Create</button>
     </div>
   </form>

@@ -4,49 +4,64 @@
 
 {% block page-content %}
  {% if can_add_manifest_mods %}
-  <form method="POST" action="/admin/manifest_modifications">
-    <fieldset>
+  <form method="POST" action="/admin/manifest_modifications" class="form">
+    <fieldset style="max-width: 650px">
     <legend>Add New Manifest Modification</legend>
 
     <input type="hidden" name="add_manifest_mod" value="1" />
 
-    Mod Type:
-    <select name="mod_type">
-      {% for key, value in mod_types %}
-        <option value="{{ key }}">{{ value }}</option>
-      {% endfor %}
-    </select>
-    Target:
-    <input type="text" name="target" size="50"/><br />
+    <div class="formcolumn" style="width: 250px;">
+      <label>Mod Type</label>
+      <select name="mod_type">
+        {% for key, value in mod_types %}
+          <option value="{{ key }}">{{ value }}</option>
+        {% endfor %}
+      </select>
+      <br/>
 
-    Munki Package Name:
-    <select name="munki_pkg_name">
-      <option selected="selected"/>
-      {% for item in munki_pkg_names %}
-        <option value="{{ item.name }}">{{ item.munki_name }}</option>
-      {% endfor %}
-    </select>
-    <br />
+      <label>Target</label>
+      <input type="text" name="target" size="50"/>
+      <br/>
+    </div>
 
     {% if is_admin %}
-      Install Types:
-      {% for install_type in install_types %}
-        <input type="checkbox" name="install_types" value="{{ install_type }}"
-               id="type-{{ install_type }}" class="tags" />
-        <label for="type-{{ install_type }}">{{ install_type }}</label>
-      {% endfor %}
-      <br />
+      <div class="formcolumn">
+        <label>Install Types</label>
+        {% for install_type in install_types %}
+          <input type="checkbox" name="install_types" value="{{ install_type }}"
+                 id="type-{{ install_type }}" class="tags" />
+          <label for="type-{{ install_type }}">{{ install_type }}</label>
+        {% endfor %}
+        <br/>
 
-      Manifests:
-      {% for manifest in manifests %}
-        <input type="checkbox" name="manifests" value="{{ manifest }}"
-               id="manifest-{{ manifest }}" class="tags" />
-        <label for="manifest-{{ manifest }}">{{ manifest }}</label>
-      {% endfor %}
-      <br />
+        <label>Manifests</label>
+        {% for manifest in manifests %}
+          <input type="checkbox" name="manifests" value="{{ manifest }}"
+                 id="manifest-{{ manifest }}" class="tags" />
+          <label for="manifest-{{ manifest }}">{{ manifest }}</label>
+        {% endfor %}
+        <br/>
+      </div>
     {% endif %}
 
-    <button type="submit">Save</button>
+    <table style="width: 650px;">
+      <tr>
+      <td>
+        <label>Munki Package Name</label>
+        <select name="munki_pkg_name">
+          <option selected="selected"/>
+          {% for item in munki_pkg_names %}
+            <option value="{{ item.name }}">{{ item.munki_name }}</option>
+          {% endfor %}
+        </select>
+        <br/>
+        </div>
+      </td>
+      <td valign="bottom" align="right">
+        <button type="submit">Save</button>
+      </td>
+      </tr>
+    </table>
     </fieldset>
   </form>
 {% endif %}

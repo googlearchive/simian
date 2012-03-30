@@ -97,24 +97,32 @@ class Host(admin.AdminHandler):
       computer = models.Computer.get_by_key_name(uuid)
     else:
       uuid = computer.uuid
+
+    popup = self.request.get('format', None) == 'popup'
+    if popup:
+      limit = 1
+    else:
+      limit = SINGLE_HOST_DATA_FETCH_LIMIT
     client_log_files = models.ClientLogFile.all().filter('uuid =', uuid).order(
-        '-mtime').fetch(100)
+        '-mtime').fetch(limit)
     msu_log = models.ComputerMSULog.all().filter('uuid =', uuid).order(
-        '-mtime').fetch(100)
+        '-mtime').fetch(limit)
     applesus_installs = models.InstallLog.all().filter('uuid =', uuid).filter(
-        'applesus =', True).order('-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
+        'applesus =', True).order('-mtime').fetch(limit)
     installs = models.InstallLog.all().filter('uuid =', uuid).filter(
-        'applesus =', False).order('-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
+        'applesus =', False).order('-mtime').fetch(limit)
     exits = models.PreflightExitLog.all().filter('uuid =', uuid).order(
-        '-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
+        '-mtime').fetch(limit)
     install_problems = models.ClientLog.all().filter(
         'action =', 'install_problem').filter('uuid =', uuid).order(
-            '-mtime').fetch(SINGLE_HOST_DATA_FETCH_LIMIT)
+            '-mtime').fetch(limit)
 
     tags = {}
+    tags_list = []
     if computer:
       # Generate tags data.
-      for tag in models.Tag.GetAllTagNamesForEntity(computer):
+      tags_list = models.Tag.GetAllTagNamesForEntity(computer)
+      for tag in tags_list:
         tags[tag] = True
       for tag in models.Tag.GetAllTagNames():
         if tag not in tags:
@@ -136,10 +144,15 @@ class Host(admin.AdminHandler):
         'install_problems': install_problems,
         'preflight_exits': exits,
         'tags': tags,
+        'tags_list': tags_list,
         'host_report': True,
         'limit': SINGLE_HOST_DATA_FETCH_LIMIT,
         'is_support_user': auth.IsSupportUser(),
         'is_security_user': auth.IsSecurityUser(),
         'is_physical_security_user': auth.IsPhysicalSecurityUser(),
     }
-    self.Render('host.html', values)
+
+    if popup:
+      self.Render('host_popup.html', values)
+    else:
+      self.Render('host.html', values)

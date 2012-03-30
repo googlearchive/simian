@@ -36,15 +36,16 @@ class IPBlacklist(admin.AdminHandler):
     if not auth.IsAdminUser():
       self.error(403)
       return
+    ips = {}
     try:
       ips = util.Deserialize(
           models.KeyValueCache.MemcacheWrappedGet('client_exit_ip_blocks',
                                                   'text_value'))
     except util.DeserializeError:
-      ips = []
-      return
-    d = {'report_type': 'ip_blacklist', 'list': ips, 'title': 'IP Blacklist',
-         'regex': '/%s/' % IP_REGEX,
+      pass
+    d = {'report_type': 'ip_blacklist', 'title': 'IP Blacklist', 'columns': 2,
+         'list': sorted(ips.items()), 'labels': ['IP', 'Comment'],
+         'regex': ['/%s/' % IP_REGEX, '/^.{0,60}$/'],
          'infopanel': 'Subnet format required (e.g. 192.168.1.0/24)'}
     self.Render('list_edit.html', d)
 
@@ -53,16 +54,17 @@ class IPBlacklist(admin.AdminHandler):
     if not auth.IsAdminUser():
       self.error(403)
       return
-    values = self.request.get_all('item', None)
-    ips = []
+    values = self.request.get_all('item_0', None)
+    comments = self.request.get_all('item_1', None)
+    if values and (not comments or not len(values) == len(comments)):
+      self.error(400)
+      return
     is_ip = re.compile(IP_REGEX)
-    for ip in values:
-      if is_ip.match(ip):
-        ips.append(ip)
-      else:
-        self.error(400)
-        self.response.out.write('Malformed IP: "%s"' % ip)
-        return
+    if not all(map(is_ip.match, values)):
+      self.error(400)
+      self.response.out.write('Malformed IP')
+      return
+    ips = dict(zip(values, comments))
     models.KeyValueCache.MemcacheWrappedSet('client_exit_ip_blocks',
                                             'text_value',
                                             util.Serialize(ips))

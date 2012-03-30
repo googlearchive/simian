@@ -1,0 +1,30 @@
+{% if not computer %}
+  <p>No computer with the specified UUID was found.</p>
+{% else %}
+  <dl class="hostpopup">
+    <dt>Hostname</dt>
+    <dd><a href="/admin?filter-type=hostname&filter={{ computer.hostname }}">{{ computer.hostname }}</a>, OS X {{ computer.os_version }}</dd>
+    <dt>Owner</dt>
+    <dd><a href="/admin?filter-type=owner&filter={{ computer.owner }}">{{ computer.owner }}</a>, {{ computer.office }}</dd>
+    <dt>Serial</dt>
+    <dd>{{ computer.serial }}</dd>
+    <dt class="inline">Free HDD</dt>
+    <dd>{{ computer.root_disk_free|filesizeformat }}</dd>
+    <dt>Uptime</dt>
+    <dd>{{ computer.uptime|uptime_from_seconds }}</dd>
+    <dt>Remaining packages to install</dt>
+    <dd>{{ computer.pkgs_to_install|length }}</dd>
+    <dt>Last preflight/postflight</dt>
+    <dd>{{ computer.preflight_datetime|timesince }} ago / {{ computer.postflight_datetime|timesince }} ago</dd>
+    <dt>Last MSU Popup</dt>
+    <dd>{{ computer.last_notified_datetime|timesince }} ago</dd>
+    {% if msu_log %}
+    <dt class="inline">Last MSU Log</dt>
+    <dd>{{ msu_log.0.event }}</dd>
+    {% endif %}
+    {% if tags_list %}
+    <dt>Tags</dt>
+    <dd>{{ tags_list|join:", " }}</dd>
+    {% endif %}
+  </dl>
+{% endif %}

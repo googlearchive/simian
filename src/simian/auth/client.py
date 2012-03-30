@@ -27,8 +27,8 @@ Classes:
 
 
 
+from simian import settings
 from simian.auth import base
-from simian.auth import settings as auth_settings
 
 
 class Error(Exception):
@@ -44,9 +44,9 @@ class AuthSimianClient(base.Auth1Client):
 
   def __init__(self):
     super(AuthSimianClient, self).__init__()
-    self._ca_pem = auth_settings.CA_PUBLIC_CERT_PEM
-    self._server_cert_pem = auth_settings.SERVER_PUBLIC_CERT_PEM
-    self._required_issuer = auth_settings.REQUIRED_ISSUER
+    self._ca_pem = settings.CA_PUBLIC_CERT_PEM
+    self._server_cert_pem = settings.SERVER_PUBLIC_CERT_PEM
+    self._required_issuer = settings.REQUIRED_ISSUER
 
   def GetSessionClass(self):
     return AuthSessionSimianClient

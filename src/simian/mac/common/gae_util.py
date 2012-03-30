@@ -49,7 +49,7 @@ def SafeBlobDel(blobstore_key):
     blobstore_key: str, a blob key
   """
   try:
-    blobstore.delete(blobstore_key)
+    blobstore.delete_async(blobstore_key)
   except blobstore.Error, e:
     logging.warning((
       'blobstore.delete(%s) failed: %s. '
@@ -63,7 +63,7 @@ def SafeEntityDel(entity):
     entity: App Engine db.Model instance.
   """
   try:
-    entity.delete()
+    entity.delete_async()
   except db.Error, e:
     logging.warning((
       'Model.delete(%s) failed: %s. '

@@ -40,9 +40,9 @@ class ACLGroups(admin.AdminHandler):
 
     if group:
       group_members = self.GetMembers(group)
-      d = {'report_type': 'acl_groups', 'list': group_members,
+      d = {'report_type': 'acl_groups', 'list': [(gm,) for gm in group_members],
+           'columns': 1, 'regex': ['/%s/' % MAIL_REGEX],
            'title': 'ACL Group: %s' % group, 'back': '/admin/acl_groups',
-           'regex': '/%s/' % MAIL_REGEX,
            'infopanel': 'Full email address required (e.g. user@example.com)'}
       self.Render('list_edit.html', d)
     else:
@@ -60,7 +60,7 @@ class ACLGroups(admin.AdminHandler):
       return
 
     if group:
-      values = self.request.get_all('item', None)
+      values = self.request.get_all('item_0', None)
       members = []
       is_email = re.compile(MAIL_REGEX)
       for member in values:

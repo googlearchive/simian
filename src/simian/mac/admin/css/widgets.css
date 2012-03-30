@@ -1,0 +1,325 @@
+/**
+ * Copyright 2012 Google Inc. All Rights Reserved.
+ *
+ * Panels, popups, tooltips, etc.
+ *
+ */
+
+#butterbar {
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  text-align: center;
+  padding: 4px 16px;
+  background: #F9EDBE;
+  border: 1px solid #F0C36D;
+  margin-bottom: -15px;
+  -webkit-border-radius: 2px;
+  -moz-border-radius: 2px;
+  border-radius: 2px;
+  margin-left: -150px;
+  -webkit-box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+  -moz-box-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  -webkit-transition: opacity 1s, -webkit-transform 0 linear 1s, left 0 linear 1s, top .6s;
+  -moz-transition: opacity 0.130s, top .6s;
+  -o-transition: opacity 0.130s, top .6s;
+  transition: opacity 0.130s, top .6s;
+  z-index: 2000;
+}
+
+.infopanel {
+  display: block;
+  position: relative;
+  margin: 16px 5px;
+  padding: 10px 16px;
+  color: #666;
+  line-height: 18px;
+  background: #F9EDBE;
+  border: 1px solid #F0C36D;
+  vertical-align: baseline;
+}
+.pointdown, .pointup, .pointleft {
+  outline: none;
+  display: block;
+  position: absolute;
+  vertical-align: baseline;
+}
+.pointdown {
+  bottom: -11px;
+  left: 24px;
+  margin: 0 0 0 -5px;
+  width: 17px;
+  height: 11px;
+  background: url('/admin/static/bubble_point_down.png');
+}
+.pointup {
+  top: -11px;
+  left: 24px;
+  margin: 0 0 0 -5px;
+  width: 17px;
+  height: 11px;
+  background: url('/admin/static/bubble_point.png');
+}
+.pointleft {
+  top: 24px;
+  left: -11px;
+  margin: 0 -5px 0 0;
+  width: 11px;
+  height: 17px;
+  background: url('/admin/static/bubble_point_left.png');
+}
+.tooltip {
+  display: inline;
+  vertical-align: text-top;
+  background-color: #222;
+  color: #FFF;
+  font-weight: bold;
+  font-size: 0.9em;
+  padding: 5px 8px;
+  margin: 0 0 0 7px;
+  position:relative;
+  -webkit-box-shadow: 0px 1px 4px rgba(0,0,0,0.2);
+  -moz-box-shadow: 0px 1px 4px rgba(0,0,0,0.2);
+  box-shadow: 1px 2px 4px rgba(0,0,0,0.2);
+}
+.whitecheck:after {
+  content: url('/admin/static/check_no_box_white.png');
+  display: inline-block;
+  vertical-align: middle;
+}
+.blackpointer {
+  border-right: 7px solid #222;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  font-size: 0px;
+  line-height: 0px;
+  position: absolute;
+  left: -7px;
+  top: 6px;
+}
+
+.modaldialog, #search.open {
+  -webkit-box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  -moz-box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  -ms-box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  background: white;
+  left: 50%;
+  outline: 1px solid rgba(0, 0, 0, 0.2);
+  padding: 30px 42px;
+  position: fixed;
+  right: auto;
+  width: 450px;
+  height: auto;
+  overflow: hidden;
+  z-index: 100;
+  top: 82px;
+  margin-left: -256px;
+  opacity: 0.0;
+  -webkit-transform: scale(1.3);
+  -moz-transform: scale(1.3);
+  transform: scale(1.3);
+  -webkit-transition: all 0.218s;
+  -moz-transition: all 0.218s;
+  transition: all 0.218s;
+  z-index: -10;
+}
+.modaldialog.visible, #search.open {
+  display: block;
+  opacity: 1.0;
+  -webkit-transform: scale(1.0);
+  -moz-transform: scale(1.0);
+  transform: scale(1.0);
+  z-index: 3999;
+}
+#search .closebutton{
+  display: none;
+  width: 44px;
+  height: 44px;
+  background: url('/admin/static/x.png') center no-repeat;
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: .7;
+  -moz-opacity: .7;
+  filter: alpha(opacity=70);
+  -ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=70)";
+  cursor: pointer;
+}
+#search.open .closebutton{
+  display: block;
+}
+#search.open #search-box{
+  width: 100%;
+}
+#search.open table{
+  width: 100%;
+}
+
+#host_popup {
+  position: relative;
+  background-color: #222;
+  color: #FFF;
+  padding: 3px 10px;
+  margin: 4px 0 0 5px;
+  -webkit-box-shadow: 0px 1px 4px rgba(0,0,0,0.2);
+  -moz-box-shadow: 0px 1px 4px rgba(0,0,0,0.2);
+  box-shadow: 1px 2px 4px rgba(0,0,0,0.2);
+}
+.popup_pointer {
+  border-bottom: 4px solid #222;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  font-size: 0px;
+  line-height: 0px;
+  position: absolute;
+  top: -4px;
+  left: 6px;
+}
+dl.hostpopup {
+  overflow: hidden;
+}
+dl.hostpopup dt {
+  font-weight: bold;
+  display: block;
+  float: left;
+  clear: both;
+}
+dl.hostpopup dt:after {
+  content: ":";
+}
+dl.hostpopup dd {
+  display: block;
+  float: left;
+  margin: 0 0 6px 5px;
+}
+dl.hostpopup dt.inline {
+  clear: none;
+  margin-left: 10px;
+}
+#host_popup a {
+  color: #FFF;
+  text-decoration: underline;
+}
+
+.sectionheader {
+  display: block;
+  margin: 15px 0 0 0;
+  padding: 5px 0 5px 0;
+  border-bottom: 1px solid #E5E5E5;
+}
+.sectionheader+div {
+  padding-top: 8px;
+}
+.sectionheader.zippy_toggle {
+  cursor: pointer;
+  padding: 10px 0 5px 15px;
+  font-size: 16px;
+  color: #222222;
+}
+div.subsection {
+  margin-left: 15px;
+}
+div.subsection table {
+  margin: 5px 10px;
+  width: 98%;
+}
+div.subsubsection {
+  margin: 15px 0 25px 0;
+}
+
+.goog-zippy-header {
+  outline: 0;
+  background-repeat: no-repeat;
+  background-position: 4px 50%;
+}
+.goog-zippy-expanded {
+  background-image: url('/admin/static/disclosure_arrow_down.png');
+}
+.goog-zippy-collapsed {
+  background-image: url('/admin/static/disclosure_arrow.png');
+}
+
+.morebox {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  max-height: 100px;
+  margin: 6px;
+  transition: all 0.28s;
+  -moz-transition: all 0.28s;
+  -webkit-transition: all 0.28s;
+  -o-transition: all 0.28s;
+}
+.morebox.maximized {
+  max-height: 800px;
+}
+.morebox .more {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  height: 20px;
+  width: 100%;
+  opacity: 0.8;
+  background-color: #DDD;
+  border-top: 1px solid #999;
+  text-align: center;
+  font-weight: bold;
+  color: #009;
+  cursor:pointer;
+}
+.morebox.maximized .more {
+  display: none;
+}
+
+.xml {
+  font-family: Courier, monospace;
+  color: #222;
+  font-weight: bold;
+}
+.xml .xml_tag {
+  color: #666;
+  font-weight: normal;
+}
+.xml .xml_tag.dict .xml_key {
+  color: #F66;
+}
+.xml .xml_tag.string .xml_key {
+  color: #6A6;
+}
+.xml .xml_tag.array .xml_key {
+  color: #66A;
+}
+.xml .xml_tag.key .xml_key {
+  font-weight: bold;
+  color: #666;
+}
+
+.diffcode {
+  font-family: "Courier New", Courier, monospace;
+  color: #999;
+  font-size: 12px;
+}
+.diff_add {
+  color: #090;
+  font-weight: bold;
+}
+.diff_sub {
+  color: #900;
+}
+.ellipsis {
+  font-weight: bold;
+  font-size: 16px;
+  cursor: pointer;
+  display: block;
+}
+.omittable {
+  display: none;
+}
+.ellipsis.visible {
+  display: none;
+}
+.ellipsis.visible + .omittable {
+  display: inline;
+}

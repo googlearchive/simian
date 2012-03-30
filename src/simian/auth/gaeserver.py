@@ -36,14 +36,17 @@ import datetime
 import logging
 import os
 import time
+
 from google.appengine import runtime
 from google.appengine.api import memcache
 from google.appengine.api import datastore
 from google.appengine.ext import deferred
 from google.appengine.ext import db
 from google.appengine.runtime import apiproxy_errors
+
+from simian import auth
+from simian import settings
 from simian.auth import base
-from simian.auth import settings as auth_settings
 from simian.mac import models
 
 
@@ -272,9 +275,9 @@ class AuthSimianServer(base.Auth1):
 
   def __init__(self):
     super(AuthSimianServer, self).__init__()
-    self._ca_pem = auth_settings.CA_PUBLIC_CERT_PEM
-    self._server_cert_pem = auth_settings.SERVER_PUBLIC_CERT_PEM
-    self._required_issuer = auth_settings.REQUIRED_ISSUER
+    self._ca_pem = settings.CA_PUBLIC_CERT_PEM
+    self._server_cert_pem = settings.SERVER_PUBLIC_CERT_PEM
+    self._required_issuer = settings.REQUIRED_ISSUER
 
   def GetSessionClass(self):
     return AuthSessionSimianServer
@@ -316,14 +319,14 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
         'Cookie could not be loaded, %s: %s', str(e), cookie_str)
     raise NotAuthenticated
 
-  if (auth_settings.AUTH_TOKEN_COOKIE not in c
-    or not c[auth_settings.AUTH_TOKEN_COOKIE]):
+  if (auth.AUTH_TOKEN_COOKIE not in c
+    or not c[auth.AUTH_TOKEN_COOKIE]):
     logging.warning('Cookie data is empty or does not contain auth token %s',
-                  auth_settings.AUTH_TOKEN_COOKIE)
+                  auth.AUTH_TOKEN_COOKIE)
     raise NotAuthenticated
 
   a = AuthSimianServer()
-  token = c[auth_settings.AUTH_TOKEN_COOKIE].value
+  token = c[auth.AUTH_TOKEN_COOKIE].value
   try:
     session = a.GetSessionIfAuthOK(token, require_level)
   except base.AuthSessionError, e:
@@ -350,12 +353,3 @@ def LogoutSession(session):
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
     deferred_name = 'logout-%.0f' % (time.time() * 1000)
     deferred.defer(LogoutSession, session, _name=deferred_name, _countdown=60)
-
-
-def GetSimianPrivateKey():
-  """Returns the string Simian Private Key in PEM format string."""
-  pk = models.KeyValueCache.MemcacheWrappedGet(
-      'server_private_cert.pem', prop_name='text_value')
-  if not pk:
-    raise ServerCertMissing('server_private_cert.pem')
-  return pk

@@ -29,7 +29,7 @@ import logging
 import os
 import sys
 import tempfile
-from simian.auth import settings as auth_settings
+from simian import auth
 from simian.client import client
 
 
@@ -321,10 +321,10 @@ class SimianAuthCliClient(object):
       token: str token.
     """
     # if a cookie was supplied as the token, parse out the actual token.
-    if token.startswith(auth_settings.AUTH_TOKEN_COOKIE):
+    if token.startswith(auth.AUTH_TOKEN_COOKIE):
       logging.debug('Setting token configs from: %s', token)
       self.config['token_cookie'] = token
-      token = token[len(auth_settings.AUTH_TOKEN_COOKIE) + 1:]
+      token = token[len(auth.AUTH_TOKEN_COOKIE) + 1:]
       token = token.split(';', 1)[0]
       self.config['token'] = token
 

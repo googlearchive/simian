@@ -635,12 +635,12 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
       (('uuid', client_id['uuid']),))
 
   tag_mods = []
-  if client_id['uuid']:
+  if client_id['uuid']:  # not set if viewing a base manifest.
     computer_key = models.db.Key.from_path('Computer', client_id['uuid'])
     computer_tags = models.Tag.GetAllTagNamesForKey(computer_key)
     if computer_tags:
-      # NOTE(user): if we feel most computers will have tags, it might make sense
-      #             to regularly fetch and cache all mods.
+      # NOTE(user): if we feel most computers will have tags, it might make
+      #             sense to regularly fetch and cache all mods.
       for tag in computer_tags:
         t = (('tag_key_name', tag),)
         tag_mods.extend(

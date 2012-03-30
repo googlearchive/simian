@@ -1,4 +1,4 @@
-// Copyright 2011 Google Inc. All Rights Reserved.
+// Copyright 2012 Google Inc. All Rights Reserved.
 
 /**
  * @fileoverview This is the main JavaScript file for the Simian project.
@@ -6,191 +6,21 @@
  */
 
 
-goog.provide('simian');
 goog.provide('applesus');
+goog.provide('simian');
 
 goog.require('goog.array');
 goog.require('goog.dom');
-goog.require('goog.events');
-goog.require('goog.i18n.DateTimeFormat');
-goog.require('goog.i18n.DateTimeParse');
-goog.require('goog.json');
-goog.require('goog.net.Cookies');
-goog.require('goog.net.XhrIo');
-goog.require('goog.ui.Component.EventType');
-goog.require('goog.ui.Css3MenuButtonRenderer');
-goog.require('goog.ui.FilteredMenu');
-goog.require('goog.ui.FilterObservingMenuItem');
-goog.require('goog.ui.InputDatePicker');
+goog.require('goog.positioning.AnchoredPosition');
+goog.require('goog.ui.HoverCard');
 goog.require('goog.ui.KeyboardShortcutHandler');
-goog.require('goog.ui.Menu');
-goog.require('goog.ui.MenuButton');
-goog.require('goog.ui.MenuItem');
-goog.require('goog.ui.Select');
-goog.require('goog.ui.TriStateMenuItem');
 goog.require('goog.ui.AnimatedZippy');
-
-// TODO(user): Build a menu class, and maybe even move the menu source into
-// it's own js module.
-
-// Global variable indicating the state of the navigation menu.
-simian.menuState =
-  goog.net.cookies.get('menupinned', '1') == '1' ? 'pinned' : 'closed';
+goog.require('goog.ui.Zippy');
+goog.require('simian.menu');
 
 
 // Global shortcutHandler for Keyboard Shortcuts.
 simian.shortcutHandler = new goog.ui.KeyboardShortcutHandler(document);
-
-/**
- * XHR function for AJAX requests.
- * @param {string} url String URL to call.
- * @param {string} params URL encoded string of query/POST parameters.
- * @param {string} method HTTP method to use; GET, POST, PUT, etc.
- * @param {Function} successCallback Callback function called on success.
- * @param {Function} failureCallback Callback function called on failure.
- */
-simian.xhr = function(url, params, method, successCallback, failureCallback) {
-  goog.net.XhrIo.send(url,
-                      function() {
-                        if (this.isSuccess()) {
-                          successCallback(this);
-                        } else {
-                          failureCallback(this);
-                        }
-                      },
-                      method, params, null, 10000);
-};
-
-
-/**
- * Callback function for simple ajax on/off buttons
- * @param {string} url String URL to call.
- * @param {string} enable String of POST parameters to enable feature.
- * @param {string} disable String of POST parameters to disable feature.
- * @param {Element} button The HTML element thats controls the state.
- * @param {string} opt_responseField The json field that contains the new state.
- * @param {Function} opt_successCallback Callback function called after success.
- */
-simian.ajaxToggle = function(url, enable, disable, button, opt_responseField,
-                            opt_successCallback) {
-  var enabled = goog.dom.classes.has(button, 'istrue');
-  var success = function(e) {
-    goog.dom.classes.remove(button, 'processing');
-    if (e.getResponseJson()[opt_responseField || 'enabled']) {
-      goog.dom.classes.add(button, 'istrue');
-    } else {
-      goog.dom.classes.remove(button, 'istrue');
-    }
-    if (opt_successCallback) opt_successCallback(e.getResponseJson());
-  };
-  var failure = function(e) {
-    alert('oops, try again.');
-  };
-  goog.dom.classes.add(button, 'processing');
-  simian.xhr(url, enabled ? disable : enable, 'POST', success, failure);
-};
-
-
-/**
- * Uses XHR to delete a client log file.
- * @param {Element} deleteButton The delete button clicked to call this func.
- */
-simian.deleteClientLogFile = function(deleteButton) {
-  var key = deleteButton.name;
-  var success = function(e) {
-    var rowIndex = deleteButton.parentNode.parentNode.rowIndex;
-    var table = deleteButton.parentNode.parentNode.parentNode;
-    table.deleteRow(rowIndex);
-  };
-  var failure = function(e) {
-    alert('Failure deleting the client log; please try again');
-  };
-  var params = 'action=delete_client_log'
-  simian.xhr('/admin/clientlog/' + key, params, 'POST', success, failure);
-};
-goog.exportSymbol('simian.deleteClientLogFile', simian.deleteClientLogFile);
-
-
-/**
- * Toggles a manifest modification between enabled/disabled.
- */
-simian.toggleManifestModification = function(key, button) {
-  var enable =  'key=' + key + '&enabled=1';
-  var disable = 'key=' + key + '&enabled=0';
-  simian.ajaxToggle('/admin/manifest_modifications/', enable, disable, button);
-};
-goog.exportSymbol(
-    'simian.toggleManifestModification', simian.toggleManifestModification);
-
-
-/**
- * Toggles a package alias between enabled/disabled.
- */
-simian.togglePackageAlias = function(key, button) {
-  var enable =  'key_name=' + key + '&enabled=1';
-  var disable = 'key_name=' + key + '&enabled=0';
-  simian.ajaxToggle('/admin/package_alias/', enable, disable, button);
-};
-goog.exportSymbol('simian.togglePackageAlias', simian.togglePackageAlias);
-
-
-/**
- * Use XHR to add or remove a given Apple SUS product from a given track.
- * @param {string} productId Apple SUS Product ID like 042-1234.
- * @param {string} track Simian track like unstable, testing, or stable.
- * @param {Element} button The button that sets the state.
- */
-applesus.toggleProductTrack = function(productId, track, button) {
-  var enable =  'track=' + track + '&enabled=1';
-  var disable = 'track=' + track + '&enabled=0';
-  simian.ajaxToggle(
-    '/admin/applesus/product/' + productId, enable, disable, button);
-};
-goog.exportSymbol('applesus.toggleProductTrack', applesus.toggleProductTrack);
-
-/**
- * Use XHR to set or unset manual override on a given Apple SUS product.
- * @param {string} productId Apple SUS Product ID like 042-1234.
- * @param {Element} button The button that sets the state.
- */
-applesus.toggleProductManualOverride = function(productId, button) {
-  var enable =  'manual_override=1';
-  var disable = 'manual_override=0';
-  var callback = function(json) {
-    goog.dom.$(productId + '-testing-promote-date').innerHTML =
-        json['testing_promote_date'] || '';
-    goog.dom.$(productId + '-stable-promote-date').innerHTML =
-        json['stable_promote_date'] || '';
-  };
-  simian.ajaxToggle('/admin/applesus/product/' + productId,
-                   enable, disable, button, 'manual_override', callback);
-};
-goog.exportSymbol('applesus.toggleProductManualOverride',
-                   applesus.toggleProductManualOverride);
-
-
-/**
- * Makes AJAX call to /admin/host/uuid with action "upload_logs".
- * @param {string} uuid UUID of the target host.
- * @param {Element} opt_button Button to replace with success msg.
- */
-simian.hostUploadLogs = function(uuid, opt_button) {
-  simian.xhr('/admin/host/' + uuid,
-            'action=upload_logs&uuid=' + uuid,
-            'POST',
-            function(e) {
-              if (opt_button) {
-                var email = e.getResponseJson()['email'];
-                opt_button.outerHTML = '<span class="success">' +
-                    'Logs will be uploaded on next preflight.' +
-                    ' (notify: ' + email + ')</span>';
-              }
-            },
-            function(e) {
-              alert('oops, please try again');
-            });
-};
-goog.exportSymbol('simian.hostUploadLogs', simian.hostUploadLogs);
 
 
 /**
@@ -268,124 +98,53 @@ goog.exportSymbol('simian.zippyfy', simian.zippyfy);
 
 
 /**
- * Makes an input a date-input.
- * @param {Element} input The input box to choose a date.
- * @param {Function} opt_callback Function called on date change.
+ * Makes UUID links (with class uuidhover) display a HoverCard with host info.
  */
-simian.makeDateInput = function(input, opt_callback) {
-  var PATTERN = "yyyy'-'MM'-'dd";
-  var formatter = new goog.i18n.DateTimeFormat(PATTERN);
-  var parser = new goog.i18n.DateTimeParse(PATTERN);
-  var idp = new goog.ui.InputDatePicker(formatter, parser);
-  idp.decorate(input);
-  if (opt_callback) {
-    goog.events.listen(idp, 'change', opt_callback);
-  }
+simian.makeUUIDHover = function() {
+  var div =
+      goog.dom.$dom('div',
+          {'id': 'host_popup_container',
+           'style': 'display: none; position: absolute; z-index: 840;'},
+          goog.dom.$dom('div', {'id': 'host_popup'},
+              goog.dom.$dom('span', {'class': 'popup_pointer'}),
+              goog.dom.$dom('div',
+                  {'id': 'host_popup_loading', 'style': 'display: none;'},
+                  goog.dom.$dom('img',
+                      {'src': '/admin/static/loading_222.gif',
+                       'style': 'width: 16px; height: 16px; margin: 5px 3px;',
+                       'alt': 'loading'})
+              ),
+              goog.dom.$dom('div', {'id': 'host_popup_info'})
+          )
+      );
+  goog.dom.appendChild(document.body, div);
+  var hc = new goog.ui.HoverCard(
+      function(e) { return goog.dom.classes.has(e, 'uuidhover'); }, false);
+  var popup = goog.dom.$('host_popup_container');
+  var content = goog.dom.$('host_popup_info');
+  var loading = goog.dom.$('host_popup_loading');
+  hc.setElement(popup);
+  var onTrigger = function(event) {
+    hc.setPosition(new goog.positioning.AnchoredPosition(
+        event.anchor, goog.positioning.Corner.BOTTOM_LEFT));
+    return true;
+  };
+  goog.events.listen(hc, goog.ui.HoverCard.EventType.TRIGGER, onTrigger);
+  var onBeforeShow = function() {
+    content.innerHTML = loading.innerHTML;
+    var host_href = hc.getAnchorElement().getAttribute('href');
+    simian.xhr(host_href + '?format=popup', '', 'get',
+              function(e) {
+                content.innerHTML = e.getResponseText();
+                return true;
+              },
+              function(e) {
+                hc.cancelTrigger();
+              });
+    return true;
+  };
+  goog.events.listen(hc, goog.ui.HoverCard.EventType.BEFORE_SHOW, onBeforeShow);
 }
-goog.exportSymbol('simian.makeDateInput', simian.makeDateInput);
-
-
-/**
- * Disables the submit button if an invalid input exists in the form.
- * @param {Element} form The form with possibly invalid inputs and submit button
- */
-simian.validateSubmit = function(form) {
-  form.submit.disabled =
-    document.getElementsByClassName('invalid-input').length > 0;
-}
-goog.exportSymbol('simian.validateSubmit', simian.validateSubmit);
-
-
-/**
- * Adds the 'invalid-input' class to a field if it fails the regular expression.
- * @param {Element} field The field to validate.
- * @param {RegExp} regexp The regular expression to match.
- * @param {Function} opt_altValid an alternative validation function.
- * @param {Function} opt_callback A callback called after validation.
- */
-simian.validateField = function(field, regexp, opt_altValid, opt_callback) {
-  if (!regexp.test(field.value) || opt_altValid && !opt_altValid()) {
-    goog.dom.classes.add(field, 'invalid-input');
-  } else {
-    goog.dom.classes.remove(field, 'invalid-input');
-  }
-  if (opt_callback) {
-    opt_callback(false);
-  }
-  if (field.form) {
-    simian.validateSubmit(field.form);
-  }
-}
-goog.exportSymbol('simian.validateField', simian.validateField);
-
-
-/**
- * Sets a cookie to save the pinned/closed state of the menu.
- * @param {boolean} val True to set the menu state as pinned in the cookie.
- */
-simian.setPinnedCookie = function(val) {
-  goog.net.cookies.remove('menupinned');
-  goog.net.cookies.set('menupinned', val ? '1' : '0');
-};
-
-
-/**
- * Updates the body's classes to show/hide/style the menu.
- */
-simian.updateMenu = function() {
-  if (simian.menuState == 'pinned') {
-    goog.dom.classes.add(goog.dom.getDocument().body, 'menupinned');
-    goog.dom.classes.remove(goog.dom.getDocument().body, 'menuopen');
-  } else if (simian.menuState == 'open') {
-    goog.dom.classes.remove(goog.dom.getDocument().body, 'menupinned');
-    goog.dom.classes.add(goog.dom.getDocument().body, 'menuopen');
-  } else {
-    goog.dom.classes.remove(goog.dom.getDocument().body, 'menupinned');
-    goog.dom.classes.remove(goog.dom.getDocument().body, 'menuopen');
-  }
-}
-goog.exportSymbol('simian.updateMenu', simian.updateMenu);
-
-
-/**
- * Toggles the menu open/close.
- * @param {boolean} opt_force If true, forces the menu to be toggled.
- */
-simian.toggleMenu = function(opt_force) {
-  if (simian.menuState == 'closed') {
-    simian.menuState = 'open';
-  } else {
-    if (opt_force) {
-      simian.menuState = 'closed';
-      simian.setPinnedCookie(false);
-    }
-  }
-  simian.updateMenu();
-};
-goog.exportSymbol('simian.toggleMenu', simian.toggleMenu);
-
-
-/**
- * Sets the menu state to pinned and saves cookie.
- */
-simian.pinMenu = function() {
-  simian.menuState = 'pinned';
-  simian.setPinnedCookie(true);
-  simian.updateMenu();
-};
-goog.exportSymbol('simian.pinMenu', simian.pinMenu);
-
-
-/**
- * Sets the menu state to closed. Useful for hiding the menu on mouseout, etc.
- */
-simian.hideMenu = function(e) {
-  if (simian.menuState == 'open') {
-    simian.menuState = 'closed';
-    simian.updateMenu();
-  }
-};
-goog.exportSymbol('simian.hideMenu', simian.hideMenu);
 
 
 /**
@@ -406,105 +165,6 @@ simian.closeSearch = function() {
   goog.dom.classes.remove(goog.dom.$('search'), 'open');
 };
 goog.exportSymbol('simian.closeSearch', simian.closeSearch);
-
-
-/**
- * Event listener to hide menu on mouseout. Does not work as expected. DISABLED.
- */
-// TODO(user): hide menu on mouseout
-simian.registerMenuMouseout = function() {
-  goog.events.listen(goog.dom.$('menu'), 'mouseout', simian.hideMenu, true);
-};
-goog.exportSymbol('simian.registerMenuMouseout', simian.registerMenuMouseout);
-
-
-/**
- * Event handler for when a new tag in created in the tags filtered menu.
- */
-simian.createNewTag = function(e) {
-  var item = e.target;
-  var itemContent = item.getContentElement();
-  var tag = goog.dom.getTextContent(goog.dom.$$('b', null, itemContent)[0]);
-  var uuid = goog.dom.$('uuid').innerHTML;
-  // If the tag is checked when this event is fired, it'll be unchecked!
-  var params = 'action=create&tag=' + tag + '&uuid=' + uuid;
-  var success = function(e) {
-    var menu = item.getParent();
-    var newItem;
-    menu.addItem(newItem = new goog.ui.TriStateMenuItem(tag));
-    newItem.setCheckedState(goog.ui.TriStateMenuItem.State.FULLY_CHECKED);
-  };
-  var failure = function(e) {
-    alert('Failure creating tag; please refresh and try again.');
-  };
-  simian.xhr('/admin/tags/', params, 'POST', success, failure);
-};
-
-
-/**
- * Event handler for when an existing tag in the tags filtered menu is toggled.
- */
-simian.hostTagClicked = function(e) {
-  var item = e.target;
-  var tag = item.getCaption();
-  var uuid = goog.dom.$('uuid').innerHTML;
-  // If the tag is checked when this event is fired, it'll be unchecked!
-  var addTag = item.isChecked() ? '0' : '1';
-  var params = 'action=change&add=' + addTag + '&tag=' + tag + '&uuid=' + uuid;
-  var success = function(e) {};
-  var failure = function(e) {
-    alert('Failure modifying tag; please refresh and try again.');
-  };
-  simian.xhr('/admin/tags/', params, 'POST', success, failure);
-};
-
-
-/**
- * Initializes Tags filtered menu for host reports.
- * @param {Object} tags Hash of key tag names and value boolean whether the tag
- *     is applied to the current host or not.
- */
-simian.initHostTags = function(tags) {
-  var el = goog.dom.$('host-tags');
-  var menu = new goog.ui.FilteredMenu();
-  menu.setAllowMultiple(true);
-
-  var item;
-  for (var tag in tags) {
-    menu.addItem(item = new goog.ui.TriStateMenuItem(tag));
-    if (tags[tag]) {
-      item.setCheckedState(goog.ui.TriStateMenuItem.State.FULLY_CHECKED);
-    }
-    goog.events.listen(
-        item, goog.ui.Component.EventType.CHECK, simian.hostTagClicked);
-    goog.events.listen(
-        item, goog.ui.Component.EventType.UNCHECK, simian.hostTagClicked);
-  }
-
-  var cm = new goog.ui.FilterObservingMenuItem('');
-  menu.addItem(cm)
-
-  var button = new goog.ui.MenuButton(
-      'Tags', menu, new goog.ui.Css3MenuButtonRenderer());
-  button.setFocusablePopupMenu(true);
-  button.render(el);
-
-  cm.setObserver(function(item, str) {
-    var b = str == '' || tags[str];
-    item.setVisible(!b);
-    if (!b) {
-      item.setContent(this.dom_.createDom(
-          'span',
-          null,
-          '"',
-          this.dom_.createDom('b', null, str),
-          '" (create tag)'));
-    }
-  });
-  goog.events.listen(
-      cm, goog.ui.Component.EventType.ACTION, simian.createNewTag);
-};
-goog.exportSymbol('simian.initHostTags', simian.initHostTags);
 
 
 /**
@@ -538,15 +198,18 @@ window.onload = function() {
       simian.shortcutHandler,
       simian.shortcutHandler.getEventType('toggle-menu'),
       function(e) {
-        if (simian.menuState == 'pinned') {
-          simian.toggleMenu(true);
+        if (simian.menu.menuState == 'pinned') {
+          simian.menu.toggleMenu(true);
         } else {
-          simian.pinMenu();
+          simian.menu.pinMenu();
         }
       });
 
   // Register the ESC key listener.
   simian.shortcutHandler.registerShortcut('esc-key', goog.events.KeyCodes.ESC);
+
+  // Make UUID links HoverCards for all pages after load.
+  simian.makeUUIDHover();
 };
 
 

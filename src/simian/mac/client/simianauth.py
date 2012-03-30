@@ -62,7 +62,7 @@ warnings.filterwarnings(
 from simian.client import simianauth
 from simian.mac.client import client
 from simian.mac.munki import plist
-from simian.auth import settings
+from simian import auth
 
 
 class SimianAuthCliClient(simianauth.SimianAuthCliClient):
@@ -113,7 +113,7 @@ class SimianAuthCliClient(simianauth.SimianAuthCliClient):
         return
       # TODO(user): We should have a function which searches
       # this for us.  I feel like we're rewriting this.
-      header = 'Cookie: %s=' % settings.AUTH_TOKEN_COOKIE
+      header = 'Cookie: %s=' % auth.AUTH_TOKEN_COOKIE
       if 'AdditionalHttpHeaders' in d:
         for h in d['AdditionalHttpHeaders']:
           if h.startswith(header):

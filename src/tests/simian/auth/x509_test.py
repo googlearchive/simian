@@ -42,95 +42,151 @@ class X509ModuleTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
+  def testLoadPemGeneric(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END'
+
+    input =  '\n\n\n-----BEGIN-----\nhello\n-----END-----\n\n\n'
+    expected = [
+        '-----BEGIN-----',
+        'hello',
+        '-----END-----',
+    ]
+
+    self.assertEqual(expected, x509.LoadPemGeneric(input, header, footer))
+
+  def testLoadPemGenericWhenInfo(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END'
+
+    input =  ('\n\n\n-----BEGIN-----\n'
+              'Proc-Type: foo\nhello\n-----END-----\n\n\n')
+    expected = [
+        '-----BEGIN-----',
+        'hello',
+        '-----END-----',
+    ]
+
+    self.assertEqual(expected, x509.LoadPemGeneric(input, header, footer))
+
+
+  def testLoadPemGenericWhenSpaces(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END'
+
+    input =  '   \n\n\n-----BEGIN-----   \nhello   \n-----END-----  \n\n\n  '
+    expected = [
+        '-----BEGIN-----',
+        'hello',
+        '-----END-----',
+    ]
+
+    self.assertEqual(expected, x509.LoadPemGeneric(input, header, footer))
+
+  def testLoadPemGenericWhenSpacesNoLastNewline(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END'
+
+    input =  '   \n\n\n-----BEGIN-----   \nhello   \n-----END-----'
+    expected = [
+        '-----BEGIN-----',
+        'hello',
+        '-----END-----',
+    ]
+
+    self.assertEqual(expected, x509.LoadPemGeneric(input, header, footer))
+
+  def testLoadPemGenericWhenMissingHeader(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN BLAH'
+    footer = 'END BLAH'
+
+    input =  '\n\n\n-----BEGIN-----\nhello\n-----END-----\n\n\n'
+
+    self.assertRaises(
+        x509.HeaderMissingPEMFormatError, x509.LoadPemGeneric,
+        input, header, footer)
+
+  def testLoadPemGenericWhenMissingFooter(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END BLAH'
+
+    input =  '\n\n\n-----BEGIN-----\nhello\n-----END-----\n\n\n'
+
+    self.assertRaises(
+        x509.FooterMissingPEMFormatError, x509.LoadPemGeneric,
+        input, header, footer)
+
+  def testLoadPemGenericWhenTooFewLines(self):
+    """Test LoadPemGeneric()."""
+    header = 'BEGIN'
+    footer = 'END BLAH'
+
+    input =  '\n\n\n-----BEGIN-----\n\n\n\n'
+
+    self.assertRaises(
+        x509.PEMFormatError, x509.LoadPemGeneric, input, header, footer)
+
   def testLoadCertificateFromPEM(self):
     """Test LoadCertificateFromPEM()."""
-    header = '-----BEGIN CERTIFICATE-----'
-    footer = '-----END CERTIFICATE-----'
+    header = 'BEGIN CERTIFICATE'
+    footer = 'END CERTIFICATE'
 
+    pem_input = 'pem_input'
+    pem_output = ['---header---', 'base64', '---footer---']
+
+    self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
     self.mox.StubOutWithMock(x509, 'LoadCertificateFromBase64')
-    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
-    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
-    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
-    x509.LoadCertificateFromBase64('base64').AndReturn('ok')
+    x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
     x509.LoadCertificateFromBase64('base64').AndReturn('ok')
 
     self.mox.ReplayAll()
-
-    # This pem input is well formed.
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '%s\nbase64\n%s\n' % (header, footer)),
-        'ok')
-
-    # Add extra spaces on the end of the string to test that
-    # LoadCertificateFromPEM will strip them.
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '\n \n\t\n%s\nbase64\n%s\n\t\n   ' % (header, footer)),
-        'ok')
-
-    # Add extra newlines on the beginning of the string to test that
-    # LoadCertificateFromPEM will strip them.
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '\n\n\n \n\t\n%s\nbase64\n%s\n\t\n   ' % (header, footer)),
-        'ok')
-
-    # Add extra newlines on the end of the string to test that
-    # LoadCertificateFromPEM will strip them.
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '\n\n\n \n\t\n%s\nbase64\n%s\n\t\n\n\n' % (header, footer)),
-        'ok')
-
-    # A missing newline on the end is tolerated.
-    self.assertEqual(
-        x509.LoadCertificateFromPEM(
-            '%s\nbase64\n%s' % (header, footer)),
-        'ok')
-
-    # Just a bunch of newlines.
-    self.assertRaises(
-        x509.CertificatePEMFormatError,
-        x509.LoadCertificateFromPEM,
-        '\n\n\n\n')
-
+    self.assertEqual(x509.LoadCertificateFromPEM(pem_input), 'ok')
     self.mox.VerifyAll()
 
-  def testLoadCertificateFromPEMWhenBadHeader(self):
-    """Test LoadCertificateFromPEM()."""
-    header = '-----BEGIN BAD HEADER CERTIFICATE-----'
-    footer = '-----END CERTIFICATE-----'
+  def testLoadRSAPrivateKeyFromPEM(self):
+    """Test LoadRSAPrivateKeyFromPEM()."""
+    header = 'BEGIN RSA PRIVATE KEY'
+    footer = 'END RSA PRIVATE KEY'
+
+    pem_input = 'pem_input'
+    pem_output = ['---header---', 'base64', '---footer---']
+
+    self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
+    self.mox.StubOutWithMock(
+        x509.tlslite.utils.keyfactory, 'parsePEMKey')
+    x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
+    x509.tlslite.utils.keyfactory.parsePEMKey(
+        '\n'.join(pem_output)).AndReturn('ok')
 
     self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificatePEMFormatError,
-        x509.LoadCertificateFromPEM,
-        '%s\nbase64\n%s\n' % (header, footer))
+    self.assertEqual(x509.LoadRSAPrivateKeyFromPEM(pem_input), 'ok')
     self.mox.VerifyAll()
 
-  def testLoadCertificateFromPEMWhenBadFooter(self):
-    """Test LoadCertificateFromPEM()."""
-    header = '-----BEGIN CERTIFICATE-----'
-    footer = '-----END BAD CERTIFICATE-----'
+  def testLoadRSAPrivateKeyFromPEMWhenSyntaxError(self):
+    """Test LoadRSAPrivateKeyFromPEM()."""
+    header = 'BEGIN RSA PRIVATE KEY'
+    footer = 'END RSA PRIVATE KEY'
+
+    pem_input = 'pem_input'
+    pem_output = ['---header---', 'base64', '---footer---']
+
+    self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
+    self.mox.StubOutWithMock(
+        x509.tlslite.utils.keyfactory, 'parsePEMKey')
+    x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
+    x509.tlslite.utils.keyfactory.parsePEMKey(
+        '\n'.join(pem_output)).AndRaise(SyntaxError)
 
     self.mox.ReplayAll()
     self.assertRaises(
-        x509.CertificatePEMFormatError,
-        x509.LoadCertificateFromPEM,
-        '%s\nbase64\n%s\n' % (header, footer))
-    self.mox.VerifyAll()
-
-  def testLoadCertificateFromPEMWhenShortCertificate(self):
-    """Test LoadCertificateFromPEM()."""
-    header = '-----BEGIN CERTIFICATE-----'
-    footer = '-----END CERTIFICATE-----'
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificatePEMFormatError,
-        x509.LoadCertificateFromPEM,
-        '%s\n%s\n' % (header, footer))
+        x509.RSAPrivateKeyPEMFormatError,
+        x509.LoadRSAPrivateKeyFromPEM, pem_input)
     self.mox.VerifyAll()
 
   def testLoadCertificateFromBase64(self):
@@ -161,7 +217,7 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertRaises(
-        x509.CertificatePEMFormatError,
+        x509.PEMFormatError,
         x509.LoadCertificateFromBase64, 'b64str')
     self.mox.VerifyAll()
 
@@ -175,7 +231,7 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertRaises(
-        x509.CertificatePEMFormatError,
+        x509.PEMFormatError,
         x509.LoadCertificateFromBase64, 'b64str')
     self.mox.VerifyAll()
 
@@ -212,7 +268,7 @@ class BaseDataObjectTest(mox.MoxTestBase):
       self.assertEqual(123, value(mock_dataobj))
 
     self.mox.ReplayAll()
-    x509.BaseDataObject.CreateGetMethod('Foo', 'foo', _setattr=mock_setattr)
+    x509.BaseDataObject.CreateGetMethod('Foo', 'foo', setattr_=mock_setattr)
     self.mox.VerifyAll()
 
 

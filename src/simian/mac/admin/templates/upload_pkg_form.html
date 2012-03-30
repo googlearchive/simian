@@ -3,14 +3,14 @@
 {% block title %}Upload Package{% endblock %}
 
 {% block page-content %}
+  <script type="text/javascript">
+    var timeout = window.setTimeout("alert('Upload link expired, please refresh.');location.reload(true);", 5*60*1000);
+  </script>
   <div style="margin:20px;border:1px solid #EFEFEF; padding:10px; width:400px">
   <form action="{{ upload_url }}" method="post" enctype="multipart/form-data">
     <h2>Upload disk image: <b>{{ filename }}</b></h2><br/><br/>
     <input type="file" name="file" accept="application/x-apple-diskimage"/><br/><br/>
-    <button type="submit">Upload</button>
+    <button type="submit" onclick="window.clearTimeout(timeout)">Upload</button>
   </form>
   </div>
-  <script type="text/javascript">
-    window.setTimeout("alert('Upload link expired, please refresh.');location.reload(true);", 5*60*1000);
-  </script>
 {% endblock %}

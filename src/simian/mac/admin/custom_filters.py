@@ -117,7 +117,8 @@ def download_speed(kbytes_per_second):
 @register.filter
 def host_uuid_link(uuid):
   """Returns an HTML anchor tag linking to the report for the given uuid."""
-  return mark_safe('<a href="/admin/host/%s/">%s</a>' % (uuid, uuid))
+  return mark_safe(
+      '<a href="/admin/host/%s/" class="uuidhover">%s</a>' % (uuid, uuid))
 
 
 @register.filter

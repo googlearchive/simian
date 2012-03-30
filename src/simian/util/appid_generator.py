@@ -26,12 +26,12 @@ import ConfigParser
 
 def GenerateAppID():
   """Returns a Google App Engine appid based on subdomain + domain configs."""
-  f = open('etc/simian/common.cfg', 'r')
+  f = open('etc/simian/settings.cfg', 'r')
   cp = ConfigParser.ConfigParser()
   cp.readfp(f)
   f.close()
-  subdomain = cp.get('common', 'subdomain')
-  domain = cp.get('common', 'domain')
+  subdomain = cp.get('settings', 'subdomain')
+  domain = cp.get('settings', 'domain')
 
   if domain == 'appspot.com':
     return subdomain

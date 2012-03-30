@@ -8,7 +8,7 @@ SIMIAN_VERSION=2.0
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=0.8.2.1430.0
+MUNKI_VERSION=0.8.2.1466.0
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.mpkg.dmg
 PYTHON_VERSION=2.5
@@ -50,11 +50,18 @@ virtualenv: python_check
 	sudo easy_install-${PYTHON_VERSION} -U virtualenv
 
 VE: virtualenv python_check
+	[ -d VE ] || \
 	${PYTHON} $(shell type -p virtualenv) --no-site-packages VE
 
 test: swig_check VE
-	VE/bin/python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,for_tests,client}.cfg
-	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" VE/bin/python setup.py google_test
+	[ -f test ] || \
+	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" \
+	VE/bin/python setup.py google_test && touch test
+
+settings_check: test
+	VE/bin/python \
+	src/simian/util/validate_settings.py etc/simian/ \
+	src/ ./pyasn1*.egg ./tlslite*.egg
 
 build: swig_check VE
 	VE/bin/python setup.py build
@@ -72,26 +79,30 @@ clean_pkgs:
 clean_sdist:
 	rm -rf ${SDIST} ${SDIST_TAR}
 
-clean: clean_contents clean_pkgs clean_sdist
-	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* VE *.egg
+clean_test:
+	rm -f test
+
+clean_ve:
+	rm -rf VE
+
+clean: clean_contents clean_pkgs clean_sdist clean_test clean_ve
+	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* *.egg
 
 ${SDIST}: VE clean_sdist client_config
 	VE/bin/python setup.py sdist --formats=tar
 	gzip ${SDIST_TAR}
 
-server_config: VE
+server_config:
 	src/simian/util/create_gae_bundle.sh $(PWD)
-	VE/bin/python src/simian/util/gen_settings.py -t server -o gae_bundle/simian/settings.py etc/simian/{common,server}.cfg
 	sed -i "" "s/^application:.*/application: `PYTHONPATH=. python src/simian/util/appid_generator.py`/" gae_bundle/app.yaml
 	src/simian/util/link_module.sh PyYAML
 	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
 	src/simian/util/link_module.sh icalendar
-	VE/bin/python src/simian/util/compile_js.py src/simian/mac/admin/js/main.js gae_bundle/simian/mac/admin/js/simian.js
+	VE/bin/python src/simian/util/compile_js.py src/simian/mac/admin/js/*.js gae_bundle/simian/mac/admin/js/simian.js
 	
-client_config: VE
-	VE/bin/python src/simian/util/gen_settings.py -t client -o src/simian/settings.py etc/simian/{common,client}.cfg
+client_config: settings_check
 
 ${MUNKIFILE}:
 	curl -o $@ http://munki.googlecode.com/files/$@
@@ -115,8 +126,7 @@ contents.tar.gz: client_config
 	# add entire config
 	cp -R etc/simian tmpcontents/etc
 	# sideline simian.cfg to avoid overwriting it on install
-	mv tmpcontents/etc/simian/client.cfg tmpcontents/etc/simian/client.cfg+
-	mv tmpcontents/etc/simian/common.cfg tmpcontents/etc/simian/common.cfg+
+	mv tmpcontents/etc/simian/settings.cfg tmpcontents/etc/simian/settings.cfg+
 	# add munki integration binaries
 	cp ./src/simian/munki/* tmpcontents/usr/local/munki
 	# add simianfacter

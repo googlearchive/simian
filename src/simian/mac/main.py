@@ -60,7 +60,17 @@ def BasicExceptionPrint(exc_type, exc_value, exc_traceback):
 
 def main():
   from google.appengine.api import users
-  from simian.mac import urls
+
+  try:
+    from simian.mac import urls
+  except AttributeError, e:
+    print 'Content-Type: text/html'
+    print ''
+    print 'AttributeError: %s' % str(e)
+    print '<br /><br />'
+    print 'Have you configured <a href="/admin/config">settings</a>?'
+    logging.exception('AttributeError')
+    return
 
   main_method = urls.main
 

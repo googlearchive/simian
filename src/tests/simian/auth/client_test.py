@@ -26,6 +26,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+
 from simian.auth import client
 
 
@@ -48,15 +49,6 @@ class AuthSimianClientTest(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  def testBasic(self):
-    self.assertEqual(
-        self.apc._ca_pem, client.auth_settings.CA_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        self.apc._server_cert_pem,
-        client.auth_settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        self.apc._required_issuer, client.auth_settings.REQUIRED_ISSUER)
 
   def testGetSessionClass(self):
     self.assertTrue(

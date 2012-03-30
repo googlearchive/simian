@@ -136,13 +136,6 @@ sed -i .bak "1c\\
 " /usr/local/bin/simianfacter
 rm -f /usr/local/bin/simianfacter.bak
 
-### update munki configuration
-
-echo Begin section: Harmless "configuration not found" messages may follow
-server=`${VE_PYTHON} -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
-defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${server}"
-echo End section
-
 ### small file operations
 
 z=$(lsbom ${PKG}/Contents/Archive.bom | grep ssl/private_keys ; true)
@@ -152,13 +145,12 @@ fi
 
 z=$(lsbom ${PKG}/Contents/Archive.bom | grep "/etc/simian/.*\.cfg" ; true)
 if [[ ! -z "$z" ]]; then
-  for f in /etc/simian/{client,common}.cfg; do
-    if [ ! -f "${f}" -a -f "${f}+" ]; then
-      mv "${f}+" "${f}"
-    else
-      rm "${f}+"
-    fi
-  done
+  f="/etc/simian/settings.cfg"
+  if [ ! -f "${f}" -a -f "${f}+" ]; then
+    mv "${f}+" "${f}"
+  else
+    rm "${f}+"
+  fi
 fi
 
 z=$(lsbom ${PKG}/Contents/Archive.bom | grep /Library/LaunchAgents/ ; true)
@@ -168,6 +160,13 @@ if [[ ! -z "$z" ]]; then
     chmod 644 "${f}"
   done
 fi
+
+### update munki configuration
+
+echo Begin section: Harmless "configuration not found" messages may follow
+server=`${VE_PYTHON} -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
+defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${server}"
+echo End section
 
 ### end
 echo postflight END

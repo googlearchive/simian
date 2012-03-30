@@ -323,6 +323,12 @@ class BasePlistModel(BaseModel):
 
   plist = property(_GetPlist, _SetPlist)
 
+  def _GetPlistXml(self):
+    """Returns the str plist."""
+    return self._plist
+
+  plist_xml = property(_GetPlistXml)
+
   def put(self, *args, **kwargs):
     """Put to Datastore.
 
@@ -671,6 +677,7 @@ class KeyValueCache(BaseModel):
   """Model for a generic key value pair storage."""
 
   text_value = db.TextProperty()
+  blob_value = db.BlobProperty()
   mtime = db.DateTimeProperty(auto_now=True)
 
   @classmethod
@@ -730,6 +737,38 @@ class KeyValueCache(BaseModel):
 
     return False
 
+  @classmethod
+  def GetSerializedItem(cls, key):
+    """Returns the deserialized value of a serialized cache."""
+    entity = cls.MemcacheWrappedGet(key)
+    if entity and entity.blob_value:
+      return util.Deserialize(entity.blob_value), entity.mtime
+    else:
+      return {}, None
+
+  @classmethod
+  def SetSerializedItem(cls, key, value):
+    """Serializes a value and caches it to an entity with a given key.
+
+    Args:
+      key: str, key_name for the ReportsCache entity.
+      value: any, a value of any kind to serialize and cache.
+    """
+    value = util.Serialize(value)
+    cls.MemcacheWrappedSet(key, 'blob_value', value)
+
+  @classmethod
+  def GetItem(cls, name):
+    entity = cls.MemcacheWrappedGet(name)
+    if entity:
+      return entity.text_value, entity.mtime
+    else:
+      return None, None
+
+  @classmethod
+  def SetItem(cls, name, value):
+    return cls.MemcacheWrappedSet(name, 'text_value', value)
+
 
 class ReportsCache(KeyValueCache):
   """Model for various reports data caching."""
@@ -741,34 +780,13 @@ class ReportsCache(KeyValueCache):
   _MSU_USER_SUMMARY_KEY = 'msu_user_summary'
 
   int_value = db.IntegerProperty()
-  blob_value = db.BlobProperty()
 
   # TODO(user): migrate reports cache to properties.SerializedProperty()
 
   @classmethod
-  def _GetCacheItem(cls, key):
-    """Returns the deserialized value of a serialized cache."""
-    entity = cls.MemcacheWrappedGet(key)
-    if entity and entity.blob_value:
-      return util.Deserialize(entity.blob_value), entity.mtime
-    else:
-      return {}, None
-
-  @classmethod
-  def _SetCacheItem(cls, key, value):
-    """Serializes a value and caches it to an entity with a given key.
-
-    Args:
-      key: str, key_name for the ReportsCache entity.
-      value: any, a value of any kind to serialize and cache.
-    """
-    value = util.Serialize(value)
-    cls.MemcacheWrappedSet(key, 'blob_value', value)
-
-  @classmethod
   def GetStatsSummary(cls):
     """Returns tuples (stats summary dictionary, datetime) from Datastore."""
-    return cls._GetCacheItem(cls._SUMMARY_KEY)
+    return cls.GetSerializedItem(cls._SUMMARY_KEY)
 
   @classmethod
   def SetStatsSummary(cls, d):
@@ -777,12 +795,12 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    return cls._SetCacheItem(cls._SUMMARY_KEY, d)
+    return cls.SetSerializedItem(cls._SUMMARY_KEY, d)
 
   @classmethod
   def GetInstallCounts(cls):
     """Returns tuple (install counts dict, datetime) from Datastore."""
-    return cls._GetCacheItem(cls._INSTALL_COUNTS_KEY)
+    return cls.GetSerializedItem(cls._INSTALL_COUNTS_KEY)
 
   @classmethod
   def SetInstallCounts(cls, d):
@@ -791,22 +809,22 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    return cls._SetCacheItem(cls._INSTALL_COUNTS_KEY, d)
+    return cls.SetSerializedItem(cls._INSTALL_COUNTS_KEY, d)
 
   @classmethod
   def GetTrendingInstalls(cls, since_hours):
     key = cls._TRENDING_INSTALLS_KEY % since_hours
-    return cls._GetCacheItem(key)
+    return cls.GetSerializedItem(key)
 
   @classmethod
   def SetTrendingInstalls(cls, since_hours, d):
     key = cls._TRENDING_INSTALLS_KEY % since_hours
-    return cls._SetCacheItem(key, d)
+    return cls.SetSerializedItem(key, d)
 
   @classmethod
   def GetPendingCounts(cls):
     """Returns tuple (pending counts dict, datetime) from Datastore."""
-    return cls._GetCacheItem(cls._PENDING_COUNTS_KEY)
+    return cls.GetSerializedItem(cls._PENDING_COUNTS_KEY)
 
   @classmethod
   def SetPendingCounts(cls, d):
@@ -815,7 +833,7 @@ class ReportsCache(KeyValueCache):
     Args:
       d: dict of summary data.
     """
-    return cls._SetCacheItem(cls._PENDING_COUNTS_KEY, d)
+    return cls.SetSerializedItem(cls._PENDING_COUNTS_KEY, d)
 
   @classmethod
   def _GetMsuUserSummaryKey(cls, since, tmp):
@@ -836,7 +854,7 @@ class ReportsCache(KeyValueCache):
         calculation)
     """
     key = cls._GetMsuUserSummaryKey(since, tmp)
-    return cls._SetCacheItem(key, d)
+    return cls.SetSerializedItem(key, d)
 
   @classmethod
   def GetMsuUserSummary(cls, since, tmp=False):
@@ -848,7 +866,7 @@ class ReportsCache(KeyValueCache):
       (dict of summary data, datetime mtime) or None if no summary
     """
     key = cls._GetMsuUserSummaryKey(since, tmp)
-    return cls._GetCacheItem(key)
+    return cls.GetSerializedItem(key)
 
   @classmethod
   def DeleteMsuUserSummary(cls, since, tmp=False):

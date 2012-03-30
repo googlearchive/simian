@@ -27,6 +27,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
+
 from simian.auth import gaeserver
 
 
@@ -51,7 +52,7 @@ class GaeserverModuleTest(mox.MoxTestBase):
     """Test DoMunkiAuth()."""
     level = 123
     cookie_str = 'foo=bar'
-    token = 'cookie value for auth_settings.AUTH_TOKEN_COOKIE'
+    token = 'cookie value for auth.AUTH_TOKEN_COOKIE'
     uuid = 'session uuid'
     mock_valobj = self.mox.CreateMockAnything()
     mock_valobj.value = token
@@ -86,19 +87,19 @@ class GaeserverModuleTest(mox.MoxTestBase):
     gaeserver.Cookie.SimpleCookie().AndReturn(mock_cookie)
     mock_cookie.load(cookie_str).AndReturn(None)
     mock_cookie.__contains__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(False)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(False)
 
     # test 5: GetSessionIfAuthOK() returns false, bad token
     mock_environ.get('HTTP_COOKIE', None).AndReturn(cookie_str)
     gaeserver.Cookie.SimpleCookie().AndReturn(mock_cookie)
     mock_cookie.load(cookie_str).AndReturn(None)
     mock_cookie.__contains__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(True)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(True)
     mock_cookie.__getitem__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
     gaeserver.AuthSimianServer().AndReturn(mock_auth1)
     mock_cookie.__getitem__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
     mock_auth1.GetSessionIfAuthOK(token, gaeserver.LEVEL_BASE).AndRaise(
         gaeserver.base.AuthSessionError)
 
@@ -107,12 +108,12 @@ class GaeserverModuleTest(mox.MoxTestBase):
     gaeserver.Cookie.SimpleCookie().AndReturn(mock_cookie)
     mock_cookie.load(cookie_str).AndReturn(None)
     mock_cookie.__contains__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(True)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(True)
     mock_cookie.__getitem__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
     gaeserver.AuthSimianServer().AndReturn(mock_auth1)
     mock_cookie.__getitem__(
-        gaeserver.auth_settings.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
+        gaeserver.auth.AUTH_TOKEN_COOKIE).AndReturn(mock_valobj)
     mock_auth1.GetSessionIfAuthOK(token, level).AndReturn(mock_session)
 
     self.mox.ReplayAll()
@@ -137,23 +138,6 @@ class GaeserverModuleTest(mox.MoxTestBase):
     mock_session.Delete(session).AndReturn(None)
     self.mox.ReplayAll()
     gaeserver.LogoutSession(session)
-    self.mox.VerifyAll()
-
-  def testGetSimianPrivateKey(self):
-    """Test GetSimianPrivateKey()."""
-    self.stubs.Set(
-        gaeserver.models, 'KeyValueCache',
-        self.mox.CreateMock(gaeserver.models.KeyValueCache))
-    gaeserver.models.KeyValueCache.MemcacheWrappedGet(
-        'server_private_cert.pem', prop_name='text_value').AndReturn(None)
-    gaeserver.models.KeyValueCache.MemcacheWrappedGet(
-        'server_private_cert.pem', prop_name='text_value').AndReturn('pk')
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        gaeserver.ServerCertMissing, gaeserver.GetSimianPrivateKey)
-    self.assertEqual(
-        'pk', gaeserver.GetSimianPrivateKey())
     self.mox.VerifyAll()
 
 
@@ -687,12 +671,12 @@ class AuthSimianServer(mox.MoxTestBase):
   def testInit(self):
     """Test __init__()."""
     self.assertEqual(
-        self.aps._ca_pem, gaeserver.auth_settings.CA_PUBLIC_CERT_PEM)
+        self.aps._ca_pem, gaeserver.settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         self.aps._server_cert_pem,
-        gaeserver.auth_settings.SERVER_PUBLIC_CERT_PEM)
+        gaeserver.settings.SERVER_PUBLIC_CERT_PEM)
     self.assertEqual(
-        self.aps._required_issuer, gaeserver.auth_settings.REQUIRED_ISSUER)
+        self.aps._required_issuer, gaeserver.settings.REQUIRED_ISSUER)
 
   def testGetSessionClass(self):
     self.assertTrue(

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration Settings{% endblock %}
+
+{% block page-content %}
+<div><h2>PEM Settings</h2></div>
+<dl>
+{% for pem_name, pem in pems.items %}
+  <dt><h3>{{ pem_name }}</h3></dt>
+  <dd style="margin-left: 6px">
+  {% if pem.pem %}
+    {% ifequal pem.validation "Valid" %}
+      <span style="color: green;">Valid</span>
+    {% else %}
+      <span style="color: red;">{{ pem.validation }}</span>
+    {% endifequal %}
+  {% else %}
+    <span style="color: red;">Missing</span>
+  {% endif %}
+  {% if not pem.pem or pem.validation != "Valid" %}
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="pem_upload"/>
+      <input type="hidden" name="pem" value="{{ pem_name }}"/>
+      <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+      <input type="file" name="pem_file"/>
+      <button type="submit">Upload</button>
+    </form>
+  {% endif %}
+  </dd>
+{% endfor %}
+</dl>
+
+<br/><br/><br/>
+
+<div><h2>Configuration Settings</h2></div>
+<dl>
+{% for name, setting in settings.items %}
+  <dt><h3>{{ setting.title }}</h3></dt>
+  <dd>
+    {% ifequal setting.type "string" %}
+      <form action="/admin/config" method="post" onsubmit="return simian.ajaxSubmit(this);" class="saved">
+        <input type="hidden" name="setting" value="{{ name }}"/>
+        <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+        <input type="text" name="value" style="width: 400px;"
+               value="{{ setting.value|default_if_none:"" }}"
+               oninput="simian.removeClass(this.form, 'saved');
+                        {% if setting.regex %}simian.validateField(this, /{{ setting.regex }}/);{% endif %}"
+               />
+        <button type="submit" name="submit">Save</button>
+      </form>
+    {% else %}
+      {% ifequal setting.type "random_str" %}
+        {% ifequal name "xsrf_secret" %}
+          <form action="/admin/config" method="post">
+        {% else %}
+          <form action="/admin/config" method="post"
+                onsubmit="return simian.ajaxSubmit(this, function(json) {document.getElementById('setting_{{ name }}').innerHTML = json['values'][0]['value'];});">
+        {% endifequal %}
+          <input type="hidden" name="setting" value="{{ name }}"/>
+          <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+          <span id="setting_{{ name }}">{{ setting.value }}</span>
+          <button type="submit" name="submit" style="display: inline;">Regenerate</button>
+        </form>
+      {% endifequal %}
+    {% endifequal %}
+    {% if setting.comment %}
+      <div><span class="note">{{ setting.comment }}</span></div>
+    {% endif %}
+  </dd>
+{% endfor %}
+</dl>
+
+{% endblock %}

@@ -39,10 +39,10 @@ class CatalogsHandlersTest(test.RequestHandlerTest):
     """Tests Catalogs.get()."""
     name = 'goodname'
     self.MockDoAnyAuth()
-    catalog = self.MockModelStatic('Catalog', 'MemcacheWrappedGet', name)
-    catalog.plist = 'fooplist'
+    catalog = self.MockModelStatic(
+        'Catalog', 'MemcacheWrappedGet', name, 'plist_xml')
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
-    self.response.out.write(catalog.plist).AndReturn(None)
+    self.response.out.write(catalog).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(name)
@@ -53,7 +53,7 @@ class CatalogsHandlersTest(test.RequestHandlerTest):
     name = 'badname'
     self.MockDoAnyAuth()
     self.MockModelStaticBase(
-        'Catalog', 'MemcacheWrappedGet', name).AndReturn(None)
+        'Catalog', 'MemcacheWrappedGet', name, 'plist_xml').AndReturn(None)
     self.response.set_status(404).AndReturn(None)
 
     self.mox.ReplayAll()

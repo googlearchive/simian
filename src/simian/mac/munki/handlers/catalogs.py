@@ -46,9 +46,9 @@ class Catalogs(handlers.AuthenticationHandler):
       A webapp.Response() response.
     """
     auth.DoAnyAuth()
-    catalog = models.Catalog.MemcacheWrappedGet(name)
+    catalog = models.Catalog.MemcacheWrappedGet(name, 'plist_xml')
     if catalog:
       self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
-      self.response.out.write(catalog.plist)
+      self.response.out.write(catalog)
     else:
       self.response.set_status(404)
