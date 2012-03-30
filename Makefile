@@ -100,13 +100,13 @@ server_config:
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
 	src/simian/util/link_module.sh icalendar
-	VE/bin/python src/simian/util/compile_js.py src/simian/mac/admin/js/*.js gae_bundle/simian/mac/admin/js/simian.js
-	
+	VE/bin/python src/simian/util/compile_js.py gae_bundle/simian/mac/admin/js/simian.js
+
 client_config: settings_check
 
 ${MUNKIFILE}:
 	curl -o $@ http://munki.googlecode.com/files/$@
-	
+
 add_munkicontents: os_check ${MUNKIFILE}
 	mkdir -p tmpcontents/
 	# Munki moved to a mpkg, scrape out all the contents of each
@@ -116,7 +116,7 @@ add_munkicontents: os_check ${MUNKIFILE}
 	for pkg in $$mnt/${MUNKI}.mpkg/Contents/Packages/*.pkg; do \
 	gzip -dc "$$pkg/Contents/Archive.pax.gz" | pax -r ; done ; \
 	hdiutil detach "$$mnt"
-	
+
 contents.tar.gz: client_config
 	mkdir -p tmpcontents/etc/simian/ssl/certs
 	mkdir -p tmpcontents/etc/simian/ssl/private_keys
@@ -134,7 +134,7 @@ contents.tar.gz: client_config
 	# build targz
 	cd tmpcontents && tar -c --exclude .svn -f ../contents.tar .
 	gzip contents.tar
-	
+
 ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
