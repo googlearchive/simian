@@ -33,8 +33,9 @@ from simian.mac.admin import xsrf
 from simian.mac.common import auth
 from simian.mac.common import util
 
+MISSING = 'Missing'
 VALID = 'Valid'
-VALIDATION = 'Validation'
+VALIDATION = 'validation'
 PEM = {
     'server_private_key_pem': {'type': 'rsapriv'},
     'server_public_cert_pem': {'type': 'x509'},
@@ -174,7 +175,7 @@ class Config(admin.AdminHandler):
         except ValueError, e:
           pems[name][VALIDATION] = str(e)
       else:
-        pems[name][VALIDATION] = 'Missing'
+        pems[name][VALIDATION] = MISSING
     return pems
 
   def _PemUpload(self):
@@ -187,7 +188,7 @@ class Config(admin.AdminHandler):
       return
 
     valid_pems = self._GetPems({pem: pem_file})
-    if valid_pems[pem] != VALID:
+    if valid_pems[pem][VALIDATION] != VALID:
       errmsg = valid_pems[pem][VALIDATION]
       self.redirect('/admin/config?msg=PEM upload failed: %s' % errmsg)
       return

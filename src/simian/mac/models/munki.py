@@ -266,7 +266,7 @@ class PackageInfo(BaseMunkiModel):
       self.plist['description'] = desc
     else:
       # Otherwise append the old avg duration text to the new description.
-      match = self.AVG_DURATION_REGEX.search(self.plist.get('description', ''))
+      match = self.AVG_DURATION_REGEX.search(self.plist['description'])
       if match:
         self.plist['description'] = '%s\n\n%s' % (desc, match.group(0))
       else:

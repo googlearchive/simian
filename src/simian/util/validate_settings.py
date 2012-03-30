@@ -83,6 +83,8 @@ def Validate():
     logging.info('Looking for required setting %s', k)
     if not hasattr(settings, k):
       ErrorExit('missing required setting %s', k)
+    else:
+      logging.info('%s = %s', k, getattr(settings, k))
 
   logging.info('Validating settings that exist')
     
