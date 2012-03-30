@@ -185,7 +185,6 @@
   {% ifnotequal report_type "site" %}
     <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site
       {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
-  </div>
     </div>
     <div id="by_site" style="max-width: 95%;">
       <ol class="clients-by-site">
