@@ -31,6 +31,11 @@ SETTINGS = {
         'type': 'random_str',
         'title': 'API Info Key',
     },
+    'email_admin_list': {
+        'type': 'string',
+        'title': 'Admin List Email',
+        'comment': 'Server notifications are emailed to this address',
+    },
     'email_domain': {
         'type': 'string',
         'title': 'Email Domain',

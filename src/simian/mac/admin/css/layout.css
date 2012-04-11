@@ -82,7 +82,7 @@ body.menuopen .head, body.menupinned .head {
 }
 
 #menu {
-  width: 218px;
+  width: 214px;
   padding: 0;
   margin: 0;
   position: fixed;
@@ -178,7 +178,7 @@ body.menuopen #menu {
   display: block;
   position: absolute;
   top: 2px;
-  right: 20px;
+  right: 10px;
   z-index: 902;
   width: 20px;
   height: 20px;
@@ -195,13 +195,13 @@ body.menupinned #menupin{
   display: none;
   position: absolute;
   top: 2px;
-  left: 25px;
+  right: 10px;
   color: #222;
   font-size: 12px;
   z-index: 902;
   cursor: pointer;
 }
-body.menupinned #menu:hover #menucollapse, body.menuopen #menu #menucollapse {
+body.menupinned #menu:hover #menucollapse {
   display: block;
 }
 
@@ -211,7 +211,7 @@ body.menupinned #menu:hover #menucollapse, body.menuopen #menu #menucollapse {
   top: 0;
   bottom: 0;
   right: 0;
-  width: 18px;
+  width: 14px;
   background-image: url('/admin/static/menutoggle.png');
   background-repeat: no-repeat;
   background-position: 0 2px;

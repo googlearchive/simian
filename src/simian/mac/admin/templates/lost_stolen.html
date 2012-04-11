@@ -4,6 +4,8 @@
 
 {% block page-content %}
 
+{% include "results_pagination.html" %}
+
 {% if computers %}
   {{ computers|length }} computers found.
   <table class="stats-table" id="stolentable">
@@ -33,5 +35,7 @@
 {% else %}
   <p>Yay!! There are no lost/stolen computers.</p>
 {% endif %}
+
+{% include "results_pagination.html" %}
 
 {% endblock %}

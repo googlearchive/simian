@@ -556,6 +556,9 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
     # Client specific settings
     # Server specific settings
     self._SetValidation(
+        'email_admin_list', self._VALIDATION_REGEX,
+        r'^%s' % mail_regex)
+    self._SetValidation(
         'email_domain', self._VALIDATION_REGEX,
         r'^\w+(\.\w+)*(\.[a-z]{2,4})$')
     self._SetValidation(
