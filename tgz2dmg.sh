@@ -50,6 +50,8 @@ if [[ "$#" -lt 2 ]]; then
   echo usage: $0 tgz_input_file dmg\|pkg_output_file [options...]
   echo
   echo options:
+  echo -vep binary          add binary to directory which is prepended onto
+  echo                      PATH during postflight virtualenv install.
   echo -pyver version       create python version hint e.g. \"2.5\"
   echo -pkgonly             do not create a dmg, just create a pkg
   echo -version version     set package version to version
@@ -74,6 +76,7 @@ TMPDIR=$(mktemp -d tgz2dmgXXXXXX)
 mkdir -p "$TMPDIR/contents"
 mkdir -p "$TMPDIR/pkg"
 mkdir -p "$TMPDIR/resources"
+mkdir -p "$TMPDIR/resources/vep"
 mkdir -p "$TMPDIR/scripts"
 
 trap "rm -rf \"$TMPDIR\"" EXIT
@@ -103,6 +106,8 @@ while [[ "$#" -gt 0 ]]; do
       next=""
     elif [[ "$1" = "-pyver" ]]; then
       next="pyver"
+    elif [[ "$1" = "-vep" ]]; then
+      next="vep"
     fi
   else
     if [[ "$next" = "script" ]]; then
@@ -123,6 +128,8 @@ while [[ "$#" -gt 0 ]]; do
       cp "$src" "$TMPDIR/contents/$dst"
     elif [[ "$next" = "pyver" ]]; then
       echo "$1" > "$TMPDIR/resources/python_version"
+    elif [[ "$next" = "vep" ]]; then
+      cp "$1" "$TMPDIR/resources/vep"
     fi
     next=""
   fi

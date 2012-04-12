@@ -90,7 +90,8 @@ fi
 
 ### install virtualenv
 
-${PYTHON} ${EZ} -U virtualenv
+# PATH override supplies a nop install_name_tool(1) if it is missing
+env PATH="${RESOURCES}/vep:${PATH}" ${PYTHON} ${EZ} -U virtualenv
 
 ### find & test newly installed virtualenv
 
@@ -101,6 +102,7 @@ VIRTUALENV=$(PATH=/usr/bin:/usr/local/bin type -p virtualenv)
 oldpwd="$PWD"
 mkdir -p "${INSTALL_DIR}"
 cd "${INSTALL_DIR}"
+
 ${PYTHON} ${VIRTUALENV} ${VE_DIR}
 VE_PYTHON=${INSTALL_DIR}/${VE_DIR}/bin/python
 VE_EZ=${INSTALL_DIR}/${VE_DIR}/bin/easy_install
@@ -108,9 +110,25 @@ VE_EZ=${INSTALL_DIR}/${VE_DIR}/bin/easy_install
 ### install supplied eggs
 
 for egg in ${RESOURCES}/*.egg ; do
-  echo === Installing egg "${egg}"
-  ${VE_PYTHON} ${VE_EZ} -N "${egg}"
+  if [[ "${egg}" =~ "/simian_" ]]; then
+    echo === Skipping egg "${egg}" for now
+  else
+    echo === Installing egg "${egg}"
+    ${VE_PYTHON} ${VE_EZ} -N "${egg}"
+  fi
 done
+
+### install simian_* specific eggs
+
+##### install M2Crypto
+
+# try to find an appropriate egg for this python and OS X version.
+set ${RESOURCES}/simian_M2Crypto-*-py${PYTHON_VERSION}-macosx-${OSX}-*.egg
+egg="$1"
+if [[ -z "${egg}" || "${egg: -5:5}" = "*.egg" ]]; then
+  die "Cannot find M2Crypto egg for ${PYTHON_VERSION}"
+fi
+${VE_PYTHON} ${VE_EZ} -N "${egg}"
 
 cd "$oldpwd"
 

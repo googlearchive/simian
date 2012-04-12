@@ -136,17 +136,31 @@ contents.tar.gz: client_config
 	cp ./src/simian/munki/* tmpcontents/usr/local/munki
 	# add simianfacter
 	cp ./src/simian/util/simianfacter tmpcontents/usr/local/bin
-	# build targz
-	cd tmpcontents && tar -c --exclude ".*" -f ../contents.tar .
-	gzip contents.tar
+	# build tar
+	tar -v -c --exclude '*/.*' -f contents.tar -C tmpcontents .
+	# build gz
+	gzip -f contents.tar
+                        
+m2crypto:
+	for egg in \
+	M2Crypto-0.21.1-py2.5-macosx-10.8-x86_64.egg \
+	M2Crypto-0.21.1-py2.5-macosx-10.7-x86_64.egg \
+	M2Crypto-0.21.1-py2.5-macosx-10.6-i386.egg \
+	M2Crypto-0.21.1-py2.5-macosx-10.5-i386.egg ; do \
+	  [[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "http://chandlerproject.org/pub/Projects/MeTooCrypto/$${egg}" ; \
+	done		
 
-${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz
+${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian \
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
-	-R M2Crypto-*.egg \
+	-vep install_name_tool \
+	-R simian_M2Crypto-*-10.5-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -159,7 +173,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz
+${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
@@ -167,7 +181,11 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz
 	-id com.google.code.simian \
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
-	-R M2Crypto-*.egg \
+	-vep install_name_tool \
+	-R simian_M2Crypto-*-10.5-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -180,7 +198,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
@@ -188,7 +206,11 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents add_munkicontents c
 	-id com.google.code.simian.and.munkitools \
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
-	-R M2Crypto-*.egg \
+	-vep install_name_tool \
+	-R simian_M2Crypto-*-10.5-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -201,13 +223,17 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents add_munkicontents c
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian.and.munkitools \
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
-	-R M2Crypto-*.egg \
+	-vep install_name_tool \
+	-R simian_M2Crypto-*-10.5-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \

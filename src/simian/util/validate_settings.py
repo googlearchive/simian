@@ -47,10 +47,10 @@ def ValidatePem(arg, dirname, fnames):
     fname_full = os.path.join(dirname, fname)
     if not os.path.exists(fname_full):
       ErrorExit('Does not exist: %s', fname_full)
-    if not os.path.isfile(fname_full):
-      ErrorExit('Not a file, remove: %s', fname_full)
     if fname.startswith('.'):
       continue
+    if not os.path.isfile(fname_full):
+      ErrorExit('Not a file, remove: %s', fname_full)
     if not fname_full.endswith('.pem'):
       ErrorExit('File without .pem extension found, remove: %s', fname_full)
     try:
