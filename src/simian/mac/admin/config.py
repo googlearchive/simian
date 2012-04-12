@@ -22,6 +22,7 @@
 
 
 import base64
+import logging
 import re
 import os
 
@@ -180,7 +181,9 @@ class Config(admin.AdminHandler):
 
   def _PemUpload(self):
     pem = self.request.get('pem', None)
-    pem_file = self.request.get('pem_file', None)
+    pem_file = self.request.get('pem_file', '')
+    
+    logging.debug('PEM upload received for %s: %s', pem, len(pem_file))
 
     if not pem or pem not in PEM:
       self.error(400)
