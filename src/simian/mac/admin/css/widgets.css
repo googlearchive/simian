@@ -307,6 +307,7 @@ div.subsubsection {
 }
 .diff_sub {
   color: #900;
+  font-weight: bold;
 }
 .ellipsis {
   font-weight: bold;

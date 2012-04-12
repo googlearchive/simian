@@ -26,7 +26,11 @@ python_check:
 
 swig_check:
 	@if [ -z "${SWIG}" -o ! -x "${SWIG}" ]; then \
-	echo swig must be installed. make swig to do this automatically. ; \
+	echo swig must be installed. type: ; \
+	echo ; \
+	echo "       make swig" ; \
+	echo ; \
+	echo and it will be done automatically for you. ; \
 	exit 1 ; \
 	fi
 
@@ -56,7 +60,8 @@ VE: virtualenv python_check
 test: swig_check VE
 	[ -f test ] || \
 	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" \
-	VE/bin/python setup.py google_test && touch test
+	VE/bin/python setup.py google_test && touch test && \
+	echo ALL TESTS COMPLETED SUCCESSFULLY
 
 settings_check: test
 	VE/bin/python \
@@ -132,7 +137,7 @@ contents.tar.gz: client_config
 	# add simianfacter
 	cp ./src/simian/util/simianfacter tmpcontents/usr/local/bin
 	# build targz
-	cd tmpcontents && tar -c --exclude .svn -f ../contents.tar .
+	cd tmpcontents && tar -c --exclude ".*" -f ../contents.tar .
 	gzip contents.tar
 
 ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz

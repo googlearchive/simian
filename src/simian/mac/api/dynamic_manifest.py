@@ -31,13 +31,6 @@ from simian.mac.munki import handlers
 from simian.mac.common import util
 
 
-MOD_TYPES = {
-    'owner': models.OwnerManifestModification,
-    'os_version': models.OSVersionManifestModification,
-    'site': models.SiteManifestModification,
-}
-
-
 class Error(Exception):
   """Class for domain specific exceptions."""
 
@@ -60,11 +53,11 @@ class DynamicManifest(handlers.AuthenticationHandler, webapp.RequestHandler):
       target: str modification target, e.g. foouser, NYC, 10.6.7.
       pkg_name: str Munki package name, e.g. FooPkg.
     """
-    if mod_type not in MOD_TYPES:
+    if mod_type not in models.MANIFEST_MOD_MODELS:
       logging.warning('Invalid modification type specified: %s', mod_type)
       raise InvalidModificationType(mod_type)
     self.mod_type = mod_type
-    self.model = MOD_TYPES.get(self.mod_type, None)
+    self.model = models.MANIFEST_MOD_MODELS.get(self.mod_type, None)
     if target:
       self.target = urllib.unquote(target)
     else:

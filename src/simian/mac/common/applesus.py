@@ -32,7 +32,7 @@ from simian.mac import models
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = ['10.5', '10.6', '10.7']
+OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8']
 
 AUTO_PROMOTE_PHASE_DAYS_MAP = {
     common.TESTING: 4,

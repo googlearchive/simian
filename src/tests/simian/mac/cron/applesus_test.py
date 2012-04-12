@@ -136,6 +136,10 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
         '10.7_testing': ['product5'],
         '10.7_stable': ['product5'],
         '10.7_untouched': ['product7'],
+        '10.8_unstable': ['product5', 'product6'],
+        '10.8_testing': ['product5'],
+        '10.8_stable': ['product5'],
+        '10.8_untouched': ['product7'],
     }
     deprecated_products = []
     for p in ['product2', 'product3', 'product7', 'deprecateme', 'andme']:

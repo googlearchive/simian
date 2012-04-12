@@ -37,17 +37,18 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     return dyn_man
 
   def _MockModTypeModel(self, mod_type):
-    """Util method to help with mocking out MOD_TYPES."""
+    """Util method to help with mocking out models.MANIFEST_MOD_MODELS."""
     mock_model = self.mox.CreateMockAnything()
-    dyn_man.MOD_TYPES[mod_type] = mock_model
+    dyn_man.models.MANIFEST_MOD_MODELS[mod_type] = mock_model
     return mock_model
 
   def testModTypes(self):
     """Tests that all valid mod_type options work."""
     mod_types = ['owner', 'os_version', 'site']
     for mod_type in mod_types:
-      self.assertTrue(dyn_man.MOD_TYPES.get(mod_type) is not None)
-    self.assertTrue(dyn_man.MOD_TYPES.get('crazytype') is None)
+      self.assertTrue(
+          dyn_man.models.MANIFEST_MOD_MODELS.get(mod_type) is not None)
+    self.assertTrue(dyn_man.models.MANIFEST_MOD_MODELS.get('crazytype') is None)
 
   def testParseParameters(self):
     """Tests _ParseParameters()."""
@@ -69,7 +70,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.assertEqual(self.c.mod_type, mod_type)
     self.assertEqual(self.c.target, target)
     self.assertEqual(self.c.pkg_name, pkg_name_unquoted)
-    self.assertEqual(self.c.model, dyn_man.MOD_TYPES[mod_type])
+    self.assertEqual(self.c.model, dyn_man.models.MANIFEST_MOD_MODELS[mod_type])
     self.assertEqual(self.c.manifests, manifests)
     self.assertEqual(self.c.install_types, install_types)
     self.assertEqual(self.c.key_name, '%s##%s' % (target, pkg_name_unquoted))
@@ -95,7 +96,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.assertEqual(self.c.mod_type, mod_type)
     self.assertEqual(self.c.target, target)
     self.assertEqual(self.c.pkg_name, pkg_name_unquoted)
-    self.assertEqual(self.c.model, dyn_man.MOD_TYPES[mod_type])
+    self.assertEqual(self.c.model, dyn_man.models.MANIFEST_MOD_MODELS[mod_type])
     self.assertEqual(self.c.manifests, [])
     self.assertEqual(self.c.install_types, install_types)
     self.assertEqual(self.c.key_name, '%s##%s' % (target, pkg_name_unquoted))

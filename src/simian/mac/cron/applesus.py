@@ -47,6 +47,7 @@ CATALOGS = {
     '10.5': 'http://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
     '10.6': 'http://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
     '10.7': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
+    '10.8': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
 }
 
 
