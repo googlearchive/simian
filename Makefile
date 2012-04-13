@@ -91,7 +91,8 @@ clean_ve:
 	rm -rf VE
 
 clean: clean_contents clean_pkgs clean_sdist clean_test clean_ve
-	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* *.egg
+	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg \
+	dist/* build/* *.egg install_name_tool
 
 ${SDIST}: VE clean_sdist client_config
 	VE/bin/python setup.py sdist --formats=tar
