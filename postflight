@@ -90,8 +90,7 @@ fi
 
 ### install virtualenv
 
-# PATH override supplies a nop install_name_tool(1) if it is missing
-env PATH="${RESOURCES}/vep:${PATH}" ${PYTHON} ${EZ} -U virtualenv
+${PYTHON} ${EZ} -U virtualenv
 
 ### find & test newly installed virtualenv
 
@@ -103,7 +102,8 @@ oldpwd="$PWD"
 mkdir -p "${INSTALL_DIR}"
 cd "${INSTALL_DIR}"
 
-${PYTHON} ${VIRTUALENV} ${VE_DIR}
+# PATH override supplies a nop install_name_tool(1) if it is missing
+env PATH="${RESOURCES}/vep:${PATH}" ${PYTHON} ${VIRTUALENV} ${VE_DIR}
 VE_PYTHON=${INSTALL_DIR}/${VE_DIR}/bin/python
 VE_EZ=${INSTALL_DIR}/${VE_DIR}/bin/easy_install
 

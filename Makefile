@@ -140,7 +140,10 @@ contents.tar.gz: client_config
 	tar -v -c --exclude '*/.*' -f contents.tar -C tmpcontents .
 	# build gz
 	gzip -f contents.tar
-                        
+	
+install_name_tool:
+	cp /usr/bin/install_name_tool .
+
 m2crypto:
 	for egg in \
 	M2Crypto-0.21.1-py2.5-macosx-10.8-x86_64.egg \
@@ -149,8 +152,10 @@ m2crypto:
 	M2Crypto-0.21.1-py2.5-macosx-10.5-i386.egg ; do \
 	  [[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "http://chandlerproject.org/pub/Projects/MeTooCrypto/$${egg}" ; \
 	done		
+	
+vep: install_name_tool
 
-${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
+${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian \
@@ -173,7 +178,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
+${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
@@ -198,7 +203,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz vep
 	rm -rf tmppkgs/$@
 	mkdir -p tmppkgs
 	./tgz2dmg.sh contents.tar.gz tmppkgs/$@ \
@@ -223,7 +228,7 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-r ${SDIST} \
 	-s postflight
 
-${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz
+${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz vep
 	rm -f $@
 	./tgz2dmg.sh contents.tar.gz $@ \
 	-id com.google.code.simian.and.munkitools \
