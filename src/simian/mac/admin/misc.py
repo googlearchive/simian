@@ -127,6 +127,7 @@ class Misc(admin.AdminHandler):
     """Displays a list of installs of a particular package."""
     applesus = self.request.get('applesus') == '1'
     failures = self.request.get('failures') == '1'
+    status = self.request.get('status', None)
 
     query = models.InstallLog.all()
 
@@ -139,6 +140,9 @@ class Misc(admin.AdminHandler):
       query.filter('applesus =', applesus)
     else:
       query.filter('package =', pkg)
+
+    if status:
+      query.filter('status =', status)
 
     query.order('-mtime')
 

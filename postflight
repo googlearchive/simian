@@ -102,8 +102,26 @@ oldpwd="$PWD"
 mkdir -p "${INSTALL_DIR}"
 cd "${INSTALL_DIR}"
 
-# PATH override supplies a nop install_name_tool(1) if it is missing
+### create a distutils __init__.py if it does not exist
+### otherwise virtualenv fails.
+distutils_path=$(${PYTHON} -c \
+    'import sys; import distutils; print distutils.__path__[0]')
+[[ -d "${distutils_path}" ]] || die "Cannot find distutils"
+
+if [[ ! -f "${distutils_path}/__init__.py" ]]; then
+  ${PYTHON} -c \
+'import distutils ; \
+print "__version__ = \"%s\"" % distutils.__version__ ; \
+print "__revision__ = \"%s\"" % distutils.__revision__' > \
+${distutils_path}/__init__.tmp$$
+  rm -f ${distutils_path}/__init__.py
+  mv -f ${distutils_path}/__init__.tmp$$ ${distutils_path}/__init__.py
+fi
+
+# Supply our own install_name_tool first in the PATH so machines without
+# the SDK can perform this step.
 env PATH="${RESOURCES}/vep:${PATH}" ${PYTHON} ${VIRTUALENV} ${VE_DIR}
+
 VE_PYTHON=${INSTALL_DIR}/${VE_DIR}/bin/python
 VE_EZ=${INSTALL_DIR}/${VE_DIR}/bin/easy_install
 

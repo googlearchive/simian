@@ -30,7 +30,7 @@ from google.appengine.api import users
 from simian import settings
 
 XSRF_DELIMITER = '||'
-XSRF_VALID_TIME = 300  # Seconds = 5 minutes
+XSRF_VALID_TIME = 3600  # Seconds = 60 minutes
 
 
 def XsrfTokenGenerate(action, user=None, timestamp=None):

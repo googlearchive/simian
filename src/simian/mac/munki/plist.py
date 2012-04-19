@@ -451,8 +451,8 @@ class ApplePlist(object):
       self._NewValue(self._ParseDate(value))
       self._NewMode('value')
     elif self._CurrentMode() == 'data':
-      self._NewValue(self._ParseData(value))
-      self._NewMode('value')
+      self._NewValue(value)
+      self._NewMode('mvalue')
     elif self._CurrentMode() == 'real':
       self._NewValue(float(value))
       self._NewMode('value')
@@ -489,6 +489,9 @@ class ApplePlist(object):
         value.insert(0, self._CurrentValue())
         self._ReleaseValue()
       value = ''.join(value)
+      # if this is a data node, now base64 decode it.
+      if self._CurrentMode() == 'data':
+        value = self._ParseData(value)
     # if this element ending is an array or dict, we're done building
     # these structures.  pop the value off and keep it to store it.
     elif name in ['array', 'dict']:

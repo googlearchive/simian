@@ -56,6 +56,9 @@ FLASH_PLUGIN_NAME = 'flashplugin'
 FLASH_PLUGIN_DEBUG_NAME = 'flash_player_debug'
 # Apple Software Update pkgs_to_install text format.
 APPLESUS_PKGS_TO_INSTALL_FORMAT = 'AppleSUS: %s'
+# Serial numbers for which first connection de-duplication should be skipped.
+DUPE_SERIAL_NUMBER_EXCEPTIONS = [
+      'SystemSerialNumb', 'System Serial#', 'Not Available', None]
 
 
 class Error(Exception):
@@ -91,8 +94,7 @@ def _SaveFirstConnection(client_id, computer):
   e.put()
 
   # Set older computers with the same serial number as inactive.
-  skip_serials = ['SystemSerialNumb', 'System Serial#', None]
-  if computer.serial not in skip_serials:
+  if computer.serial not in DUPE_SERIAL_NUMBER_EXCEPTIONS:
     for dupe in models.Computer.AllActive().filter('serial =', computer.serial):
       # skip over the new client.
       if dupe.uuid == computer.uuid:

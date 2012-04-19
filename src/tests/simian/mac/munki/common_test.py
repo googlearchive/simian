@@ -48,7 +48,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'office': 'foooffice', 'site': 'foosite'
     }
     class MockComputer(object):
-      serial = None
+      serial = common.DUPE_SERIAL_NUMBER_EXCEPTIONS[0]
     mock_computer = MockComputer()
     mock_entity = self.mox.CreateMockAnything()
     common.models.FirstClientConnection(key_name=client_id['uuid']).AndReturn(
@@ -70,6 +70,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(common.models.Computer, 'AllActive')
 
     now = datetime.datetime.utcnow()
+    dupe_serial = 'fooserial'
 
     client_id = {
         'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
@@ -89,10 +90,12 @@ class CommonModuleTest(test.RequestHandlerTest):
     dupe1 = self.mox.CreateMockAnything()
     dupe1.uuid = 'diff'
     dupe1.preflight_datetime = now - datetime.timedelta(days=0, minutes=1)
+    dupe1.serial = dupe_serial
 
     dupe2 = self.mox.CreateMockAnything()
     dupe2.uuid = 'diff again'
     dupe2.preflight_datetime = now - datetime.timedelta(days=21)
+    dupe2.serial = dupe_serial
 
     # same_serials contains mock_computer, but put() shouldn't be called again.
     same_serials = [mock_computer, dupe1, dupe2]

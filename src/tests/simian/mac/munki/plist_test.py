@@ -258,6 +258,12 @@ class ApplePlistTest(mox.MoxTestBase):
            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
     self.PlistTest(xml, {'foo': 'hello there'})
 
+  def testBasicDataTwoLines(self):
+    xml = ('%s  <dict>\n    <key>foo</key>\n    '
+           '<data>aGVs\nbG8gdGhlcmU=</data>\n  '
+           '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+    self.PlistTest(xml, {'foo': 'hello there'})
+
   def testBasicDataEmptyKey(self):
     xml = ('%s  <dict>\n    <key></key>\n    '
            '<data>d2hhdCBhIGJ1ZyB0aGlzIHdhcw==</data>\n  '

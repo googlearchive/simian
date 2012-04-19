@@ -205,9 +205,9 @@
 
 {% else %}
 
-  {% ifequal report_type "summary" %}
+  {% if report_type == "summary" or report_type == "search" %}
     <p>No clients were found.</p>
-  {% endifequal %}
+  {% endif %}
 
 {% endif %}  {# endif summary  #}
 

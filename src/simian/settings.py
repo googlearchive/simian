@@ -585,7 +585,7 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
         we do not need to recalculate that value.  This avoids recursion
         problems.
     """
-    if k != 'server_hostname':
+    if k in ['subdomain', 'domain']:
       try:
         # Set this value only into DictSettings storage, not any
         # child classes which will likely override _Set().
@@ -593,6 +593,10 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
           DictSettings._Set(
               self, 'server_hostname', os.environ.get('HTTP_HOST'))
         else:
+          # Only calculate a value if the other values are present.
+          # _Get() raises AttributeError if not.
+          unused = DictSettings._Get(self, 'subdomain')
+          unused = DictSettings._Get(self, 'domain')
           DictSettings._Set(self, 'server_hostname', '%s.%s' % (
               self._Get('subdomain'), self._Get('domain')))
       except (KeyError, AttributeError):
@@ -656,6 +660,7 @@ class FilesystemSettings(SimianDictSettings):
       if as_file=True, string contents of entire file.
       if as_file=False, dictionary of settings loaded from file.
     """
+    logging.debug('_GetExternalConfiguration(%s)', name)
     if path is None:
       path = self._path
 
@@ -706,6 +711,7 @@ class FilesystemSettings(SimianDictSettings):
     Raises:
       AttributeError: if the name does not exist in external settings.
     """
+    logging.debug('_GetExternalPem(%s)', k)
     if k in self._settings:
       return self._settings[k]
     pem_file = '%s.pem' % k[:-4]
@@ -728,6 +734,7 @@ class FilesystemSettings(SimianDictSettings):
     Raises:
       AttributeError: if the name does not exist in external settings.
     """
+    logging.debug('_GetExternalValue(%s)', k)
     if k in self._settings:
       return self._settings[k]
     config = self._GetExternalConfiguration('settings')
@@ -750,6 +757,7 @@ class FilesystemSettings(SimianDictSettings):
     Raises:
       AttributeError: if this settings item does not exist.
     """
+    logging.debug('_Get(%s)', k)
     if k.endswith('_pem'):
       v = self._GetExternalPem(k)
     else:
