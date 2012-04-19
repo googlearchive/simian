@@ -9,18 +9,6 @@ import subprocess
 from simian import settings
 
 
-SETTINGS_FACTER = {
-    'certname': settings.CERTNAME or GetSerialNumber(),
-    'primary_user': settings.PRIMARY_USER,
-    'sp_local_host_name': settings.HOSTNAME,
-    'configtrack': settings.CONFIGTRACK,
-    'simiantrack': settings.SIMIANTRACK,
-    'site': settings.SITE,
-    'location': settings.LOCATION,
-    'applesus': settings.APPLESUS,
-}
-
-
 def Exec(cmd):
   """Executes a process and returns exit code, stdout, stderr.
 
@@ -81,6 +69,18 @@ def GetFacterFacts():
     value = value.strip()
     facts[key] = value
   return facts
+
+
+SETTINGS_FACTER = {
+    'certname': settings.CERTNAME or GetSerialNumber(),
+    'primary_user': settings.PRIMARY_USER,
+    'sp_local_host_name': settings.HOSTNAME,
+    'configtrack': settings.CONFIGTRACK,
+    'simiantrack': settings.SIMIANTRACK,
+    'site': settings.SITE,
+    'location': settings.LOCATION,
+    'applesus': settings.APPLESUS,
+}
 
 
 def main():
