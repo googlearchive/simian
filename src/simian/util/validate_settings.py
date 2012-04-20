@@ -43,11 +43,14 @@ def ValidatePem(arg, dirname, fnames):
   """
   settings, pem_content = arg
   logging.info('Validating pem inside %s', dirname)
-  for fname in fnames:
+  i = 0
+  while i < len(fnames):
+    fname = fnames[i]
     fname_full = os.path.join(dirname, fname)
     if not os.path.exists(fname_full):
       ErrorExit('Does not exist: %s', fname_full)
     if fname.startswith('.'):
+      del(fnames[i])  # if this is a directory, this stops recursion into it
       continue
     if not os.path.isfile(fname_full):
       ErrorExit('Not a file, remove: %s', fname_full)
@@ -69,6 +72,8 @@ def ValidatePem(arg, dirname, fnames):
       logging.info('Validated %s', fname_full)
     except ValueError, e:
       ErrorExit('Error reading %s: %s', fname_full, str(e))
+
+    i += 1
 
 
 def FindPemAndValidate(settings):
