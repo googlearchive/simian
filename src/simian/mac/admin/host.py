@@ -133,9 +133,19 @@ class Host(admin.AdminHandler):
       computer.connection_dates.reverse()
       computer.connection_datetimes.reverse()
 
+    try:
+      uuid_lookup_url = settings.UUID_LOOKUP_URL
+    except AttributeError:
+      uuid_lookup_url = None
+
+    try:
+      owner_lookup_url = settings.OWNER_LOOKUP_URL
+    except AttributeError:
+      owner_lookup_url = None
+
     values = {
-        'uuid_lookup_url': settings.UUID_LOOKUP_URL,
-        'owner_lookup_url': settings.OWNER_LOOKUP_URL,
+        'uuid_lookup_url': uuid_lookup_url,
+        'owner_lookup_url': owner_lookup_url,
         'computer': computer,
         'applesus_installs': applesus_installs,
         'installs': installs,

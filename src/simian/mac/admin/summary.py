@@ -119,11 +119,16 @@ class Summary(admin.AdminHandler):
     if report_type in REPORT_TYPES:
       computers.sort(key=lambda c: c.preflight_datetime, reverse=True)
 
+    try:
+      owner_lookup_url = settings.OWNER_LOOKUP_URL
+    except AttributeError:
+      owner_lookup_url = None
+
     summary = GetComputerSummary(computers=computers)
     values = {
         'computers': computers, 'summary': summary, 'report_type': 'search',
         'search_type': report_type, 'search_term': report_filter,
-        'owner_lookup_url': settings.OWNER_LOOKUP_URL,
+        'owner_lookup_url': owner_lookup_url,
     }
     self.Render('summary.html', values)
 
