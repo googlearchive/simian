@@ -33,6 +33,7 @@ from google.appengine.ext import db
 from google.appengine.ext import deferred
 from google.appengine.runtime import apiproxy_errors
 
+from simian.mac.common import ipcalc
 from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.common import util
@@ -384,6 +385,9 @@ class Computer(db.Model):
   # request logs to be uploaded, and notify email addresses saved here.
   # the property should contain a comma delimited list of email addresses.
   upload_logs_and_notify = db.StringProperty()
+  # The number of preflight connections since the last successful postflight
+  # connection. Resets to 0 when a postflight connection is posted.
+  preflight_count_since_postflight = db.IntegerProperty(default=0)
 
   def _GetUserSettings(self):
     """Returns the user setting dictionary, or None."""
@@ -728,10 +732,10 @@ class KeyValueCache(BaseModel):
     #
     # (pickle is 2X+ faster but not secure & deprecated inside util module)
 
-    ip_int = util.IpToInt(ip)
+    ip_int = ipcalc.IpToInt(ip)
 
     for ip_mask_str in ip_blocks:
-      ip_mask = util.IpMaskToInts(ip_mask_str)
+      ip_mask = ipcalc.IpMaskToInts(ip_mask_str)
       if (ip_int & ip_mask[1]) == ip_mask[0]:
         return True
 

@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""Module to handle /pkgs"""
+"""Module to handle /auth"""
 
 
 
@@ -35,14 +35,19 @@ from simian.mac.munki import handlers
 class Auth(handlers.AuthenticationHandler):
   """Handler for /auth URL."""
 
-  def GetAuth1Instance(self):
-    auth1 = gaeserver.AuthSimianServer()
+  def GetAuth1Instance(self, ca_id=None):
+    """Generate an instance of auth1 class and return it.
+
+    Args:
+      ca_id: str, default None, the ca_id to pass to LoadCaParameters.
+          This value changes the set of server/ca public/priv etc config
+          parameters that is used for the Auth1 communication.
+    """
     try:
-      key = settings.SERVER_PRIVATE_KEY_PEM
-      auth1.LoadSelfKey(key)
-    except (AttributeError, ValueError):
-      logging.critical('SERVER_PRIVATE_KEY_PEM error')
-      logging.exception('SERVER_PRIVATE_KEY_PEM error')
+      auth1 = gaeserver.AuthSimianServer()
+      auth1.LoadCaParameters(settings, ca_id)
+    except gaeserver.CaParametersError, e:
+      logging.critical('(ca_id = %s) %s' % (ca_id, str(e)))
       raise base.NotAuthenticated
     return auth1
 
@@ -71,7 +76,8 @@ class Auth(handlers.AuthenticationHandler):
 
   def post(self):
     """POST"""
-    auth1 = self.GetAuth1Instance()
+    ca_id = self.request.get('ca_id', None)
+    auth1 = self.GetAuth1Instance(ca_id=ca_id)
 
     if self._IsRemoteIpAddressBlocked(os.environ.get('REMOTE_ADDR', '')):
       raise base.NotAuthenticated

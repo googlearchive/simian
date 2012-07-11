@@ -9,18 +9,15 @@ Exit codes: see constants below.
 
 
 
-import datetime
 import errno
 import logging
 import os
 import re
-import signal
 import shutil
 import sys
 import time
 import urllib
 import flight_common
-from munkilib import FoundationPlist as fpl
 from munkilib import munkicommon
 
 
@@ -28,8 +25,6 @@ IFCONFIG = '/sbin/ifconfig'
 # Start exit codes
 STATUS_SUCCESS = (0, 'SUCCESS')
 STATUS_FAIL_AUTH = (10, 'failure obtaining auth token')
-STATUS_FAIL_WWAN_ACTIVE = (11, 'WWAN device ppp0 is active')
-STATUS_FAIL_ANDROID_WAP_ACTIVE = (12, 'Android WAP tether is active')
 STATUS_FAIL_CONFIG_SETUP = (13, 'Config setup errors')
 STATUS_SERVER_EXIT_FEEDBACK = (14, 'Server send EXIT command')
 # End exit codes
@@ -38,7 +33,6 @@ MAX_ATTEMPTS = 4
 MSULOGFILE = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.log'
 MSULOGDIR = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.logs'
 
-
 DEBUG = False
 if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
@@ -46,13 +40,15 @@ else:
   logging.getLogger().setLevel(logging.INFO)
 
 
-def LoginToServer(config, client_id, user_settings):
+def LoginToServer(config, client_id, user_settings, client_exit=None):
   """Sets an auth token cookie header to a plist object.
 
   Args:
-    config: FoundationPlist.NSCFDictionary object.
+    config: Preferences object.
     client_id: dict client identifier.
     user_settings: dict of user settings.
+    client_exit: optional, default None, str explaining why the client is
+      requesting to exit its execution.
   Returns:
     str auth token.
   """
@@ -96,10 +92,14 @@ def LoginToServer(config, client_id, user_settings):
       'client_id': client_id_str,
       'user_settings': user_settings_str,
   }
+  if client_exit:
+    client_params['client_exit'] = client_exit
+
   client_params = urllib.urlencode(client_params)
 
+  url = flight_common.GetServerURL()
   cmd = [
-      script_path, '--login', '--print-cookie',
+      script_path, '--login', '--server', url, '--print-cookie',
       '--write-root-ca-certs', cert_file_path,
       '--report', 'feedback:OK=0:%s=77:%s=88:%s=99:body:%s' % (
           flight_common.ReportFeedback.EXIT,
@@ -107,7 +107,14 @@ def LoginToServer(config, client_id, user_settings):
           flight_common.ReportFeedback.UPLOAD_LOGS,
           client_params),
   ]
-  return_code, stdout, stderr = flight_common.Exec(cmd, timeout=90, waitfor=0.5)
+  try:
+    return_code, stdout, stderr = flight_common.Exec(
+        cmd, timeout=90, waitfor=0.5)
+  except OSError, e:
+    logging.error('Exec(%s) error: %s', cmd, e)
+    return_code = -1
+    stdout = ''
+
   token = stdout.strip()
 
   # Add the Cookie and client id to the headers.
@@ -118,11 +125,9 @@ def LoginToServer(config, client_id, user_settings):
 
   if return_code == 99:
     # write new token/client_id headers to secure plist and upload logs.
-    fpl.writePlist(config, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
     flight_common.UploadClientLogFiles()
   elif return_code == 88:
     # write new token/client_id headers to secure plist and repair client.
-    fpl.writePlist(config, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
     try:
       logging.info('Reinstalling Munki client....')
       flight_common.RepairClient()
@@ -140,7 +145,7 @@ def LoginToServer(config, client_id, user_settings):
   return token
 
 
-def IsOnWWAN():
+def IsOnWwan():
   """"Checks WWAN device connection status.
 
   Note: this may produce false-positives, and may not catch all WWAN devices.
@@ -153,22 +158,32 @@ def IsOnWWAN():
     Boolean. True if WWAN device is active, False otherwise.
   """
   wwan_iface = 'ppp0'
-  return_code, unused_out, unused_err = flight_common.Exec(
-      [IFCONFIG, wwan_iface])
+  try:
+    return_code, unused_out, unused_err = flight_common.Exec(
+        [IFCONFIG, wwan_iface])
+  except OSError, e:
+    logging.error('Exec(%s) error: %s', IFCONFIG, e)
+    return_code = -1
+
   return return_code == 0  # ifconfig exits with 1 if interface doesn't exist.
 
 
-def IsOnAndroidWAP():
-  """Checks if the AirPort is connection to Android WAP tether.
+def IsOnAndroidWap():
+  """Checks if the AirPort is connected to Android WAP tether.
 
   Returns:
-    Boolean. True if Android WAP is connected, False otherwise.
+    Booelan. True if WAP is providing connection, False otherwise.
   """
   airport_iface = 'en1'
   # Android WAP uses a very specific subnet (192.168.43.0/24) as well as
   # dnsmasq.
-  return_code, stdout, unused_err = flight_common.Exec(
-      [IFCONFIG, airport_iface])
+  try:
+    return_code, stdout, unused_err = flight_common.Exec(
+        [IFCONFIG, airport_iface])
+  except OSError, e:
+    logging.error('Exec(%s) error: %s', IFCONFIG, e)
+    return_code = -1
+
   if return_code != 0:  # interface was likely not found.
     return False
   # 0xffffff00 is a hex representation of /24.
@@ -178,7 +193,12 @@ def IsOnAndroidWAP():
     # IP and netmask look like Android WAP, so check dnsmasq.
     cmd = ['host', '-W', '5', '-c', 'CHAOS', '-t', 'txt', 'VERSION.BIND',
            '192.168.43.1']
-    return_code, stdout, unused_err = flight_common.Exec(cmd)
+    try:
+      return_code, stdout, unused_err = flight_common.Exec(cmd)
+    except OSError, e:
+      logging.error('Exec(%s) error: %s', cmd, e)
+      return_code = -1
+
     if return_code != 0:
       return False
     dnsmasq_match = re.search(
@@ -188,6 +208,8 @@ def IsOnAndroidWAP():
       return True
 
   return False
+
+
 
 
 def CreateEmptyDirectory(attempt=0):
@@ -285,7 +307,7 @@ def GetManagedSoftwareUpdateLogFile(logfile=MSULOGFILE):
     log_re = re.compile('^(\d+\.\d+) INFO (\w+) : @@([^:]+):([^:]+)@@\s?(.*)')
 
     r = fd.readline()
-    while r != '':
+    while r:
       r = r.strip()
       m = log_re.search(r)
       if m:
@@ -363,18 +385,10 @@ def main(args):
     sys.exit(0)
 
   # load the NONSECURE ManagedInstalls.plist
-  regular_config = fpl.readPlist(munkicommon.MANAGED_INSTALLS_PLIST_PATH)
+  regular_config = munkicommon.ManagedInstallsPreferences()
 
 
-  config_file_path = munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH
-
-  # read secure ManagedInstalls.plist.
-  try:
-    secure_config = fpl.readPlist(config_file_path)
-  except fpl.NSPropertyListSerializationException:
-    logging.warning(
-        'secure config does not exist or is corrupt; resetting to empty.')
-    secure_config = {}
+  secure_config = munkicommon.SecureManagedInstallsPreferences()
 
   # update the ClientIdentifier key with the custom client id.
   client_id = flight_common.GetClientIdentifier(runtype)
@@ -382,46 +396,27 @@ def main(args):
 
   user_settings = {}
 
+  # If the munki exec is an auto run (launchd), exit if on WWAN or Android WAP.
+  client_exit = None
+  if runtype == 'auto':
+    if IsOnWwan():
+      client_exit = 'WWAN device ppp0 is active'
+    elif IsOnAndroidWap():
+      client_exit = 'Android WAP tether is active'
+
   # get a client auth token/cookie from the server, and post connection data.
-  token = LoginToServer(secure_config, client_id, user_settings)
+  token = LoginToServer(secure_config, client_id, user_settings, client_exit)
 
   # post recent MSU logs
   logs = GetManagedSoftwareUpdateLogs()
   PostManagedSoftwareUpdateLogs(logs, token)
-
-  # If the munki exec is an auto run (launchd), exit if on WWAN or Android WAP.
-  if runtype == 'auto':
-    # Exit if WWAN device is active.
-    if IsOnWWAN():
-      response = flight_common.PostReportToServer(
-          'preflight_exit', {'message': STATUS_FAIL_WWAN_ACTIVE[1]},
-          token=token)
-      if response != flight_common.ReportFeedback.FORCE_CONTINUE:
-        logging.warning(STATUS_FAIL_WWAN_ACTIVE[1])
-        sys.exit(STATUS_FAIL_WWAN_ACTIVE[0])
-      else:
-        logging.warning('Report status from server: %s', response)
-
-    # Exit if Android WAP tether is active.
-    if IsOnAndroidWAP():
-      response = flight_common.PostReportToServer(
-          'preflight_exit', {'message': STATUS_FAIL_ANDROID_WAP_ACTIVE[1]},
-          token=token)
-      if response != flight_common.ReportFeedback.FORCE_CONTINUE:
-        logging.warning(STATUS_FAIL_ANDROID_WAP_ACTIVE[1])
-        sys.exit(STATUS_FAIL_ANDROID_WAP_ACTIVE[0])
-      else:
-        logging.warning('Report status from server: %s', response)
-
-  # save secure ManagedInstalls.plist.
-  fpl.writePlist(secure_config, config_file_path)
 
   # load user settings
   if user_settings:
     regular_config['UserSettings'] = user_settings
   else:
     if 'UserSettings' in regular_config:
-      del(regular_config['UserSettings'])  # wipe existing UserSettings.
+      del regular_config['UserSettings']  # wipe existing UserSettings.
 
   # setup blank directory for capath setting
   path = CreateEmptyDirectory()
@@ -435,9 +430,6 @@ def main(args):
     regular_config['InstallAppleSoftwareUpdates'] = True
     # Get Apple Software Update Service catalog from server and set locally.
     flight_common.GetAppleSUSCatalog()
-
-  # write NONSECURE ManagedInstalls.plist
-  fpl.writePlist(regular_config, munkicommon.MANAGED_INSTALLS_PLIST_PATH)
 
   # Report installs/etc to server.
   flight_common.UploadAllManagedInstallReports(client_id.get('on_corp', 'None'))

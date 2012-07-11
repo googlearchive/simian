@@ -22,7 +22,7 @@
 
 from google.appengine.ext import db
 from simian.mac.common import util
-from simian.mac.common import zip
+from simian.mac.common import compress
 
 
 class SerializedProperty(db.TextProperty):
@@ -78,7 +78,8 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
       self.length = 0
     else:
       self.length = len(value)
-    return db.Blob(zip.CompressedText(value, encoding='utf-8').Compressed())
+    return db.Blob(
+        compress.CompressedText(value, encoding='utf-8').Compressed())
 
   # pylint: disable-msg=C6409
   def __get__(self, model_instance, model_class):
@@ -90,7 +91,8 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
     # by an instance. When this happens, return our class instance.
     if value is self:
       return self
-    return unicode(zip.CompressedText(value, encoding='utf-8')).encode('utf-8')
+    return unicode(
+        compress.CompressedText(value, encoding='utf-8')).encode('utf-8')
 
   # pylint: disable-msg=C6409
   def __set__(self, model_instance, value):
@@ -100,7 +102,7 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
       super(CompressedUtf8BlobProperty, self).__set__(model_instance, value)
     else:
       self.length = len(value)
-      value = zip.CompressedText(value, encoding='utf-8').Compressed()
+      value = compress.CompressedText(value, encoding='utf-8').Compressed()
       super(CompressedUtf8BlobProperty, self).__set__(model_instance, value)
 
   # pylint: disable-msg=C6409

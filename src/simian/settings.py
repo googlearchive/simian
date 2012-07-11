@@ -245,9 +245,9 @@ class BaseSettings(types.ModuleType):
     if type(regex) is str:
       regex = re.compile(regex)
 
-    m = regex.search(v)
+    m = regex.search(str(v))
     if m is None:
-      raise ValueError('value "%s" for %s' % (v, k))
+      raise ValueError('Invalid value "%s" for %s' % (v, k))
 
   def _CheckValueFunc(self, k, v, func):
     """Check whether v meets func validation for setting k.
@@ -492,7 +492,8 @@ class TestModuleSettings(ModuleSettings):  # pylint: disable-msg=W0223
       # pylint: disable-msg=E0611
       from tests.simian import test_settings as unused_foo
     except ImportError:
-      raise ImportError('Missing test_settings, check dependencies')
+      raise ImportError(
+          'Missing test_settings, check dependencies')
     return 'tests.simian.test_settings'
 
 
@@ -539,6 +540,18 @@ class DictSettings(BaseSettings):
 class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
   """Settings stored in a dictionary with calculated values for Simian."""
 
+  def _IsCaIdValid(self, k, v):
+    """Is this settings ca_id value valid?
+
+    Args:
+      k: str, key being checked. See _VALIDATION_FUNC interface.
+      v: unknown type (probably None or str), check this ca_id value.
+    Returns:
+      True if valid, False if not.
+    """
+    # TODO(user): Refactor. This regex is also @ simian/auth:util.CA_ID_RE
+    return v is None or re.search(r'^[A-Z][0-9A-Z]+$', str(v)) is not None
+
   def _Initialize(self):
     """Initialize."""
     # We do this to initialize underlying DictSettings, nothing more:
@@ -551,10 +564,24 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
         'ca_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
     self._SetValidation(
         'server_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
+    # Note: One should add other CA_ID based parameter validation here.
     if not GAE:
       self._SetCalculatedSetting('server_hostname', ['subdomain', 'domain'])
     # Client specific settings
+    self._SetValidation('ca_id', self._VALIDATION_FUNC, self._IsCaIdValid)
     # Server specific settings
+    self._SetValidation(
+        'apple_auto_promote_enabled', self._VALIDATION_REGEX,
+        r'^(0|1)$')
+    self._SetValidation(
+        'apple_auto_promote_stable_weekday', self._VALIDATION_REGEX,
+        r'^[0-6]$')
+    self._SetValidation(
+        'apple_unstable_grace_period_days', self._VALIDATION_REGEX,
+        r'^[0-90]+$')
+    self._SetValidation(
+        'apple_testing_grace_period_days', self._VALIDATION_REGEX,
+        r'^\[0-90]$')
     self._SetValidation(
         'email_admin_list', self._VALIDATION_REGEX,
         r'^%s' % mail_regex)

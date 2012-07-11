@@ -120,6 +120,12 @@ def GetClientVersion():
   return '%s %s' % (munkicommon.get_version(), version.VERSION)
 
 
+def GetServerURL():
+  """Returns the server URL str from ManagedInstalls or const var URL."""
+  url = GetPlistValue('SoftwareRepoURL', secure=False)
+  return url
+
+
 def _GetConsoleUser():
   """Returns the logged in console username, or None if nobody is logged in."""
   logging.warning('facter primary_user empty; fetching from sys_config')
@@ -172,7 +178,7 @@ def _GetPrimaryUser():
       user = line.split(' ')[0]
       users[user] = users.get(user, 0) + 1
     users_list = users.keys()
-    users_list.sort(cmp=lambda x,y: cmp(users[x], users[y]), reverse=True)
+    users_list.sort(cmp=lambda x, y: cmp(users[x], users[y]), reverse=True)
     return users_list[0]
   return ''
 
@@ -183,16 +189,16 @@ def _GetMachineInfoPlistValue(key):
 
 
 def SetFileNonBlocking(f, non_blocking=True):
-    """Set non-blocking flag on a file object.
+  """Set non-blocking flag on a file object.
 
-    Args:
-      f: file
-      non_blocking: bool, default True, non-blocking mode or not
-    """
-    flags = fcntl.fcntl(f.fileno(), fcntl.F_GETFL)
-    if bool(flags & os.O_NONBLOCK) != non_blocking:
-      flags ^= os.O_NONBLOCK
-    fcntl.fcntl(f.fileno(), fcntl.F_SETFL, flags)
+  Args:
+    f: file
+    non_blocking: bool, default True, non-blocking mode or not
+  """
+  flags = fcntl.fcntl(f.fileno(), fcntl.F_GETFL)
+  if bool(flags & os.O_NONBLOCK) != non_blocking:
+    flags ^= os.O_NONBLOCK
+  fcntl.fcntl(f.fileno(), fcntl.F_SETFL, flags)
 
 
 def Exec(cmd, timeout=0, waitfor=0):
@@ -215,7 +221,7 @@ def Exec(cmd, timeout=0, waitfor=0):
     shell = False
 
   p = subprocess.Popen(
-    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
+      cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
 
   if timeout <= 0:
     stdout, stderr = p.communicate()
@@ -230,7 +236,7 @@ def Exec(cmd, timeout=0, waitfor=0):
     returncode = None
 
     while returncode is None:
-      (rlist, wlist, xlist) = select.select([p.stdout, p.stderr], [], [], 1.0)
+      rlist, _, _ = select.select([p.stdout, p.stderr], [], [], 1.0)
 
       if not rlist:
         inactive += 1
@@ -451,8 +457,8 @@ def GetClientIdentifier(runtype=None):
   facts = GetMachineInfoFromFacter()
 
   uuid = (facts.get('certname', None) or
-      facts.get('uuid', None) or _GetMachineInfoPlistValue('MachineUUID') or
-      _GetHardwareUUID())
+          facts.get('uuid', None) or _GetMachineInfoPlistValue('MachineUUID') or
+          _GetHardwareUUID())
   uuid = uuid.lower()  # normalize uuid to lowercase.
 
   owner = (facts.get('primary_user', None) or
@@ -562,7 +568,8 @@ def DictToStr(d, delimiter=DELIMITER):
   """Returns a passed dict as a key=value string with a defined delimiter.
 
   Args:
-    d: dict
+    d: dict to convert to a string.
+    delimiter: str delimiter to place between key/value pairs.
 
   Returns:
     String.  "uuid=<v>|owner=<v>|hostname=<v>|track=<v>" where "<v>" is the
@@ -580,13 +587,8 @@ def DictToStr(d, delimiter=DELIMITER):
 
 
 def GetAppleSUSCatalog():
-  """Fetches an Apple Software Update Service catalog from the server.
-
-  Args:
-    client_id: dict client id.
-    token: optional str auth token.
-  """
-  url = GetPlistValue('SoftwareRepoURL', secure=False)
+  """Fetches an Apple Software Update Service catalog from the server."""
+  url = GetServerURL()
   try:
     updatecheck.getResourceIfChangedAtomically(
         '%s/applesus/' % url, APPLE_SUS_CATALOG)
@@ -595,7 +597,7 @@ def GetAppleSUSCatalog():
     sus_catalog['CatalogURL'] = urlparse.urljoin(
         'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
     fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
-  except fetch.MunkiDownloadError, e:
+  except fetch.MunkiDownloadError:
     logging.exception('MunkiDownloadError getting Apple SUS catalog.')
 
 
@@ -666,6 +668,10 @@ def PerformServerRequest(
   """
   script_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
   cmd = [os.path.join(script_dir, AUTH_BINARY)]
+
+  url = GetServerURL()
+  cmd.append('--server')
+  cmd.append(url)
 
   if login:
     cmd.append('--login')
@@ -766,15 +772,15 @@ def GetInstallResults(install_results):
 
 
 def GetMunkiName(item_dict):
-    """Returns the display_name or name of a Munki package."""
-    return item_dict.get('display_name', item_dict.get('name')).encode('utf-8')
+  """Returns the display_name or name of a Munki package."""
+  return item_dict.get('display_name', item_dict.get('name')).encode('utf-8')
 
 
 def GetMunkiNameAndVersion(item_dict):
-    """Returns the "(display_name|name)-version" Munki name."""
-    name = GetMunkiName(item_dict)
-    munki_name = '%s-%s' % (name, item_dict.get('version_to_install', ''))
-    return munki_name.encode('utf-8')
+  """Returns the "(display_name|name)-version" Munki name."""
+  name = GetMunkiName(item_dict)
+  munki_name = '%s-%s' % (name, item_dict.get('version_to_install', ''))
+  return munki_name.encode('utf-8')
 
 
 def GetRemainingPackagesToInstall():
@@ -833,7 +839,7 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
   installs = GetInstallResults(installs)
   for i in xrange(len(installs)):
     # If 'time' exists, convert it to an epoc timestamp.
-    install_time =  installs[i].get('time', None)
+    install_time = installs[i].get('time', None)
     if hasattr(install_time, 'timeIntervalSince1970'):
       installs[i]['time'] = install_time.timeIntervalSince1970()
     # TODO(user): if we moved all of this code to simianauth, we could just use
@@ -874,7 +880,7 @@ def UploadAllManagedInstallReports(on_corp, logout=False):
       install_report_path = os.path.join(archives_dir, fname)
       if not os.path.isfile(install_report_path):
         continue
-      install_report, unused = GetManagedInstallReport(
+      install_report, _ = GetManagedInstallReport(
           install_report_path=install_report_path)
       try:
         _UploadManagedInstallReport(on_corp, install_report)
@@ -934,7 +940,7 @@ def RepairClient():
   Raises:
     RepairClientError: there was an error repairing this client.
   """
-  url = GetPlistValue('SoftwareRepoURL', secure=False)
+  url = GetServerURL()
   # TODO(user): figure out a way to not specify filename, then add a version
   # check so if the downloaded client is the same version that is running the
   # repair will just abort.

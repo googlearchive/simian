@@ -40,43 +40,8 @@ class Error(Exception):
   """Base Error class."""
 
 
-def GetMunkiConfigParam(
-    param, munki_config_plist=MUNKI_CONFIG_PLIST, open_fn=open):
-  """Get Munki configuration.
-
-  Args:
-    param: str, key to return, e.g. 'SoftwareRepoURL'
-    munki_config_plist: str, optional, filename to read from
-    open_fn: func, optional, open function to use
-  Returns:
-    str, value for param key
-    or None if the value cannot be determined
-  """
-  try:
-    f = open_fn(munki_config_plist, 'r')
-    buf = []
-    s = f.read()
-    while s:
-      buf.append(s)
-      s = f.read()
-    f.close()
-    mpi = plist.MunkiPlist(''.join(buf))
-    mpi.Parse()
-    pl = mpi.GetContents()
-  except (IOError, plist.Error), e:
-    logging.debug('Error reading %s: %s', munki_config_plist, str(e))
-    return
-  return pl.get(param, None)
-
-
-def GetMunkiSoftwareRepoURL():
-  """Get SoftwareRepoURL parameter from Munki config."""
-  return GetMunkiConfigParam('SoftwareRepoURL')
-
-
 class BaseSimianClient(object):
   """Base client features in all Mac clients."""
-
 
   def GetSystemRootCACertChain(self):
     """Load certificate chain from system.
@@ -165,9 +130,6 @@ class BaseSimianClient(object):
 
 class SimianClient(BaseSimianClient, client.SimianClient):
   """Client to connect to the Simian server as a Mac client."""
-
-  def __init__(self, hostname=None, port=None):
-    super(SimianClient, self).__init__(hostname, port)
 
   def _LoadPackageInfo(self, filename, description, display_name, catalogs):
     """Load package info from a file and return its package info.
@@ -364,9 +326,6 @@ class SimianClient(BaseSimianClient, client.SimianClient):
 
 class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
   """Client perform authentication steps with Simian server."""
-
-  def __init__(self, hostname=None, port=None):
-    super(SimianAuthClient, self).__init__(hostname, port)
 
   def _GetPuppetSslDetails(self, cert_fname=None, interactive_user=False):
     """Get Puppet SSL details.

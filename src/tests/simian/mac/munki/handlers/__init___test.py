@@ -24,7 +24,7 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
-from simian.mac.common import test
+from tests.simian.mac.common import test
 from simian.mac.munki import handlers
 
 

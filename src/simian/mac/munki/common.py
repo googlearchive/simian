@@ -77,6 +77,26 @@ class ManifestDisabledError(Error):
   """Disable manifest was requested."""
 
 
+class ReportFeedback(object):
+  """Class container for feedback status constants."""
+
+  # Client should proceed as normally defined.
+  OK = 'OK'
+
+  # Client should NOT exit and instead continue, even if this means masking
+  # an error which it would usually stop running because of.
+  FORCE_CONTINUE = 'FORCE_CONTINUE'
+
+  # Client should exit instead of continuing as normal.
+  EXIT = 'EXIT'
+
+  # Client should repair (download and reinstall) itself.
+  REPAIR = 'REPAIR'
+
+  # Client should send logs to the server.
+  UPLOAD_LOGS = 'UPLOAD_LOGS'
+
+
 def _SaveFirstConnection(client_id, computer):
   """Function to save first connection of a given client.
 
@@ -107,7 +127,8 @@ def _SaveFirstConnection(client_id, computer):
 
 def LogClientConnection(
     event, client_id, user_settings=None, pkgs_to_install=None,
-    apple_updates_to_install=None, delay=0, computer=None, ip_address=None):
+    apple_updates_to_install=None, ip_address=None, report_feedback=None,
+    computer=None, delay=0):
   """Logs a host checkin to Simian.
 
   Args:
@@ -117,9 +138,10 @@ def LogClientConnection(
     pkgs_to_install: optional list of string packages remaining to install.
     apple_updates_to_install: optional list of string Apple updates remaining
         to install.
-    delay: int. if > 0, LogClientConnection call is deferred this many seconds.
-    computer: optional models.Computer object.
     ip_address: str IP address of the connection.
+    report_feedback: str ReportFeedback command sent to the client.
+    computer: optional models.Computer object.
+    delay: int. if > 0, LogClientConnection call is deferred this many seconds.
   """
   #logging.debug(
   #    ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
@@ -135,7 +157,7 @@ def LogClientConnection(
         LogClientConnection, event, client_id, user_settings=user_settings,
         pkgs_to_install=pkgs_to_install, ip_address=ip_address,
         apple_updates_to_install=apple_updates_to_install,
-        _name=deferred_name, _countdown=delay)
+        report_feedback=report_feedback, _name=deferred_name, _countdown=delay)
     return
 
   if not client_id['uuid']:
@@ -144,7 +166,7 @@ def LogClientConnection(
 
   def __UpdateComputerEntity(
       event, _client_id, _user_settings, _pkgs_to_install,
-      _apple_updates_to_install, c=None, ip_address=None):
+      _apple_updates_to_install, _ip_address, _report_feedback, c=None):
     """Update the computer entity, or create a new one if it doesn't exists."""
     now = datetime.datetime.utcnow()
     is_new_client = False
@@ -168,7 +190,7 @@ def LogClientConnection(
     c.user_disk_free = _client_id['user_disk_free']
     c.global_uuid = _client_id['global_uuid']
     c.runtype = _client_id['runtype']
-    c.ip_address = ip_address
+    c.ip_address = _ip_address
 
     last_notified_datetime = _client_id['last_notified_datetime']
     if last_notified_datetime:  # might be None
@@ -185,7 +207,18 @@ def LogClientConnection(
       c.preflight_datetime = now
       if _client_id['on_corp'] == True:
         c.last_on_corp_preflight_datetime = now
+
+      # Increment the number of preflight connections since the last successful
+      # postflight, but only if the current connection is not going to exit due
+      # to report feedback (WWAN, GoGo InFlight, etc.)
+      if _report_feedback != ReportFeedback.EXIT:
+        if c.preflight_count_since_postflight is not None:
+          c.preflight_count_since_postflight += 1
+        else:
+          c.preflight_count_since_postflight = 1
+
     elif event == 'postflight':
+      c.preflight_count_since_postflight = 0
       c.postflight_datetime = now
 
       # Update pkgs_to_install.
@@ -245,12 +278,12 @@ def LogClientConnection(
     db.run_in_transaction(
         __UpdateComputerEntity,
         event, client_id, user_settings, pkgs_to_install,
-        apple_updates_to_install, c=computer, ip_address=ip_address)
+        apple_updates_to_install, ip_address, report_feedback, c=computer)
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
     logging.exception('LogClientConnection put() failure; deferring...')
     LogClientConnection(
         event, client_id, user_settings, pkgs_to_install,
-        apple_updates_to_install, ip_address=ip_address,
+        apple_updates_to_install, ip_address, report_feedback,
         delay=DATASTORE_NOWRITE_DELAY)
 
 

@@ -93,7 +93,7 @@
 
 
 <div class="zippy_toggle sectionheader" title="pf_computers">
-  Clients with recent preflight_datetime, but old postflight_datetime <span class="count">({{ pf_computers|length }})</span>
+  Clients with &#62; {{ preflight_count_broken_threshold }} preflight connections since last postflight <span class="count">({{ pf_computers|length }})</span>
 </div>
 <div id="pf_computers">
   {% if truncated %}Results were truncated.{% endif %}
@@ -102,7 +102,8 @@
       <tr class="multi-header">
          <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
          <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
-         <th>Site</th><th>Office</th><th>Last Preflight</th><th>Last Postflight</th>
+         <th>Site</th><th>Office</th><th>Preflight Count</th>
+         <th>Last Preflight</th><th>Last Postflight</th>
          <th>Last On Corp Preflight</th><th>Last IP Address</th>
          <th>Upload Logs</th>
       </tr>
@@ -118,6 +119,7 @@
         <td>{{ c.client_version }}</td>
         <td>{{ c.site }}</td>
         <td>{{ c.office }}</td>
+        <td>{{ c.preflight_count_since_postflight }}</td>
         <td>{{ c.preflight_datetime|timesince }}</td>
         <td>{{ c.postflight_datetime|timesince }}</td>
         <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>

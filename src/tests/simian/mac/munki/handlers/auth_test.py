@@ -23,7 +23,7 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
-from simian.mac.common import test
+from tests.simian.mac.common import test
 from simian.mac.munki.handlers import auth
 
 
@@ -40,7 +40,7 @@ class AuthModuleTest(test.RequestHandlerTest):
     auth_one = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(auth.gaeserver, 'AuthSimianServer')
     auth.gaeserver.AuthSimianServer().AndReturn(auth_one)
-    auth_one.LoadSelfKey(auth.settings.SERVER_PRIVATE_KEY_PEM)
+    auth_one.LoadCaParameters(auth.settings, None).AndReturn(None)
     self.mox.ReplayAll()
     self.assertEqual(auth_one, self.c.GetAuth1Instance())
     self.mox.VerifyAll()
@@ -50,8 +50,8 @@ class AuthModuleTest(test.RequestHandlerTest):
     auth_one = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(auth.gaeserver, 'AuthSimianServer')
     auth.gaeserver.AuthSimianServer().AndReturn(auth_one)
-    auth_one.LoadSelfKey(auth.settings.SERVER_PRIVATE_KEY_PEM).AndRaise(
-        ValueError)
+    auth_one.LoadCaParameters(
+        auth.settings, None).AndRaise(auth.gaeserver.CaParametersError)
     self.mox.ReplayAll()
     self.assertRaises(
         auth.base.NotAuthenticated, self.c.GetAuth1Instance)
@@ -68,7 +68,6 @@ class AuthModuleTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.assertFalse(self.c._IsRemoteIpAddressBlocked(ip))
     self.mox.VerifyAll()
-
 
   def testGetWithLogout(self):
     """Tests get() with logout."""
@@ -95,14 +94,18 @@ class AuthModuleTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(auth.logging, 'exception')
     mock_auth1 = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(self.c, 'GetAuth1Instance')
-    self.c.GetAuth1Instance().AndReturn(mock_auth1)
     self.mox.StubOutWithMock(self.c, '_IsRemoteIpAddressBlocked')
+
+    self.request.get('ca_id', None).AndReturn('ca_id')
+    self.c.GetAuth1Instance(ca_id='ca_id').AndReturn(mock_auth1)
+
     ip = '0.0.0.0'
     auth.os.environ['REMOTE_ADDR'] = ip
     self.c._IsRemoteIpAddressBlocked(ip).AndReturn(False)
     self.request.get('n', None).AndReturn('n')
     self.request.get('m', None).AndReturn('m')
     self.request.get('s', None).AndReturn('s')
+
     return mock_auth1
 
   def testPostWithInvalidParameters(self):

@@ -744,8 +744,8 @@ class Auth1(AuthBase):
     """
     try:
       key = tlslite.utils.keyfactory.parsePEMKey(keystr)
-    except SyntaxError:
-      raise ValueError('invalid PEM key format')
+    except (SyntaxError, AttributeError), e:
+      raise ValueError('invalid PEM key format: %s' % str(e))
     return key
 
   def Sign(self, datastr):

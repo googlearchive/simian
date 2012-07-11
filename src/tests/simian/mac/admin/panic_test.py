@@ -28,7 +28,7 @@ import mox
 import stubout
 import tests.appenginesdk
 from simian.mac.admin import panic
-from simian.mac.common import test
+from tests.simian.mac.common import test
 
 
 class AdminPanicTest(test.RequestHandlerTest):

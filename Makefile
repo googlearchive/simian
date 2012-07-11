@@ -4,7 +4,7 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.0
+SIMIAN_VERSION=2.0.1
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz

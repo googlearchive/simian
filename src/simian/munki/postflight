@@ -7,10 +7,8 @@
 
 
 
-import os
 import sys
 import flight_common
-from munkilib import FoundationPlist as fpl
 from munkilib import munkicommon
 munkicommon.cleanUpTmpDir()  # munkicommon creates a tempdir on import.
 
@@ -33,7 +31,7 @@ def RemoveAuthTokenHeaderFromPlist(plist):
       plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
     else:
       # if there are no headers remaining, delete the key entirely.
-      del(plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY])
+      del plist[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]
 
 
 def main(args):
@@ -49,7 +47,7 @@ def main(args):
     sys.exit(0)
 
   # read SecureConfig.plist.
-  plist = fpl.readPlist(munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
+  plist = munkicommon.SecureManagedInstallsPreferences()
 
   # Post client_id to server.
   # TODO(user): refactor PostReport* to support multiple reports at once
@@ -58,9 +56,9 @@ def main(args):
   pkgs_to_install, apple_updates_to_install = (
       flight_common.GetRemainingPackagesToInstall())
   params = {
-     'client_id': flight_common.DictToStr(client_id),
-     'pkgs_to_install': pkgs_to_install,
-     'apple_updates_to_install': apple_updates_to_install,
+      'client_id': flight_common.DictToStr(client_id),
+      'pkgs_to_install': pkgs_to_install,
+      'apple_updates_to_install': apple_updates_to_install,
   }
   flight_common.PostReportToServer('postflight', params, logout=False)
 
@@ -70,9 +68,6 @@ def main(args):
 
   # expire auth token and remove cookie from plist.
   RemoveAuthTokenHeaderFromPlist(plist)
-
-  # save SecureConfig.plist.
-  fpl.writePlist(plist, munkicommon.SECURE_MANAGED_INSTALLS_PLIST_PATH)
 
 
 if __name__ == '__main__':

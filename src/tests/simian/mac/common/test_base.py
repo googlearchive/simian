@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""Common classes for Macsimian unit tests.
+"""Common classes for hostinfo unit tests.
 
 Contents:
 
@@ -29,9 +29,6 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
-from simian.mac import models
-from simian.mac.common import auth
-from simian import settings
 
 
 class GenericContainer(object):
@@ -137,99 +134,6 @@ class RequestHandlerTest(TestBase):
     self.MockSelf('redirect')
     self._test.redirect(url).AndReturn(None)
 
-  def MockDoUserAuth(self, user=None, is_admin=None, fail=False):
-    """Mock calling auth.DoUserAuth().
-
-    Args:
-      user: user for DoUserAuth to return.
-      fail: bool, whether to fail or not
-    """
-    if not 'authDoUserAuth' in self._set_mock:
-      self.mox.StubOutWithMock(auth, 'DoUserAuth')
-      self._set_mock['authDoUserAuth'] = 1
-    if fail:
-      if is_admin is None:
-        auth.DoUserAuth().AndRaise(auth.NotAuthenticated)
-      else:
-        auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
-    else:
-      if is_admin is None:
-        auth.DoUserAuth().AndReturn(user)
-      else:
-        auth.DoUserAuth(is_admin=is_admin).AndReturn(user)
-
-  def MockDoOAuthAuth(self, user=None, is_admin=None, fail=False):
-    """Mock calling auth.DoOAuthAuth().
-
-    Args:
-      user: user for DoOAuthAuth to return.
-      fail: bool, whether to fail or not
-    """
-    if not 'authDoOAuthAuth' in self._set_mock:
-      self.mox.StubOutWithMock(auth, 'DoOAuthAuth')
-      self._set_mock['authDoOAuthAuth'] = 1
-    if fail:
-      if is_admin is None:
-        auth.DoOAuthAuth().AndRaise(auth.NotAuthenticated)
-      else:
-        auth.DoOAuthAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
-    else:
-      if is_admin is None:
-        auth.DoOAuthAuth().AndReturn(user)
-      else:
-        auth.DoOAuthAuth(is_admin=is_admin).AndReturn(user)
-
-  def MockDoMunkiAuth(self, fail=False, and_return=None, **kwargs):
-    """Mock calling gaeserver.DoMunkiAuth().
-
-    Args:
-      fail: bool, whether to fail or not; calls AndRaise()
-      and_return: any, variable to pass to AndReturn, default None
-      kwargs: other options, like require_level=int
-    """
-    munki_auth_module = self.GetTestClassModule().gaeserver
-    if not hasattr(munki_auth_module, 'DoMunkiAuth'):
-      raise NotImplementedError('MockDoMunkiAuth for non-Munki handler class')
-    if not 'authDoMunkiAuth' in self._set_mock:
-      self.mox.StubOutWithMock(munki_auth_module, 'DoMunkiAuth')
-      self._set_mock['authDoMunkiAuth'] = 1
-    if fail:
-      self.GetTestClassModule().gaeserver.DoMunkiAuth(**kwargs).AndRaise(
-          munki_auth_module.NotAuthenticated)
-    else:
-      self.GetTestClassModule().gaeserver.DoMunkiAuth(**kwargs).AndReturn(
-          and_return)
-
-  def MockDoAnyAuth(self, fail=False, and_return=None):
-    """Mock calling auth.DoAnyAuth().
-
-    Args:
-      fail: bool, whether to fail or not
-      and_return: any, variable to pass to AndReturn, default None
-    """
-    if not 'authDoAnyAuth' in self._set_mock:
-      self.mox.StubOutWithMock(auth, 'DoAnyAuth')
-      self._set_mock['authDoAnyAuth'] = 1
-    if fail:
-      auth.DoAnyAuth().AndRaise(auth.NotAuthenticated)
-    else:
-      auth.DoAnyAuth().AndReturn(and_return)
-
-  def MockDoAdminMachineAuth(self, fail=False, and_return=None, **kwargs):
-    """Mock calling auth.AdminMachineAuth().
-
-    Args:
-      fail: bool, whether to fail or not
-      and_return: any, variable to pass to AndReturn, default None
-    """
-    if not 'authDoAdminMachineAuth' in self._set_mock:
-      self.mox.StubOutWithMock(auth, 'DoAdminMachineAuth')
-      self._set_mock['authDoAdminMachineAuth'] = 1
-    if fail:
-      auth.DoAdminMachineAuth(**kwargs).AndRaise(auth.NotAuthenticated)
-    else:
-      auth.DoAdminMachineAuth(**kwargs).AndReturn(and_return)
-
   def MockModelStaticBase(self, model_name, method_name, *args):
     """Mock a model static method, return a mock setup.
 
@@ -307,10 +211,6 @@ class RequestHandlerTest(TestBase):
         self.GetTestClassModule().models,
         model_name)(*args, **kwargs).AndReturn(model)
     return model
-
-
-# Provide sane settings values
-settings.ADMINS = ['admin@example.com']
 
 
 def main(unused_argv):

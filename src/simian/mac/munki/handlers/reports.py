@@ -26,12 +26,16 @@ import re
 import time
 import urllib
 
+from google.appengine.ext import deferred
+from google.appengine.runtime import apiproxy_errors
+
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac import common as main_common
 from simian.mac.munki import common
 from simian.mac.munki import handlers
 from simian.mac.common import util
+
 
 
 # int number of days after which postflight_datetime is considered stale.
@@ -43,26 +47,6 @@ REPAIR_CLIENT_PRE_POST_DIFF_DAYS = 7
 # InstallResults legacy string matching regex.
 LEGACY_INSTALL_RESULTS_STRING_REGEX = (
     '^Install of (.*)-(\d+.*): (SUCCESSFUL|FAILED with return code: (\-?\d+))$')
-
-
-class ReportFeedback(object):
-  """Class container for feedback status constants."""
-
-  # Client should proceed as normally defined.
-  OK = 'OK'
-
-  # Client should NOT exit and instead continue, even if this means masking
-  # an error which it would usually stop running because of.
-  FORCE_CONTINUE = 'FORCE_CONTINUE'
-
-  # Client should exit instead of continuing as normal.
-  EXIT = 'EXIT'
-
-  # Client should repair (download and reinstall) itself.
-  REPAIR = 'REPAIR'
-
-  # Client should send logs to the server.
-  UPLOAD_LOGS = 'UPLOAD_LOGS'
 
 
 def IsExitFeedbackIpAddress(ip_address):
@@ -93,49 +77,53 @@ class Reports(handlers.AuthenticationHandler):
       details: str, optional, details from client
       ip_address: str, optional, IP address of client
     Returns:
-      ReportFeedback.* constant
+      common.ReportFeedback.* constant
     """
-    report = ReportFeedback.OK
+    report = common.ReportFeedback.OK
     if 'computer' in kwargs:
       c = kwargs['computer']
     else:
       c = models.Computer.get_by_key_name(uuid)
     ip_address = kwargs.get('ip_address', None)
+    client_exit = kwargs.get('client_exit', None)
 
     # TODO(user): if common.BusinessLogicMethod ...
-    if report_type == 'preflight':
-      if IsExitFeedbackIpAddress(ip_address):
-        report = ReportFeedback.EXIT
-      elif common.IsPanicModeNoPackages():
-        report = ReportFeedback.EXIT
-      elif not c or c.preflight_datetime is None:
-        # this is the first preflight post from this host
-        report = ReportFeedback.FORCE_CONTINUE
-      elif getattr(c, 'upload_logs_and_notify', None) is not None:
-        report = ReportFeedback.UPLOAD_LOGS
-      elif c.postflight_datetime is None:
-        # client has posted preflight before, but not postflight
-        report = ReportFeedback.REPAIR
-      else:
-        # check if postflight_datetime warrants a repair.
-        pre_post_timedelta = c.preflight_datetime - c.postflight_datetime
-        if pre_post_timedelta > datetime.timedelta(
-            days=REPAIR_CLIENT_PRE_POST_DIFF_DAYS):
-          report = ReportFeedback.REPAIR
-    elif report_type == 'preflight_exit':
+    if client_exit and report_type == 'preflight':
+      report = common.ReportFeedback.EXIT
+      # client has requested an exit, but let's ensure we should allow it.
       if c is None or c.postflight_datetime is None:
-        # host has never fully executed Munki.
-        report = ReportFeedback.FORCE_CONTINUE
+        # client has never fully executed Munki.
+        report = common.ReportFeedback.FORCE_CONTINUE
       else:
         # check if the postflight_datetime warrants a FORCE_CONTINUE
         now = datetime.datetime.utcnow()
         postflight_stale_datetime = now - datetime.timedelta(
             days=FORCE_CONTINUE_POSTFLIGHT_DAYS)
         if c.postflight_datetime < postflight_stale_datetime:
-          # host hasn't fully executed Munki in FORCE_CONTINUE_POSTFLIGHT_DAYS.
-          report = ReportFeedback.FORCE_CONTINUE
+          # client hasn't executed Munki in FORCE_CONTINUE_POSTFLIGHT_DAYS.
+          report = common.ReportFeedback.FORCE_CONTINUE
+    elif report_type == 'preflight':
+      if IsExitFeedbackIpAddress(ip_address):
+        report = common.ReportFeedback.EXIT
+      elif common.IsPanicModeNoPackages():
+        report = common.ReportFeedback.EXIT
+      elif not c or c.preflight_datetime is None:
+        # this is the first preflight post from this client.
+        report = common.ReportFeedback.FORCE_CONTINUE
+      elif getattr(c, 'upload_logs_and_notify', None) is not None:
+        report = common.ReportFeedback.UPLOAD_LOGS
+      elif c.postflight_datetime is None:
+        # client has posted preflight before, but not postflight
+        report = common.ReportFeedback.REPAIR
+      else:
+        # check if postflight_datetime warrants a repair.
+        pre_post_timedelta = c.preflight_datetime - c.postflight_datetime
+        if pre_post_timedelta > datetime.timedelta(
+            days=REPAIR_CLIENT_PRE_POST_DIFF_DAYS):
+          report = common.ReportFeedback.REPAIR
 
-    if report not in [ReportFeedback.OK, ReportFeedback.FORCE_CONTINUE]:
+    if report not in [common.ReportFeedback.OK,
+                      common.ReportFeedback.FORCE_CONTINUE]:
       logging.info('Feedback to %s: %s', uuid, report)
 
     return report
@@ -149,7 +137,7 @@ class Reports(handlers.AuthenticationHandler):
     session = gaeserver.DoMunkiAuth()
     uuid = main_common.SanitizeUUID(session.uuid)
     report_type = self.request.get('_report_type')
-    feedback = self.request.get('_feedback')
+    feedback_requested = self.request.get('_feedback')
     message = None
     details = None
     client_id = None
@@ -175,21 +163,37 @@ class Reports(handlers.AuthenticationHandler):
 
       computer = models.Computer.get_by_key_name(uuid)
       ip_address = os.environ.get('REMOTE_ADDR', '')
+      report_feedback = None
       if report_type == 'preflight':
         # if the UUID is known to be lost/stolen, log this connection.
         if models.ComputerLostStolen.IsLostStolen(uuid):
           logging.warning('Connection from lost/stolen machine: %s', uuid)
           models.ComputerLostStolen.LogLostStolenConnection(
               computer=computer, ip_address=ip_address)
+
         # we want to get feedback now, before preflight_datetime changes.
-        if feedback:
-          self.response.out.write(
-              self.GetReportFeedback(
-                  uuid, report_type, computer=computer,
-                  ip_address=ip_address))
+        if feedback_requested:
+          client_exit = self.request.get('client_exit', None)
+          report_feedback = self.GetReportFeedback(
+              uuid, report_type, computer=computer, ip_address=ip_address,
+              client_exit=client_exit)
+          self.response.out.write(report_feedback)
+
+          # if report feedback calls for a client exit, log it.
+          if report_feedback == common.ReportFeedback.EXIT:
+            if not client_exit:
+              # client didn't ask for an exit, which means server decided.
+              client_exit = 'Connection from defined exit IP address'
+            common.WriteClientLog(
+                models.PreflightExitLog, uuid, computer=computer,
+                exit_reason=client_exit)
+
       common.LogClientConnection(
           report_type, client_id, user_settings, pkgs_to_install,
-          apple_updates_to_install, computer=computer, ip_address=ip_address)
+          apple_updates_to_install, computer=computer, ip_address=ip_address,
+          report_feedback=report_feedback)
+
+
     elif report_type == 'install_report':
       on_corp = self.request.get('on_corp')
       if on_corp == '1':
@@ -262,6 +266,7 @@ class Reports(handlers.AuthenticationHandler):
         common.WriteClientLog(
             models.ClientLog, uuid, action='install_problem', details=problem)
     elif report_type == 'preflight_exit':
+      # NOTE(user): only remains for older clients.
       message = self.request.get('message')
       computer = common.WriteClientLog(
           models.PreflightExitLog, uuid, exit_reason=message)
@@ -285,7 +290,7 @@ class Reports(handlers.AuthenticationHandler):
     # If the client asked for feedback, get feedback and respond.
     # Skip this if the report_type is preflight, as report feedback was
     # retrieved before LogComputerConnection changed preflight_datetime.
-    if feedback and report_type != 'preflight':
+    if feedback_requested and report_type != 'preflight':
       self.response.out.write(
           self.GetReportFeedback(
               uuid, report_type,

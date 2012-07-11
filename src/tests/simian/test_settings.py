@@ -13,9 +13,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+# #
 #
-#
+
+APPLE_AUTO_PROMOTE_ENABLED = True
+
+APPLE_AUTO_PROMOTE_STABLE_WEEKDAY = 2
+
+APPLE_UNSTABLE_GRACE_PERIOD_DAYS = 4
+
+APPLE_TESTING_GRACE_PERIOD_DAYS = 7
 
 CA_PUBLIC_CERT_PEM = 'foo_ca_public_pem'
 

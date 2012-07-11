@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""Zlib-encoded property."""
+"""Module for a container class of zlib-encoded text."""
 
 
 

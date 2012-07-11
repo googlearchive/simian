@@ -29,6 +29,12 @@ from simian.mac import models
 from simian.mac.common import auth
 
 
+# Number of preflight connections without a successful postflight before a
+# is considered "broken."  1-2 is not a great number for various reasons;
+# machines sleep/shutdown/drop network/etc. during Munki executions regularly.
+PREFLIGHT_COUNT_BROKEN_THRESHOLD = 5
+
+
 class BrokenClients(admin.AdminHandler):
   """Handler for /admin/brokenclients."""
 
@@ -76,21 +82,20 @@ class BrokenClients(admin.AdminHandler):
           pass
 
     # clients with zero connection
-    zero_conn_computers = models.Computer.AllActive().filter(
+    q = models.Computer.AllActive().filter(
         'connections_on_corp =', 0).filter('connections_off_corp =', 0).fetch(
             admin.DEFAULT_COMPUTER_FETCH_LIMIT)
-    zero_conn_computers = list(zero_conn_computers)
+    zero_conn_computers = []
+    for c in q:
+      if c.preflight_count_since_postflight > PREFLIGHT_COUNT_BROKEN_THRESHOLD:
+        zero_conn_computers.append(c)
     zero_conn_computers.sort(key=lambda x: x.preflight_datetime, reverse=True)
 
     # clients with no recent postflight, but recent preflight
-    fetch_limit = 3000
+    fetch_limit = 1000
     pf_computers = []
-    now = datetime.datetime.utcnow()
-    not_recent = now - datetime.timedelta(days=15)
-    # unfortunately Datastore cannot do a != query on more than one field,
-    # so we first grab all hosts that don't have a recent postflight, and then
-    # compare that postflight date to the preflight date in python.
-    q = models.Computer.AllActive().filter('postflight_datetime <', not_recent)
+    q = models.Computer.AllActive().filter(
+        'preflight_count_since_postflight >', PREFLIGHT_COUNT_BROKEN_THRESHOLD)
     i = 0
     for c in q:
       i += 1
@@ -98,8 +103,7 @@ class BrokenClients(admin.AdminHandler):
         break
       if not c.preflight_datetime or not c.postflight_datetime:
         continue  # already covered zero connection clients above.
-      if (c.preflight_datetime - c.postflight_datetime).days > 7:
-        pf_computers.append(c)
+      pf_computers.append(c)
     pf_computers.sort(key=lambda x: x.preflight_datetime, reverse=True)
 
     self.Render(
@@ -110,4 +114,5 @@ class BrokenClients(admin.AdminHandler):
          'is_security_user': auth.IsSecurityUser(),
          'report_type': 'broken_clients',
          'truncated': i >= fetch_limit,
+         'preflight_count_broken_threshold': PREFLIGHT_COUNT_BROKEN_THRESHOLD,
         })

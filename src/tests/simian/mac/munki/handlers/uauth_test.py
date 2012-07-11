@@ -27,7 +27,7 @@ from google.apputils import basetest
 import mox
 import stubout
 from simian.mac.munki.handlers import uauth
-from simian.mac.common import test
+from tests.simian.mac.common import test
 
 
 class UauthModuleTest(mox.MoxTestBase):

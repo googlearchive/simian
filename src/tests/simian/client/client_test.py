@@ -859,9 +859,9 @@ class HttpsAuthClientTest(mox.MoxTestBase):
 
   def testInit(self):
     """Test __init__()."""
-    self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadCACerts')
+    self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadRootCertChain')
     self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadCertSubjectLists')
-    client.HttpsAuthClient._LoadCACerts().AndReturn(None)
+    client.HttpsAuthClient._LoadRootCertChain().AndReturn(None)
     client.HttpsAuthClient._LoadCertSubjectLists().AndReturn(None)
     self.mox.ReplayAll()
     c = client.HttpsAuthClient(self.hostname)
@@ -1119,6 +1119,11 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.client.DoUserAuth()
     self.mox.VerifyAll()
 
+  def testDoSimianAuth(self):
+    """Test DoSimianAuth()."""
+    # TODO(user)
+
+
 class UAuthTest(mox.MoxTestBase):
   """Test UAuth."""
 
@@ -1168,6 +1173,7 @@ class UAuthTest(mox.MoxTestBase):
         save_cookies=True, secure=True).AndReturn(mock_s)
     mock_s.Send('/uauth').AndReturn(response)
     client.auth_client.AuthSimianClient().AndReturn(mock_auth1)
+    mock_auth1.LoadCaParameters(client.settings).AndReturn(None)
     mock_auth1.Input(t=response)
     mock_auth1.AuthStateOK().AndReturn(True)
     mock_s.cookie_jar = [self.mox.CreateMockAnything()]
@@ -1197,6 +1203,7 @@ class UAuthTest(mox.MoxTestBase):
         save_cookies=True, secure=True).AndReturn(mock_s)
     mock_s.Send('/uauth').AndReturn(response)
     client.auth_client.AuthSimianClient().AndReturn(mock_auth1)
+    mock_auth1.LoadCaParameters(client.settings).AndReturn(None)
     mock_auth1.Input(t=response)
     mock_auth1.AuthStateOK().AndReturn(True)
     mock_s.cookie_jar = [self.mox.CreateMockAnything()]

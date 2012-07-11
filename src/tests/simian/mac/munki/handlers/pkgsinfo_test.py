@@ -27,7 +27,7 @@ import mox
 import stubout
 from google.apputils import basetest
 from simian.mac.munki.handlers import pkgsinfo
-from simian.mac.common import test
+from tests.simian.mac.common import test
 
 
 class MunkiPackageInfoPlistStrictTest(mox.MoxTestBase):

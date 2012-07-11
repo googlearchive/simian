@@ -56,6 +56,8 @@ if _term is not None:
 import logging
 import subprocess
 import warnings
+from Foundation import CFPreferencesCopyAppValue
+
 warnings.filterwarnings(
     'ignore',
     '.*Python 2\.\d is unsupported; use 2.\d.*', DeprecationWarning, '.*', 0)
@@ -81,62 +83,46 @@ class SimianAuthCliClient(simianauth.SimianAuthCliClient):
     """Returns an instance of the Simian client to use within this CLI."""
     return client.SimianAuthClient(*args, **kwargs)
 
-  def _LoadTokenFromFile(self, filename):
-    """Look auth token from a plist file.
+  def _GetAuth1Token(self):
+    """Get Auth1Token from secure ManagedInstalls."""
+    logging.debug('_GetAuth1Token')
+    bundle_id = 'ManagedInstalls'
+    pref_value = CFPreferencesCopyAppValue('AdditionalHttpHeaders', bundle_id)
+    if pref_value is None:
+      raise simianauth.client.SimianClientError(
+          'Missing AdditionalHttpHeaders in ManagedInstalls')
 
-    Args:
-      filename: str, filename
-    Returns:
-      str token value
-      None if the token could not be found
-    """
-    token = None
-    if filename.endswith('.plist'):
-      logging.debug('_LoadTokenFromFile(%s): reading plist', filename)
-      # do this because the plist may be in binary format
-      p = subprocess.Popen(
-          ['/usr/bin/plutil', '-convert', 'xml1', '-o', '-', filename],
-          stdout=subprocess.PIPE,
-          stderr=subprocess.PIPE)
-      (stdout, stderr) = p.communicate()
-      rc = p.wait()
-      if stderr:
-        logging.debug('_LoadTokenFromFile(%s) stderr %s', filename, stderr)
-      if rc != 0 or not stdout:
-        logging.debug('_LoadTokenFromFile(%s) returns %s', filename, rc)
-        return
-      try:
-        pl = plist.ApplePlist(stdout)
-        pl.Parse()
-        d = pl.GetContents()
-      except plist.Error:
-        return
-      # TODO(user): We should have a function which searches
-      # this for us.  I feel like we're rewriting this.
-      header = 'Cookie: %s=' % auth.AUTH_TOKEN_COOKIE
-      if 'AdditionalHttpHeaders' in d:
-        for h in d['AdditionalHttpHeaders']:
-          if h.startswith(header):
-            logging.debug('_LoadTokenFromFile(%s): found %s', filename, h)
-            token = h[len(header):]
-            if token.find(';') > -1:
-              token = token[0:token.find(';')]
-            token = str(token)  # not unicode!
-    logging.debug('_LoadTokenFromFile() returning %s', token)
-    return token
+    header = 'Cookie: %s=' % auth.AUTH_TOKEN_COOKIE
+    for h in pref_value:
+      if h.startswith(header):
+        logging.debug('_GetAuth1Token(): found %s', h)
+        token = h[len(header):]
+        if token.find(';') > -1:
+          token = token[0:token.find(';')]
+        token = str(token)
+        return token
+
+    raise simianauth.client.SimianClientError(
+        'Auth1Token missing in ManagedInstalls')
 
   def _ProcessToken(self):
     """Process the token parameter."""
+    logging.debug('_ProcessToken')
     if not self.config['token']:
       return
-    if os.path.isfile(self.config['token']):
-      logging.debug('Logout sees file %s', self.config['token'])
-      token = self._LoadTokenFromFile(self.config['token'])
+    logging.debug('_ProcessToken: %s', self.config['token'])
+    # TODO(user): This is a quick fix. The plist file that is being
+    # passed in here might not exist on disk yet because 10.8 has daemons
+    # which manage filesystem i/o. So, just look for the directory instead,
+    # which should always exist since it will be ~root/L/P.
+    is_dir = os.path.isdir(os.path.dirname(self.config['token']))
+    if is_dir:
+      token = self._GetAuth1Token()
       if token:
         self.config['token'] = token
       else:
         raise simianauth.client.SimianClientError(
-            'Could not load token from file %s' % self.config['token'])
+            'Could not load token from %s' % self.config['token'])
 
   def _PreprocessRunConfig(self):
     """Before Run() starts, last chance to preprocess the config."""

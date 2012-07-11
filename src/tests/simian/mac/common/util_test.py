@@ -25,8 +25,6 @@ import mox
 import stubout
 from simian.mac.common import util
 
-import socket
-import struct
 
 class DatetimeTest(mox.MoxTestBase):
 
@@ -88,84 +86,6 @@ class UtilModuleTest(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  def _socket_ip2int(self, ip_str):
-    """Convert an IP string to int with code other than ours.
-
-    Args:
-      ip_str: str
-    Returns:
-      int in network byte order
-    """
-    i = struct.unpack('I', socket.inet_aton(ip_str))[0]
-    i = socket.htonl(i)
-    # on python 2.5 socket.htonl() returns a signed int, on later versions
-    # python returns a python long type to return the number without sign.
-    if i < 0:
-      i = 4294967296L - (long(i) * -1)
-    return i
-
-  def testIpToIntWhenIpv6(self):
-    """Test IpToInt() when passed ipv6."""
-    ip_str = '2620::1003:1004:129a:ddff:fe60:fb46'
-    self.assertRaises(ValueError, util.IpToInt, ip_str)
-
-  def testIpToInt(self):
-    """Test IpToInt()."""
-    ip_tests = [
-        ['192.168.0.0', 3232235520],
-        ['10.0.0.5', 167772165],
-    ]
-
-    for ip_str, ip_int_expected in ip_tests:
-      self.assertEqual(ip_int_expected, self._socket_ip2int(ip_str))
-      self.assertEqual(ip_int_expected, util.IpToInt(ip_str))
-
-  def testIpMaskToInts(self):
-    """Test IpMaskToInts()."""
-    mask_str = '1.2.3.4/8'
-    ip_mask_ints_expected = (
-        self._socket_ip2int('1.2.3.4'),
-        self._socket_ip2int('255.0.0.0'),
-    )
-    self.assertEqual(ip_mask_ints_expected, util.IpMaskToInts(mask_str))
-
-  def testIpMaskMatch(self):
-    """Test IpMaskMatch()."""
-    ip_tests = [
-        ['192.168.0.0',   '192.168.0.0/25', True],
-        ['192.168.0.127', '192.168.0.0/25', True],
-        ['192.168.0.128', '192.168.0.0/25', False],
-
-        ['192.168.0.0',   '192.168.0.0/24', True],
-        ['192.168.0.255', '192.168.0.0/24', True],
-        ['192.168.0.100', '192.168.1.0/24', False],
-
-        ['192.168.0.0',   '192.168.0.0/23', True],
-        ['192.168.1.0',   '192.168.0.0/23', True],
-        ['192.168.1.255', '192.168.0.0/23', True],
-        ['192.168.2.1',   '192.168.0.0/23', False],
-
-        ['192.168.0.0',   '192.168.0.0/22', True],
-        ['192.168.1.0',   '192.168.0.0/22', True],
-        ['192.168.1.255', '192.168.0.0/22', True],
-        ['192.168.2.255', '192.168.0.0/22', True],
-        ['192.168.3.255', '192.168.0.0/22', True],
-        ['192.168.4.0',   '192.168.0.0/22', False],
-
-        ['10.0.0.0',       '10.0.0.0/8', True],
-        ['10.0.0.1',       '10.0.0.0/8', True],
-        ['10.0.1.0',       '10.0.0.0/8', True],
-        ['10.1.0.0',       '10.0.0.0/8', True],
-        ['10.1.2.3',       '10.0.0.0/8', True],
-        ['10.255.255.255', '10.0.0.0/8', True],
-        ['11.0.0.0',       '10.0.0.0/8', False],
-    ]
-
-    for ip, ip_mask, expected in ip_tests:
-      self.assertEqual(
-          expected, util.IpMaskMatch(ip, ip_mask),
-          '%s %s expected %s' % (ip, ip_mask, expected))
 
   def testSerializePickle(self):
     """Test Serialize()."""

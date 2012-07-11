@@ -20,10 +20,11 @@
 
 
 
-
+import calendar
 import logging
 import os
 from google.appengine.api import users
+from simian import settings
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
@@ -160,6 +161,11 @@ class AppleSUSAdmin(admin.AdminHandler):
         'catalogs': catalogs,
         'products': products,
         'tracks': common.TRACKS,
+        'auto_promote_enabled': settings.APPLE_AUTO_PROMOTE_ENABLED,
+        'auto_promote_stable_weekday': calendar.day_name[
+            settings.APPLE_AUTO_PROMOTE_STABLE_WEEKDAY],
+        'unstable_grace_period_days': settings.APPLE_UNSTABLE_GRACE_PERIOD_DAYS,
+        'testing_grace_period_days': settings.APPLE_TESTING_GRACE_PERIOD_DAYS,
         'report_type': 'apple_applesus'
     }
     self.Render('applesus_list.html', data)

@@ -27,17 +27,13 @@ import re
 from xml.dom import minidom
 from google.appengine.api import taskqueue
 from google.appengine.ext import deferred
+from simian import settings
 from simian.mac import common
 from simian.mac import models
 from simian.mac.munki import plist
 
 
 OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8']
-
-AUTO_PROMOTE_PHASE_DAYS_MAP = {
-    common.TESTING: 4,
-    common.STABLE: 7,
-}
 
 MON, TUE, WED, THU, FRI, SAT, SUN = range(0, 7)
 
@@ -262,13 +258,18 @@ def GetAutoPromoteDate(track, applesus_product):
   Raises:
     ValueError: an invalid track was specified; only testing/stable supported.
   """
+  if not settings.APPLE_AUTO_PROMOTE_ENABLED:
+    return None
   if applesus_product.manual_override:
     return None
   elif common.UNSTABLE not in applesus_product.tracks:
     return None
 
-  days = AUTO_PROMOTE_PHASE_DAYS_MAP.get(track)
-  if not days:
+  if track == common.TESTING:
+    days = settings.APPLE_UNSTABLE_GRACE_PERIOD_DAYS
+  elif track == common.STABLE:
+    days = settings.APPLE_TESTING_GRACE_PERIOD_DAYS
+  else:
     raise ValueError('Invalid track was specified: %s' % track)
 
   auto_promote_offset = datetime.timedelta(days=days)
@@ -289,10 +290,12 @@ def GetAutoPromoteDate(track, applesus_product):
 
   # Unstable should only promoted on Wednesdays and only after the grace period.
   min_auto_promote_date = previous_track_date + auto_promote_offset
-  return _GetNextWeekdayDate(min_date=min_auto_promote_date)
+  return _GetNextWeekdayDate(
+      weekday=settings.APPLE_AUTO_PROMOTE_STABLE_WEEKDAY,
+      min_date=min_auto_promote_date)
 
 
-def _GetNextWeekdayDate(weekday=WED, min_date=None):
+def _GetNextWeekdayDate(weekday, min_date=None):
   """Returns the date of the current or next weekday on or after min_date.
 
   Args:

@@ -22,7 +22,6 @@
 
 
 import base64
-import re
 import os
 
 from simian import settings as settings_module
@@ -74,7 +73,11 @@ class Config(admin.AdminHandler):
     for name, d in settings.iteritems():
       d['regex'] = settings_module.GetValidationRegex(name)
     pems = self._GetPems()
-    d = {'report_type': 'config', 'settings': settings, 'pems': pems}
+    d = {
+        'report_type': 'config',
+        'settings': sorted(settings.iteritems()),
+        'pems': pems
+    }
     self.Render('config.html', d)
 
   def post(self):
@@ -98,29 +101,19 @@ class Config(admin.AdminHandler):
     setting = self.request.get('setting', None)
     if setting and setting in models.SETTINGS:
       setting_type = models.SETTINGS[setting]['type']
-      if setting_type == 'string':
+      if setting_type in ['integer', 'string']:
         value = self.request.get('value', None)
-        valid = True
-        if value is None:
-          valid = False
-        if models.SETTINGS[setting].get('regex'):
-          if not re.match(models.SETTINGS[setting]['regex'], value):
-            valid = False
-        if valid:
-          try:
-            setattr(settings_module, setting.upper(), value)
-          except ValueError, e:
-            # TODO(user): test this....
-            self.response.out.write(util.Serialize(
-                {'error': str(e)}))
-          else:
-            new_value = getattr(settings_module, setting.upper())
-            self.response.out.write(util.Serialize(
-                {'values': [{'name': 'value', 'value': new_value}]}))
-        else:
+        try:
+          if setting_type == 'integer':
+            value = int(value)
+          setattr(settings_module, setting.upper(), value)
+        except (TypeError, ValueError), e:
           self.error(400)
+          self.response.out.write(util.Serialize({'error': str(e)}))
+        else:
+          new_value = getattr(settings_module, setting.upper())
           self.response.out.write(util.Serialize(
-              {'error': 'Incorrect value for setting.'}))
+              {'values': [{'name': 'value', 'value': new_value}]}))
       elif setting_type == 'random_str':
         random_str = os.urandom(16).encode('base64')[:20]
         setattr(settings_module, setting.upper(), random_str)

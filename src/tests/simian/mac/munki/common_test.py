@@ -25,7 +25,7 @@ logging.basicConfig(filename='/dev/null')
 
 import tests.appenginesdk
 from google.apputils import app
-from simian.mac.common import test
+from tests.simian.mac.common import test
 from simian.mac.munki import common
 
 logging.basicConfig(filename='/dev/null')
@@ -117,18 +117,13 @@ class CommonModuleTest(test.RequestHandlerTest):
     """Tests LogClientConnection() function with an invalid uuid."""
     client_id = {'uuid': ''}
     event = 'custom'
-    ip_address = 'fooip'
 
-    #self.mox.StubOutWithMock(common.logging, 'debug')
-    #common.logging.debug(
-    #    ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
-    #     'ip_address: %s, delay=%s)'),
-    #    event, client_id, False, None, ip_address, 0)
-    #common.logging.debug(
-    #    'uuid is unknown, skipping log.')
+    self.mox.StubOutWithMock(common.logging, 'warning')
+    common.logging.warning(
+        'LogClientConnection: uuid is unknown, skipping log')
 
     self.mox.ReplayAll()
-    common.LogClientConnection(event, client_id, ip_address=ip_address)
+    common.LogClientConnection(event, client_id)
     self.mox.VerifyAll()
 
   def testLogClientConnectionPreflight(self):
@@ -154,6 +149,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     global_uuid = 'uuid'
     ip_address = 'fooip'
     runtype = 'auto'
+    report_feedback = 'foofeedback'
+
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
         'track': track, 'config_track': config_track, 'os_version': os_version,
@@ -176,11 +173,13 @@ class CommonModuleTest(test.RequestHandlerTest):
     mock_computer.connection_dates = connection_dates
     mock_computer.connections_on_corp = 2
     mock_computer.connections_off_corp = 2
+    mock_computer.preflight_count_since_postflight = 3
     mock_computer.put().AndReturn(None)
 
     self.mox.ReplayAll()
     common.LogClientConnection(
-        event, client_id, user_settings=user_settings, ip_address=ip_address)
+        event, client_id, user_settings=user_settings, ip_address=ip_address,
+        report_feedback=report_feedback)
     self.assertEquals(uuid, mock_computer.uuid)
     self.assertEquals(ip_address, mock_computer.ip_address)
     self.assertEquals(runtype, mock_computer.runtype)
@@ -200,6 +199,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(2, mock_computer.connections_off_corp)
     self.assertEquals(
         datetime.datetime, type(mock_computer.last_on_corp_preflight_datetime))
+    self.assertEquals(4, mock_computer.preflight_count_since_postflight)
     self.mox.VerifyAll()
 
   def testLogClientConnectionPostflight(self):
@@ -287,6 +287,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(0, mock_computer.connections_off_corp)
     self.assertEquals(all_pkgs_to_install, mock_computer.pkgs_to_install)
     self.assertEquals(False, mock_computer.all_pkgs_installed)
+    self.assertEquals(0, mock_computer.preflight_count_since_postflight)
     self.mox.VerifyAll()
 
   def testLogClientConnectionPreflightAndNew(self):
@@ -336,6 +337,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     mock_computer.connection_dates = []
     mock_computer.connections_on_corp = None
     mock_computer.connections_off_corp = None
+    mock_computer.preflight_count_since_postflight = None
     mock_computer.put().AndReturn(None)
     common.deferred.defer(
         common._SaveFirstConnection,
@@ -364,6 +366,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     # Verify on_corp/off_corp counts.
     self.assertEquals(None, mock_computer.connections_on_corp)
     self.assertEquals(None, mock_computer.connections_off_corp)
+    self.assertEquals(1, mock_computer.preflight_count_since_postflight)
     self.mox.VerifyAll()
 
   def testLogClientConnectionAsync(self):
@@ -380,7 +383,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.deferred.defer(
         common.LogClientConnection, event, client_id, user_settings=None,
         pkgs_to_install=None, apple_updates_to_install=None,
-        ip_address=ip_address, _name=deferred_name, _countdown=2)
+        ip_address=ip_address, report_feedback=None,
+        _name=deferred_name, _countdown=2)
     self.mox.ReplayAll()
     common.LogClientConnection(event, client_id, delay=2, ip_address=ip_address)
     self.mox.VerifyAll()

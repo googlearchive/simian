@@ -28,6 +28,7 @@ import mox
 import stubout
 
 from simian.auth import client
+from tests.simian import test_settings
 
 
 class AuthSessionSimianClientTest(mox.MoxTestBase):
@@ -53,6 +54,29 @@ class AuthSimianClientTest(mox.MoxTestBase):
   def testGetSessionClass(self):
     self.assertTrue(
         self.apc.GetSessionClass() is client.AuthSessionSimianClient)
+
+  def testLoadCaParameters(self):
+    """Test _LoadCaParameters()."""
+    self.mox.ReplayAll()
+    self.apc.LoadCaParameters(test_settings)
+    self.assertEqual(self.apc._ca_pem, test_settings.CA_PUBLIC_CERT_PEM)
+    self.assertEqual(
+        self.apc._server_cert_pem, test_settings.SERVER_PUBLIC_CERT_PEM)
+    self.assertEqual(
+        self.apc._required_issuer, test_settings.REQUIRED_ISSUER)
+    self.mox.VerifyAll()
+
+  def testLoadCaParametersWhenError(self):
+    """Test _LoadCaParameters()."""
+    self.mox.StubOutWithMock(client.util, 'GetCaParameters')
+
+    client.util.GetCaParameters(
+        test_settings).AndRaise(client.util.CaParametersError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        client.CaParametersError, self.apc.LoadCaParameters, test_settings)
+    self.mox.VerifyAll()
 
 
 def main(unused_argv):

@@ -27,12 +27,16 @@ Classes:
 
 
 
-from simian import settings
 from simian.auth import base
+from simian.auth import util
 
 
 class Error(Exception):
   """Base"""
+
+
+class CaParametersError(Error):
+  """Error obtaining CA parameters."""
 
 
 class AuthSessionSimianClient(base.Auth1ClientSession):
@@ -44,9 +48,22 @@ class AuthSimianClient(base.Auth1Client):
 
   def __init__(self):
     super(AuthSimianClient, self).__init__()
-    self._ca_pem = settings.CA_PUBLIC_CERT_PEM
-    self._server_cert_pem = settings.SERVER_PUBLIC_CERT_PEM
-    self._required_issuer = settings.REQUIRED_ISSUER
+
+  def LoadCaParameters(self, settings):
+    """Load ca/cert parameters for default CA.
+
+    Args:
+      settings: object with attribute level access to settings.
+    Raises:
+      CaParametersError: if any errors occur loading keys/certs.
+    """
+    try:
+      ca_params = util.GetCaParameters(settings)
+    except util.CaParametersError, e:
+      raise CaParametersError(*e.args)
+    self._ca_pem = ca_params.ca_public_cert_pem
+    self._server_cert_pem = ca_params.server_public_cert_pem
+    self._required_issuer = ca_params.required_issuer
 
   def GetSessionClass(self):
     return AuthSessionSimianClient

@@ -52,6 +52,7 @@ from google.appengine.tools import appengine_rpc
 from simian import auth
 from simian import settings
 from simian.auth import client as auth_client
+from simian.auth import util
 from simian.auth import x509
 
 warnings.filterwarnings(
@@ -952,6 +953,7 @@ class UAuth(object):
 
     # Step 3 - load the response
     auth1 = auth_client.AuthSimianClient()
+    auth1.LoadCaParameters(settings)
     auth1.Input(t=response)
 
     if not auth1.AuthStateOK():
@@ -999,13 +1001,14 @@ class HttpsAuthClient(HttpsClient):
     super(HttpsAuthClient, self).__init__(*args, **kwargs)
     self._auth1 = None
     self._cookie_token = None
-    self._LoadCACerts()
+    self._LoadRootCertChain()
     self._LoadCertSubjectLists()
     self._PlatformSetup()
+    self._LoadCaParameters()
 
-  def _LoadCACerts(self):
+  def _LoadRootCertChain(self):
     """Load CA certificates."""
-    logging.debug('_LoadCACerts()')
+    logging.debug('_LoadRootCertChain()')
     certs = self.GetSystemRootCACertChain()
     self.SetCACertChain(certs)
 
@@ -1021,6 +1024,14 @@ class HttpsAuthClient(HttpsClient):
       self.FACTER_CACHE_PATH = self.FACTER_CACHE_OSX_PATH
     else:
       self.FACTER_CACHE_PATH = self.FACTER_CACHE_DEFAULT_PATH
+
+  def _LoadCaParameters(self):
+    """Load CA parameters from settings."""
+    logging.debug('LoadCaParameters')
+    self._ca_params = util.GetCaParameters(settings)
+    logging.debug('Loaded ca_params')
+    self._default_ca_params = util.GetCaParametersDefault(settings)
+    logging.debug('Loaded default_ca_params')
 
   def GetSystemRootCACertChain(self):
     """Load system supplied root CA certs.
@@ -1304,20 +1315,49 @@ class HttpsAuthClient(HttpsClient):
     Raises:
       PuppetSslCertError: there was an error reading the cert.
     """
+    required_issuer = self._ca_params.required_issuer
+    default_required_issuer = self._default_ca_params.required_issuer
+
+    logging.debug(
+        '_ValidatePuppetSslCert: required_issuer %s', required_issuer)
+    logging.debug(
+        '_ValidatePuppetSslCert: default_required_issuer %s',
+        default_required_issuer)
+
     try:
       cert_path = os.path.join(cert_dir_path, cert_fname)
       logging.debug('_ValidatePuppetSslCert: %s', cert_path)
       f = open(cert_path, 'r')
-      s = f.read(10240)
+      s = f.read()
       f.close()
       x = x509.LoadCertificateFromPEM(s)
+
       issuer = x.GetIssuer()
-      if issuer != settings.REQUIRED_ISSUER:
-        msg = 'Skipping cert %s, unknown issuer' % cert_fname
-        logging.warning(msg)
-        logging.warning(
-            'Expected: "%s" Received: "%s"', settings.REQUIRED_ISSUER, issuer)
-        raise PuppetSslCertError(msg)
+      logging.debug('Looking at issuer %s', issuer)
+      # Check issuer match.
+      if issuer != required_issuer:
+        # Matches the default CA params issuer instead, if it is available?
+        if (default_required_issuer is not None and
+            default_required_issuer == issuer):
+          # match, good.
+          msg = ('Cert %s does not match config issuer, '
+              'but matches default' % cert_fname)
+          logging.warning(msg)
+          logging.warning('Dumping config CA params for defaults')
+          self._ca_params = self._default_ca_params
+          # TODO(user): It would be nicer if the cert scraping code like
+          # this function raised a signal that hinted the later
+          # AuthSimianClient into using the different config. Instead we
+          # just whack the CA_ID setting to point later consumers of the
+          # CA settings directly.
+          settings.CA_ID = self._ca_params.ca_id
+        else:
+          # no match at all.
+          msg = 'Skipping cert %s, unknown issuer' % cert_fname
+          logging.warning(msg)
+          logging.warning(
+              'Expected: "%s" Received: "%s"', required_issuer, issuer)
+          raise PuppetSslCertError(msg)
     except IOError, e:
       logging.debug('Skipped cert %s, IO Error %s', cert_fname, str(e))
       raise PuppetSslCertError(str(e))
@@ -1387,9 +1427,13 @@ class HttpsAuthClient(HttpsClient):
       o = self._GetPuppetSslDetails(interactive_user=interactive_user)
       if not o:
         raise SimianClientError('Could not obtain SSL details')
-
+      # Load the CA parameters after GetPuppetSslDetails figured out
+      # which CA settings are optimal to use on this client.
+      auth1.LoadCaParameters(settings)
       auth1.LoadSelfKey(o['priv_key'])
       auth1.LoadSelfCert(o['cert'])
+    else:
+      auth1.LoadCaParameters(settings)
 
     self._auth1 = auth1
 
@@ -1439,8 +1483,13 @@ class HttpsAuthClient(HttpsClient):
     self._auth1.Input()
     cn = self._auth1.Output()
 
+    # Generate /auth URL
+    auth_url = '/auth'
+    if self._ca_params.ca_id:
+      auth_url = '%s?ca_id=%s' % (auth_url, self._ca_params.ca_id)
+
     # Step 1 - send client nonce to server
-    response = self.Do('POST', '/auth', {'n': cn})
+    response = self.Do('POST', auth_url, {'n': cn})
 
     # Step 1 return - look at server message output
     if response.status != 200:
@@ -1454,7 +1503,7 @@ class HttpsAuthClient(HttpsClient):
           ' '.join(self._auth1.ErrorOutput())))
 
     # Step 2 - send signed message to server
-    response = self.Do('POST', '/auth', {'s': o['s'], 'm': o['m']})
+    response = self.Do('POST', auth_url, {'s': o['s'], 'm': o['m']})
 
     # Step 2 return - verify
     if response.status != 200:

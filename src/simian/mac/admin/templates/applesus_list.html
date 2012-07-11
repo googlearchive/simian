@@ -38,7 +38,11 @@
   <div class="sectionheader">Apple Update List</div>
 
   <div class="infopanel">
-    Unless "Manual Override" is enabled, Apple Updates will auto-promote from unstable to testing after 4 days (excluding weekends) and from testing to stable on the next Wednesday that is 7+ days past the testing promotion date.
+    {% if auto_promote_enabled %}
+      Unless "Manual Override" is enabled, Apple Updates will auto-promote from unstable to testing after {{ unstable_grace_period_days }} days (excluding weekends) and from testing to stable on the next {{ auto_promote_stable_weekday }} that is {{ testing_grace_period_days }}+ days past the testing promotion date.
+    {% else %}
+      Apple Update Auto-Promotions are disabled! To enable, visit Admin Tools - Configuration.
+    {% endif %}
     {% if is_admin %}
       <p>
         Note: if other admins are changing tracks of below products, select box

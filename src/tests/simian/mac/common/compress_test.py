@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""zip module tests."""
+"""compress module tests."""
 
 
 
@@ -25,11 +25,11 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
-from simian.mac.common import zip
+from simian.mac.common import compress
 
 
 class ZipModuleTest(mox.MoxTestBase):
-  """Test the zip module."""
+  """Test the compress module."""
 
   def setUp(self):
     mox.MoxTestBase.setUp(self)
@@ -49,18 +49,18 @@ class CompressedTextTest(mox.MoxTestBase):
     self.decomp_str = 'hello'
     self.decomp_ustr = u'hello\u2019'
     self.comp_str = (
-        '%sx\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15' % zip.MAGIC)
+        '%sx\x9c\xcbH\xcd\xc9\xc9\x07\x00\x06,\x02\x15' % compress.MAGIC)
     self.comp_ustr = (
         '%sx\x9c\xcbH\xcd\xc9\xc9\x7f'
-        '\xd40\x13\x00\x10\xaa\x04\x10' % zip.MAGIC)
+        '\xd40\x13\x00\x10\xaa\x04\x10' % compress.MAGIC)
 
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
   def _GetInstance(self, arg=None, compression_threshold=0, **kwargs):
-    """Return an instance of zip.CompressedText to test."""
-    return zip.CompressedText(
+    """Return an instance of compress.CompressedText to test."""
+    return compress.CompressedText(
         arg=arg, compression_threshold=compression_threshold, **kwargs)
 
   def testIsCompressed(self):

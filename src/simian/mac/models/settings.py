@@ -31,6 +31,32 @@ SETTINGS = {
         'type': 'random_str',
         'title': 'API Info Key',
     },
+    'apple_auto_promote_enabled': {
+        'type': 'integer',
+        'title': 'Apple Update Auto-Promotion Enabled',
+        'comment': '1 to enable, 0 to disable.',
+        'default': 1,
+    },
+    'apple_auto_promote_stable_weekday': {
+        'type': 'integer',
+        'title': 'Apple Update Stable Auto-Promote Weekday',
+        'comment': 'Integer weekday, where Monday is 0 and Sunday is 6.',
+        'default': 2,
+    },
+    'apple_unstable_grace_period_days': {
+        'type': 'integer',
+        'title': 'Apple Update Auto-Promote Unstable Grace Period Days',
+        'comment': ('Number of days before updates auto-promote from '
+                    'unstable to testing.'),
+        'default': 4,
+    },
+    'apple_testing_grace_period_days': {
+        'type': 'integer',
+        'title': 'Apple Update Auto-Promote Testing Grace Period Days',
+        'comment': ('Number of days before updates auto-promote from '
+                    'testing to stable.'),
+        'default': 7,
+    },
     'email_admin_list': {
         'type': 'string',
         'title': 'Admin List Email',
@@ -64,6 +90,7 @@ SETTINGS = {
     'required_issuer': {
         'type': 'string',
         'title': 'Required Issuer',
+        'suffix': True,
     },
     'xsrf_secret': {
         'type': 'random_str',
@@ -71,12 +98,15 @@ SETTINGS = {
     },
     'server_private_key_pem': {
         'type': 'pem',
+        'suffix': True,
     },
     'server_public_cert_pem': {
         'type': 'pem',
+        'suffix': True,
     },
     'ca_public_cert_pem': {
         'type': 'pem',
+        'suffix': True,
     }
 }
 
@@ -85,22 +115,72 @@ class Settings(base.KeyValueCache):
   """Model for settings."""
 
   @classmethod
+  def GetType(cls, name):
+    """Get the type for a setting.
+
+    Args:
+      name: str, like 'ca_public_cert_pem' or 'suffix_ca_public_cert_pem'
+          if suffix==True in the SETTINGS[name] dict above.
+    Returns:
+      type like 'pem', 'string', 'random_str', None
+    """
+    if name in SETTINGS:
+      return SETTINGS.get(name, {}).get('type')
+    # Look for name as a prefix to a setting with suffix==True.
+    for k in SETTINGS:
+      if ('suffix' in SETTINGS[k] and SETTINGS[k]['suffix'] and
+          name.endswith('_%s' % k)):
+        return SETTINGS.get(k, {}).get('type')
+    return None
+
+  @classmethod
   def GetItem(cls, name):
-    if SETTINGS.get(name, {}).get('type') in ['pem', 'string', 'random_str']:
+    """Get an item from settings.
+
+    If the item is in a serialized container it will be deserialized
+    before returning it.
+
+    Args:
+      name: str, like 'ca_public_cert_pem' or 'required_issuer'
+    Returns:
+      (value for that setting, datetime time of last change)
+    """
+    if Settings.GetType(name) in ['pem', 'string', 'random_str']:
       value, mtime = super(Settings, cls).GetItem(name)
     else:
       value, mtime = cls.GetSerializedItem(name)
+
+    if mtime is None:  # item was not in Datastore, use default if it exists.
+      value = SETTINGS.get(name, {}).get('default')
     return value, mtime
 
   @classmethod
   def SetItem(cls, name, value):
-    if SETTINGS.get(name, {}).get('type') in ['pem', 'string', 'random_str']:
+    """Set an item into settings.
+
+    If the item belongs in a serialized container it will be serialized
+    before storage.
+
+    Args:
+      name: str, like 'ca_public_cert_pem'
+      value: str, value
+    """
+    if Settings.GetType(name) in ['pem', 'string', 'random_str']:
       return super(Settings, cls).SetItem(name, value)
     else:
       return cls.SetSerializedItem(name, value)
 
   @classmethod
   def GetAll(cls):
+    """Return a dictionary of all settings.
+
+    Format = {
+        'setting name': {
+            'value': value,
+            'mtime': datetime,
+        },
+    }
+    """
     settings = SETTINGS.copy()
     for setting in SETTINGS:
       value, mtime = cls.GetItem(setting)

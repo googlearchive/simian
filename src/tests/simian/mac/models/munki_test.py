@@ -29,7 +29,7 @@ from google.apputils import app
 from google.apputils import basetest
 import mox
 import stubout
-from simian.mac.common import test
+from tests.simian.mac.common import test
 from simian.mac.models import munki as models
 
 

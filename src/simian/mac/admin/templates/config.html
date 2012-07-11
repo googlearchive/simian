@@ -34,10 +34,10 @@
 
 <div><h2>Configuration Settings</h2></div>
 <dl>
-{% for name, setting in settings.items %}
+{% for name, setting in settings %}
   <dt><h3>{{ setting.title }}</h3></dt>
   <dd>
-    {% ifequal setting.type "string" %}
+    {% if setting.type == "string" or setting.type == "integer" %}
       <form action="/admin/config" method="post" onsubmit="return simian.ajaxSubmit(this);" class="saved">
         <input type="hidden" name="setting" value="{{ name }}"/>
         <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
@@ -49,7 +49,8 @@
         <button type="submit" name="submit">Save</button>
       </form>
     {% else %}
-      {% ifequal setting.type "random_str" %}
+      {# TODO: change to elif when GAE supports Django 1.4 #}
+      {% if setting.type == "random_str" %}
         {% ifequal name "xsrf_secret" %}
           <form action="/admin/config" method="post">
         {% else %}
@@ -61,8 +62,9 @@
           <span id="setting_{{ name }}">{{ setting.value }}</span>
           <button type="submit" name="submit" style="display: inline;">Regenerate</button>
         </form>
-      {% endifequal %}
-    {% endifequal %}
+      {% endif %}
+    {% endif %}
+
     {% if setting.comment %}
       <div><span class="note">{{ setting.comment }}</span></div>
     {% endif %}

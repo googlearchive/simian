@@ -45,8 +45,8 @@ from google.appengine.ext import db
 from google.appengine.runtime import apiproxy_errors
 
 from simian import auth
-from simian import settings
 from simian.auth import base
+from simian.auth import util
 from simian.mac import models
 
 
@@ -69,8 +69,8 @@ class NotAuthenticated(Error, base.NotAuthenticated):
   """Not Authenticated Error."""
 
 
-class ServerCertMissing(Error, base.NotAuthenticated):
-  """Private key or cert missing Error."""
+class CaParametersError(Error, base.NotAuthenticated):
+  """Loading/finding (ca, server certs, keys) error."""
 
 
 class Auth1ServerDatastoreSession(base.Auth1ServerSession):
@@ -274,10 +274,29 @@ class AuthSimianServer(base.Auth1):
   """Auth1 server which uses AuthSessionSimian for session storage."""
 
   def __init__(self):
+    """TODO(user): remove once certain/done"""
     super(AuthSimianServer, self).__init__()
-    self._ca_pem = settings.CA_PUBLIC_CERT_PEM
-    self._server_cert_pem = settings.SERVER_PUBLIC_CERT_PEM
-    self._required_issuer = settings.REQUIRED_ISSUER
+
+  def LoadCaParameters(self, settings, ca_id=None):
+    """Load ca/cert parameters for CA named ca_id.
+
+    Args:
+      settings: object with attribute level access to settings.
+      ca_id: str or None (default), identifies the CA/server cert/keys.
+    Raises:
+      CaParametersError: if any errors occur loading keys/certs for ca_id.
+    """
+    try:
+      ca_params = util.GetCaParameters(settings, ca_id)
+    except util.CaParametersError, e:
+      raise CaParametersError(*e.args)
+    self._ca_pem = ca_params.ca_public_cert_pem
+    self._server_cert_pem = ca_params.server_public_cert_pem
+    try:
+      self.LoadSelfKey(ca_params.server_private_key_pem)
+    except ValueError, e:
+      raise CaParametersError('server_private_key_pem: %s' % str(e))
+    self._required_issuer = ca_params.required_issuer
 
   def GetSessionClass(self):
     return AuthSessionSimianServer

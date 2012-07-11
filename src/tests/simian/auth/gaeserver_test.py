@@ -670,15 +670,76 @@ class AuthSimianServer(mox.MoxTestBase):
 
   def testInit(self):
     """Test __init__()."""
-    self.assertEqual(
-        self.aps._ca_pem, gaeserver.settings.CA_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        self.aps._server_cert_pem,
-        gaeserver.settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        self.aps._required_issuer, gaeserver.settings.REQUIRED_ISSUER)
+
+  def testLoadCaParameters(self):
+    """Test LoadCaParameters()."""
+    self.mox.StubOutWithMock(gaeserver.util, 'GetCaParameters')
+    self.mox.StubOutWithMock(self.aps, 'LoadSelfKey')
+
+    settings = {}
+
+    ca_params = self.mox.CreateMockAnything()
+    ca_params.ca_public_cert_pem = 'ca'
+    ca_params.server_public_cert_pem = 'spub'
+    ca_params.server_private_key_pem = 'spriv'
+    ca_params.required_issuer = 'ri'
+
+    gaeserver.util.GetCaParameters(
+        settings, None).AndReturn(ca_params)
+    self.aps.LoadSelfKey('spriv').AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.aps.LoadCaParameters(settings)
+    self.assertEqual(self.aps._ca_pem, 'ca')
+    self.assertEqual(self.aps._server_cert_pem, 'spub')
+    self.assertEqual(self.aps._required_issuer, 'ri')
+    self.mox.VerifyAll()
+
+  def testLoadCaParametersWhenValueError(self):
+    """Test LoadCaParameters()."""
+    self.mox.StubOutWithMock(gaeserver.util, 'GetCaParameters')
+    self.mox.StubOutWithMock(self.aps, 'LoadSelfKey')
+
+    settings = {}
+
+    ca_params = self.mox.CreateMockAnything()
+    ca_params.ca_public_cert_pem = 'ca'
+    ca_params.server_public_cert_pem = 'spub'
+    ca_params.server_private_key_pem = 'spriv'
+    ca_params.required_issuer = 'ri'
+
+    gaeserver.util.GetCaParameters(
+        settings, None).AndReturn(ca_params)
+    self.aps.LoadSelfKey('spriv').AndRaise(ValueError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        gaeserver.CaParametersError, self.aps.LoadCaParameters, settings)
+    self.mox.VerifyAll()
+
+  def testLoadCaParametersWhenError(self):
+    """Test LoadCaParameters()."""
+    self.mox.StubOutWithMock(gaeserver.util, 'GetCaParameters')
+    self.mox.StubOutWithMock(self.aps, 'LoadSelfKey')
+
+    settings = {}
+
+    ca_params = self.mox.CreateMockAnything()
+    ca_params.ca_public_cert_pem = 'ca'
+    ca_params.server_public_cert_pem = 'spub'
+    ca_params.server_private_key_pem = 'spriv'
+    ca_params.required_issuer = 'ri'
+
+    gaeserver.util.GetCaParameters(
+        settings, None).AndRaise(gaeserver.util.CaParametersError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        gaeserver.CaParametersError, self.aps.LoadCaParameters, settings)
+    self.mox.VerifyAll()
 
   def testGetSessionClass(self):
+    """Test GetSessionClass()."""
     self.assertTrue(
         self.aps.GetSessionClass() is gaeserver.AuthSessionSimianServer)
 

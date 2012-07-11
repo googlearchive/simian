@@ -509,6 +509,14 @@ class SimianDictSettingsTest(BaseSettingsTestBase):
     for k in regex_key_validations:
       self._CheckSetValidation(k, self.settings._VALIDATION_REGEX)
 
+  def testIsCaIdValid(self):
+    k = 'k'
+    self.assertTrue(self.settings._IsCaIdValid(k, None))
+    self.assertTrue(self.settings._IsCaIdValid(k, 'FOO'))
+    self.assertFalse(self.settings._IsCaIdValid(k, '9'))
+    self.assertFalse(self.settings._IsCaIdValid(k, ''))
+    self.assertFalse(self.settings._IsCaIdValid(k, 10))
+
 
 class FilesystemSettingsTest(BaseSettingsTestBase):
   """Test FilesystemSettings class."""

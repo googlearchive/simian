@@ -29,14 +29,14 @@
     </td>
     <td>{{ computer.serial }}</td>
     {% if uuid_lookup_url %}
-      <td><a href="{{ uuid_lookup_url }}/{{ computer.uuid }}">view</a></td>
+      <td><a href="{{ uuid_lookup_url }}{{ computer.uuid }}">view</a></td>
     {% endif %}
     <td>
       <a href="/admin?filter-type=owner&filter={{ computer.owner }}"
         >{{ computer.owner }}</a>
     </td>
     {% if owner_lookup_url %}
-      <td><a href="{{ owner_lookup_url }}/{{ computer.owner }}">view</a></td>
+      <td><a href="{{ owner_lookup_url }}{{ computer.owner }}">view</a></td>
     {% endif %}
     <td>{{ computer.site }}</td>
     <td>{{ computer.office }}</td>

@@ -26,7 +26,6 @@ Classes:
 
 import datetime
 import logging
-import os
 import urllib2
 from google.appengine.api import mail
 from google.appengine.api import urlfetch
@@ -47,18 +46,19 @@ CATALOGS = {
     '10.5': 'http://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
     '10.6': 'http://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
     '10.7': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
-    '10.8': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
+    '10.8': 'http://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
 }
 
 
 class AppleSUSCatalogSync(webapp.RequestHandler):
   """Class to sync SUS catalogs from Apple."""
 
-  def _UpdateCatalog(self, plist, key=None, entity=None, last_modified=None):
+  def _UpdateCatalog(
+      self, plist_str, key=None, entity=None, last_modified=None):
     """Updates a Datastore entry.
 
     Args:
-      plist: str xml catalog plist.
+      plist_str: str xml catalog plist.
       key: key of AppleSUSCatalog entity to update.
         or
       entity: AppleSUSCatalog entity to update.
@@ -70,7 +70,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
     try:
       if not entity:
         entity = models.AppleSUSCatalog.get_or_insert(key)
-      entity.plist = plist
+      entity.plist = plist_str
       entity.last_modified_header = last_modified
       entity.put()
       logging.info('_UpdateCatalog: %s update complete.', entity.key().name())
@@ -136,7 +136,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
       return True
     else:
       raise urlfetch.DownloadError(
-         'Non-200 status_code: %s' % response.status_code)
+          'Non-200 status_code: %s' % response.status_code)
 
   def _UpdateProductDataFromCatalog(self, catalog_plist):
     """Updates models.AppleSUSProduct model from a catalog plist object.
@@ -216,7 +216,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
         try:
           catalog_plist.Parse()
         except plist.Error:
-          logging.exception('Error parsing Apple Updates catalog plist: %s', key)
+          logging.exception('Error parsing Apple Updates catalog: %s', key)
           continue
         for product in catalog_plist.get('Products', []):
           catalog_products[product] = 1
@@ -255,7 +255,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
     applesus.GenerateAppleSUSCatalog(os_version, common.UNSTABLE)
 
   def get(self):
-    """Handle GET"""
+    """Handle GET."""
     for os_version, url in CATALOGS.iteritems():
       untouched_key = '%s_untouched' % os_version
       untouched_catalog = models.AppleSUSCatalog.get_or_insert(untouched_key)
@@ -303,7 +303,7 @@ class AppleSUSAutoPromote(webapp.RequestHandler):
       Boolean. True if the product is ready to promote, False otherwise.
     """
     today = datetime.datetime.utcnow().date()
-    auto_promote_date =  applesus.GetAutoPromoteDate(track, applesus_product)
+    auto_promote_date = applesus.GetAutoPromoteDate(track, applesus_product)
     if auto_promote_date and auto_promote_date <= today:
       return True
     return False

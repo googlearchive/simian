@@ -39,67 +39,6 @@ class ClientModuleTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testGetMunkiConfigParam(self):
-    """Test GetMunkiConfigParam()."""
-    open_fn = self.mox.CreateMockAnything()
-    mock_plist = self.mox.CreateMockAnything()
-    name = 'foo'
-    value = 'bar'
-
-    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndReturn(open_fn)
-    open_fn.read().AndReturn('abc')
-    open_fn.read().AndReturn('def')
-    open_fn.read().AndReturn(None)
-    open_fn.close()
-
-    self.mox.StubOutWithMock(client.plist, 'MunkiPlist')
-    client.plist.MunkiPlist('abcdef').AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-    mock_plist.GetContents().AndReturn({name: value})
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        client.GetMunkiConfigParam(name, open_fn=open_fn),
-        value)
-    self.mox.VerifyAll()
-
-  def testGetMunkiConfigParamWhenPlistError(self):
-    """Test GetMunkiConfigParam()."""
-    open_fn = self.mox.CreateMockAnything()
-    mock_plist = self.mox.CreateMockAnything()
-    name = 'foo'
-    value = None
-
-    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndReturn(open_fn)
-    open_fn.read().AndReturn('abc')
-    open_fn.read().AndReturn('def')
-    open_fn.read().AndReturn(None)
-    open_fn.close()
-
-    self.mox.StubOutWithMock(client.plist, 'MunkiPlist')
-    client.plist.MunkiPlist('abcdef').AndReturn(mock_plist)
-    mock_plist.Parse().AndRaise(client.plist.Error)
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        client.GetMunkiConfigParam(name, open_fn=open_fn),
-        value)
-    self.mox.VerifyAll()
-
-  def testGetMunkiConfigParamWhenIOError(self):
-    """Test GetMunkiConfigParam()."""
-    open_fn = self.mox.CreateMockAnything()
-    name = 'foo'
-    value = None
-
-    open_fn(client.MUNKI_CONFIG_PLIST, 'r').AndRaise(IOError)
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        client.GetMunkiConfigParam(name, open_fn=open_fn),
-        value)
-    self.mox.VerifyAll()
-
 
 class BaseSimianClientTest(mox.MoxTestBase):
   def setUp(self):

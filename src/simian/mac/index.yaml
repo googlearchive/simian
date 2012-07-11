@@ -56,6 +56,11 @@ indexes:
 - kind: Computer
   properties:
   - name: active
+  - name: preflight_count_since_postflight
+
+- kind: Computer
+  properties:
+  - name: active
   - name: client_version
 
 - kind: Computer

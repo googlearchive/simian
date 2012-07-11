@@ -218,7 +218,8 @@ class AppleModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     for date in dates:
-      self.assertEqual(applesus._GetNextWeekdayDate(min_date=date[0]), date[1])
+      self.assertEqual(
+          applesus._GetNextWeekdayDate(applesus.WED, min_date=date[0]), date[1])
     self.mox.VerifyAll()
 
 
