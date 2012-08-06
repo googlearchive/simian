@@ -19,6 +19,7 @@ def RemoveAuthTokenHeaderFromPlist(plist):
   Args:
     plist: FoundationPlist.NSCFDictionary object.
   """
+  # TODO(user): Port to CFP, so Mountain Lion removes the token as well.
   headers = []
 
   # Expire the auth token, and preserve all non-Cookie headers that may exist.

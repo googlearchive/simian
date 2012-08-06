@@ -68,7 +68,6 @@ class SimianAuthCliClient(object):
       'report=',
       'write-root-ca-certs=',
       'server=',
-      'token=',
       'uploadfile=',
       'uploadfiletype=',
       'logout',
@@ -149,9 +148,6 @@ class SimianAuthCliClient(object):
     --write-root-ca-certs [filename]
         write the root CA certs that Simian client is using to filename.
         existing file is destroyed.
-
-    --token [token string]
-        specify token
 
     --uploadfile [path to file]
         uploads a file to the server.
@@ -275,6 +271,11 @@ class SimianAuthCliClient(object):
     if not found_cmd:
       found_cmd.append(self.DEFAULT_COMMAND)
 
+    token = os.environ.get('SIMIAN_AUTH1TOKEN')
+    if token:
+      logging.info('Using SIMIAN_AUTH1TOKEN provided in environment.')
+      self.config['token'] = token
+
     self._OrderCommands(found_cmd)
 
     if len(found_cmd) < 1:
@@ -311,9 +312,6 @@ class SimianAuthCliClient(object):
   def PrintError(self, errstr):
     print >>sys.stderr, 'Error: %s' % errstr
 
-  def _PreprocessRunConfig(self):
-    """Before Run() starts, last chance to preprocess the config."""
-
   def _SetTokens(self, token):
     """Sets 'token' and 'token_cookie' self.config keys based on passed token.
 
@@ -335,8 +333,6 @@ class SimianAuthCliClient(object):
 
     if not self.commands:
       return
-
-    self._PreprocessRunConfig()
 
     did_userauth = False
     did_auth = False

@@ -49,8 +49,6 @@ def LoginToServer(config, client_id, user_settings, client_exit=None):
     user_settings: dict of user settings.
     client_exit: optional, default None, str explaining why the client is
       requesting to exit its execution.
-  Returns:
-    str auth token.
   """
   headers = []
 
@@ -142,7 +140,8 @@ def LoginToServer(config, client_id, user_settings, client_exit=None):
         'preflight failure obtaining token (%d): %s', return_code, stderr)
     sys.exit(STATUS_FAIL_AUTH[0])
 
-  return token
+  # Set the AUTH1_TOKEN global, so it doesn't need to be read from CFPrefrences.
+  flight_common.AUTH1_TOKEN = token
 
 
 def IsOnWwan():
@@ -356,12 +355,11 @@ def GetManagedSoftwareUpdateLogs():
   return logs
 
 
-def PostManagedSoftwareUpdateLogs(logs, token):
+def PostManagedSoftwareUpdateLogs(logs):
   """Post Managed Software Update logs to Munki server.
 
   Args:
     logs: same format as output from GetManagedSoftwareUpdateLogs
-    token: str, token for auth
   """
   args = []
   for log in logs:
@@ -369,7 +367,7 @@ def PostManagedSoftwareUpdateLogs(logs, token):
     args.extend(['--report', 'dict:msu_log:%s' % kv])
 
   if args:
-    flight_common.PerformServerRequest(args, token, login=False, logout=False)
+    flight_common.PerformServerRequest(args, login=False, logout=False)
 
 
 def main(args):
@@ -405,11 +403,11 @@ def main(args):
       client_exit = 'Android WAP tether is active'
 
   # get a client auth token/cookie from the server, and post connection data.
-  token = LoginToServer(secure_config, client_id, user_settings, client_exit)
+  LoginToServer(secure_config, client_id, user_settings, client_exit)
 
   # post recent MSU logs
   logs = GetManagedSoftwareUpdateLogs()
-  PostManagedSoftwareUpdateLogs(logs, token)
+  PostManagedSoftwareUpdateLogs(logs)
 
   # load user settings
   if user_settings:

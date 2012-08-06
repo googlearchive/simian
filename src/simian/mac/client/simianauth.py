@@ -53,18 +53,13 @@ if _term is not None:
   os.environ['TERM'] = _term
 #
 # END TERM HACK
-import logging
-import subprocess
 import warnings
-from Foundation import CFPreferencesCopyAppValue
 
 warnings.filterwarnings(
     'ignore',
     '.*Python 2\.\d is unsupported; use 2.\d.*', DeprecationWarning, '.*', 0)
 from simian.client import simianauth
 from simian.mac.client import client
-from simian.mac.munki import plist
-from simian import auth
 
 
 class SimianAuthCliClient(simianauth.SimianAuthCliClient):
@@ -72,61 +67,9 @@ class SimianAuthCliClient(simianauth.SimianAuthCliClient):
 
   NAME = 'simianauth'
 
-  def __init__(self, *args, **kwargs):
-    #TODO(user): These CLI tools need to be refactored to handle feature
-    #additions in subclasses better.  For now, I'm sorry:
-    self.USAGE = self.USAGE.replace(
-        '--token [token string]', '--token [token string or plist filename]')
-    super(SimianAuthCliClient, self).__init__(*args, **kwargs)
-
   def GetSimianClientInstance(self, *args, **kwargs):
     """Returns an instance of the Simian client to use within this CLI."""
     return client.SimianAuthClient(*args, **kwargs)
-
-  def _GetAuth1Token(self):
-    """Get Auth1Token from secure ManagedInstalls."""
-    logging.debug('_GetAuth1Token')
-    bundle_id = 'ManagedInstalls'
-    pref_value = CFPreferencesCopyAppValue('AdditionalHttpHeaders', bundle_id)
-    if pref_value is None:
-      raise simianauth.client.SimianClientError(
-          'Missing AdditionalHttpHeaders in ManagedInstalls')
-
-    header = 'Cookie: %s=' % auth.AUTH_TOKEN_COOKIE
-    for h in pref_value:
-      if h.startswith(header):
-        logging.debug('_GetAuth1Token(): found %s', h)
-        token = h[len(header):]
-        if token.find(';') > -1:
-          token = token[0:token.find(';')]
-        token = str(token)
-        return token
-
-    raise simianauth.client.SimianClientError(
-        'Auth1Token missing in ManagedInstalls')
-
-  def _ProcessToken(self):
-    """Process the token parameter."""
-    logging.debug('_ProcessToken')
-    if not self.config['token']:
-      return
-    logging.debug('_ProcessToken: %s', self.config['token'])
-    # TODO(user): This is a quick fix. The plist file that is being
-    # passed in here might not exist on disk yet because 10.8 has daemons
-    # which manage filesystem i/o. So, just look for the directory instead,
-    # which should always exist since it will be ~root/L/P.
-    is_dir = os.path.isdir(os.path.dirname(self.config['token']))
-    if is_dir:
-      token = self._GetAuth1Token()
-      if token:
-        self.config['token'] = token
-      else:
-        raise simianauth.client.SimianClientError(
-            'Could not load token from %s' % self.config['token'])
-
-  def _PreprocessRunConfig(self):
-    """Before Run() starts, last chance to preprocess the config."""
-    self._ProcessToken()
 
   def Logout(self):
     """Logout from Simian, release a token."""

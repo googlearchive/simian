@@ -72,6 +72,8 @@ DEFAULT_FACTER_CACHE_TIME = datetime.timedelta(hours=3)
 # InstallResults legacy string matching regex.
 LEGACY_INSTALL_RESULTS_STRING_REGEX = (
     '^Install of (.*)-(\d+.*): (SUCCESSFUL|FAILED with return code: (\-?\d+))$')
+# Global for holding the auth token to be used to communicate with the server.
+AUTH1_TOKEN = None
 
 
 DEBUG = False
@@ -201,11 +203,12 @@ def SetFileNonBlocking(f, non_blocking=True):
   fcntl.fcntl(f.fileno(), fcntl.F_SETFL, flags)
 
 
-def Exec(cmd, timeout=0, waitfor=0):
+def Exec(cmd, env=None, timeout=0, waitfor=0):
   """Executes a process and returns exit code, stdout, stderr.
 
   Args:
     cmd: str or sequence, command and optional arguments to execute.
+    env: dict, optional, environment variables to set.
     timeout: int or float, if >0, Exec() will stop waiting for output
       after timeout seconds and kill the process it started.  return code
       might be undefined, or -SIGTERM, use waitfor to make sure to obtain it.
@@ -220,8 +223,13 @@ def Exec(cmd, timeout=0, waitfor=0):
   else:
     shell = False
 
+  if env:
+    environ = os.environ.copy()
+    environ.update(env)
+    env = environ
+
   p = subprocess.Popen(
-      cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
+      cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
 
   if timeout <= 0:
     stdout, stderr = p.communicate()
@@ -344,10 +352,13 @@ def CacheFacterContents():
 
   facts = {}
 
-  # Iterate over the facter output and create a dictionary of the output
+    # Iterate over the facter output and create a dictionary of the output
   lines = stdout.splitlines()
   for line in lines:
-    (key, unused_sep, value) = line.split(' ', 2)
+    try:
+      (key, unused_sep, value) = line.split(' ', 2)
+    except ValueError:
+      logging.warning('Ignoring invalid facter output line: %s', line)
     value = value.strip()
     facts[key] = value
 
@@ -601,17 +612,40 @@ def GetAppleSUSCatalog():
     logging.exception('MunkiDownloadError getting Apple SUS catalog.')
 
 
+def GetAuth1Token():
+  """Returns an Auth1Token for use with server authentication."""
+  if AUTH1_TOKEN:
+    return AUTH1_TOKEN
+
+  pref_value = Foundation.CFPreferencesCopyAppValue(
+      'AdditionalHttpHeaders', 'ManagedInstalls')
+  if pref_value is None:
+    logging.error('GetAuth1Token(): AdditionalHttpHeaders not present.')
+    return None
+
+  header = 'Cookie: Auth1Token='
+  for h in pref_value:
+    if h.startswith(header):
+      logging.debug('GetAuth1Token(): found %s', h)
+      token = h[len(header):]
+      if token.find(';') > -1:
+        token = token[0:token.find(';')]
+      token = str(token)
+      return token
+
+  logging.error('GetAuth1Token(): AdditionalHttpHeaders lacks a token.')
+  return None
+
+
 def PostReportToServer(
-    report_type, params,
-    token=None, login=False, logout=True, raise_exc=False):
+    report_type, params, login=False, logout=True, raise_exc=False):
   """POSTs report to server.
 
   Args:
     report_type: str report type.
     params: dict of data to POST.
-    token: optional str auth token to use.
     login: optional boolean; True to pass --login to simianauth binary.
-        Default False. If True, token is ignored.
+        Default False. If True, global AUTH1_TOKEN is ignored.
     logout: optional boolean. True to logout after posting the report.
     raise_exc: bool, optional, True to raise exceptions on non 0 status
       from underlying server request handler, False (default) to nicely
@@ -630,12 +664,8 @@ def PostReportToServer(
   response = None
   try:
     try:
-      if token:
-        PerformServerRequest(
-            params, token=token, login=login, logout=logout, raise_exc=True)
-      else:
-        PerformServerRequest(
-            params, login=login, logout=logout, raise_exc=True)
+      PerformServerRequest(
+          params, login=login, logout=logout, raise_exc=True)
     except OSError, e:
       if e.args[1] == 99:
         response = ReportFeedback.FORCE_CONTINUE
@@ -650,15 +680,13 @@ def PostReportToServer(
 
 
 def PerformServerRequest(
-    params=None, token=DEFAULT_SECURE_MANAGED_INSTALLS_PLIST_PATH, login=False,
-    logout=False, raise_exc=False):
+    params=None, login=False, logout=False, raise_exc=False):
   """Performs a urllib2 request to the passed URL.
 
   Args:
     params: sequence, optional, params to pass to auth binary.
-    token: str, optional, auth token to use.
     login: bool, optional, True to pass --login to simianauth binary.
-        Default False. If True, token is ignored.
+        Default False. If True, global AUTH1_TOKEN is ignored.
     logout: bool, optional, True to logout after any other commands.
     raise_exc: bool, optional, True to raise exceptions on non 0 status
       from underlying server request handler, False (default) to nicely
@@ -673,11 +701,13 @@ def PerformServerRequest(
   cmd.append('--server')
   cmd.append(url)
 
+  env = None
   if login:
     cmd.append('--login')
   else:
-    cmd.append('--token')
-    cmd.append(token)
+    token = GetAuth1Token()
+    if token:
+      env = {'SIMIAN_AUTH1TOKEN': token}
 
   if params:
     cmd.extend(params)
@@ -685,7 +715,7 @@ def PerformServerRequest(
     cmd.append('--logout')
 
   try:
-    rc, stdout, stderr = Exec(cmd, timeout=90, waitfor=0.5)
+    rc, stdout, stderr = Exec(cmd, env=env, timeout=90, waitfor=0.5)
     if rc != 0:
       raise OSError('Exec %d: %s' % (rc, stderr), rc)
   except OSError, e:
