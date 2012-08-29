@@ -472,6 +472,41 @@ class ModelsModuleTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
+class BaseManifestModificationTest(mox.MoxTestBase):
+  """BaseManifestModification class test."""
+
+  def setUp(self):
+    mox.MoxTestBase.setUp(self)
+    self.stubs = stubout.StubOutForTesting()
+
+  def tearDown(self):
+    self.mox.UnsetStubs()
+    self.stubs.UnsetAll()
+
+  def testGenerateInstance(self):
+    """TODO(user): Should be completed."""
+
+  def testResetModMemcache(self):
+    """Test ResetModMemcache()."""
+    target = 'target'
+    mod_type_invalid = 'UNKNOWN'
+    mod_type = models.MANIFEST_MOD_MODELS.keys()[0]
+    mod_type_cls = models.MANIFEST_MOD_MODELS[mod_type]
+
+    self.mox.StubOutWithMock(mod_type_cls, 'ResetMemcacheWrappedGetAllFilter')
+    mod_type_cls.ResetMemcacheWrappedGetAllFilter(
+        (('%s =' % mod_type, target),)).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.assertTrue(mod_type_invalid not in models.MANIFEST_MOD_MODELS)
+    self.assertRaises(
+        ValueError, models.BaseManifestModification.ResetModMemcache,
+        mod_type_invalid, target)
+
+    models.BaseManifestModification.ResetModMemcache(mod_type, target)
+    self.mox.VerifyAll()
+
+
 class KeyValueCacheTest(mox.MoxTestBase):
   """Test KeyValueCache class."""
 

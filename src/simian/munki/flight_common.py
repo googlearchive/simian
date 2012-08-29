@@ -20,7 +20,6 @@
 
 
 
-import cPickle as Pickle
 import ctypes
 import ctypes.util
 import datetime
@@ -352,22 +351,22 @@ def CacheFacterContents():
 
   facts = {}
 
-    # Iterate over the facter output and create a dictionary of the output
+  # Iterate over the facter output and create a dictionary of the output
   lines = stdout.splitlines()
   for line in lines:
     try:
       (key, unused_sep, value) = line.split(' ', 2)
+      value = value.strip()
+      facts[key] = value
     except ValueError:
       logging.warning('Ignoring invalid facter output line: %s', line)
-    value = value.strip()
-    facts[key] = value
 
   try:
     f = open(DEFAULT_FACTER_CACHE_PATH, 'w')
+    print >>f, '\n'.join(lines)   # Use same facter format.
+    f.close()
   except IOError:
-    return facts
-  Pickle.dump(facts, f)
-  f.close()
+    pass
   return facts
 
 
@@ -394,9 +393,17 @@ def GetMachineInfoFromFacter():
   if now - cache_mtime < DEFAULT_FACTER_CACHE_TIME:
     try:
       f = open(DEFAULT_FACTER_CACHE_PATH, 'r')
-      facter = Pickle.load(f)
+      lines = f.readlines()
+      for line in lines:
+        line = line.strip()
+        try:
+          (key, unused_sep, value) = line.split(' ', 2)
+          value = value.strip()
+          facter[key] = value
+        except ValueError:
+          logging.warning('Ignoring invalid facter output line: %s', line)
       f.close()
-    except (ImportError, EOFError, IOError, Pickle.UnpicklingError):
+    except (EOFError, IOError):
       facter = {}
 
   if not facter:

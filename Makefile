@@ -4,13 +4,13 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.0.2
+SIMIAN_VERSION=2.0.3
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=0.8.2.1466.0
+MUNKI_VERSION=0.8.3.1634.0
 MUNKI=munkitools-${MUNKI_VERSION}
-MUNKIFILE=${MUNKI}.mpkg.dmg
+MUNKIFILE=${MUNKI}.dmg
 PYTHON_VERSION=2.5
 PYTHON=$(shell type -p python${PYTHON_VERSION})
 TS=$(shell date '+%s')
@@ -111,6 +111,7 @@ client_config: settings_check
 
 ${MUNKIFILE}:
 	curl -o $@ http://munki.googlecode.com/files/$@
+	hdiutil verify "$@" || (rm -f "$@" ; exit 1)
 
 add_munkicontents: os_check ${MUNKIFILE}
 	mkdir -p tmpcontents/

@@ -103,6 +103,74 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     self.mox.VerifyAll()
 
+  def testPutMod(self):
+    """Test _PutMod."""
+    mod_type = 'owner'
+    target = 'foouser'
+    pkg_name = 'Foo%20Pkg-1.2'
+    install_types = ['optional_installs']
+
+    mock_entity = self.mox.CreateMockAnything()
+
+    # This code partially replicates self.c._ParseParameters.
+    # It is hard to reuse that function for testing because it uses
+    # self.request...
+    self.c.mod_type = mod_type
+    # Instead of dyn_man.models.MANIFEST_MOD_MODELS.get(mod_type, None)
+    # plug our mock in immediately.
+    self.c.model = self.mox.CreateMockAnything()
+    self.c.target = urllib.unquote(target)
+    self.c.pkg_name = urllib.unquote(pkg_name)
+    self.c.key_name = '%s##%s' % (self.c.target, self.c.pkg_name)
+    self.c.install_types = install_types
+    self.c.manifests = []
+    # End partially replicated section.
+
+    self.c.model(key_name=self.c.key_name).AndReturn(mock_entity)
+    self.mox.StubOutWithMock(
+        dyn_man.models.BaseManifestModification, 'ResetModMemcache')
+
+    mock_entity.put().AndReturn(True)
+    dyn_man.models.BaseManifestModification.ResetModMemcache(
+        mod_type, target).AndReturn(None)
+
+    self.mox.ReplayAll()
+    self.c._PutMod()
+    self.mox.VerifyAll()
+
+  def testPutModWhenError(self):
+    """Test _PutMod."""
+    mod_type = 'owner'
+    target = 'foouser'
+    pkg_name = 'Foo%20Pkg-1.2'
+    install_types = ['optional_installs']
+
+    mock_entity = self.mox.CreateMockAnything()
+
+    # This code partially replicates self.c._ParseParameters.
+    # It is hard to reuse that function for testing because it uses
+    # self.request...
+    self.c.mod_type = mod_type
+    # Instead of dyn_man.models.MANIFEST_MOD_MODELS.get(mod_type, None)
+    # plug our mock in immediately.
+    self.c.model = self.mox.CreateMockAnything()
+    self.c.target = urllib.unquote(target)
+    self.c.pkg_name = urllib.unquote(pkg_name)
+    self.c.key_name = '%s##%s' % (self.c.target, self.c.pkg_name)
+    self.c.install_types = install_types
+    self.c.manifests = []
+    # End partially replicated section.
+
+    self.c.model(key_name=self.c.key_name).AndReturn(mock_entity)
+    self.mox.StubOutWithMock(
+        dyn_man.models.BaseManifestModification, 'ResetModMemcache')
+
+    mock_entity.put().AndRaise(dyn_man.db.Error)
+
+    self.mox.ReplayAll()
+    self.assertRaises(dyn_man.db.Error, self.c._PutMod)
+    self.mox.VerifyAll()
+
   def testGetSuccess(self):
     """Tests get()."""
     mod_type = 'owner'
@@ -196,6 +264,10 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.request.get_all('install_types').AndReturn(install_types)
     mock_model(key_name=key_name).AndReturn(mock_model)
     mock_model.put().AndReturn(None)
+    self.mox.StubOutWithMock(
+        dyn_man.models.BaseManifestModification, 'ResetModMemcache')
+    dyn_man.models.BaseManifestModification.ResetModMemcache(
+        mod_type, target).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.put(mod_type=mod_type, target=target, pkg_name=pkg_name)
@@ -304,6 +376,11 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     mock_model(key_name=key_name).AndReturn(mock_model)
     mock_model.put().AndReturn(None)
+    self.mox.StubOutWithMock(
+        dyn_man.models.BaseManifestModification, 'ResetModMemcache')
+    dyn_man.models.BaseManifestModification.ResetModMemcache(
+        mod_type, target).AndReturn(None)
+
     self.c.response.headers.__setitem__('Content-Type', 'application/json')
     self.response.out.write(dyn_man.util.Serialize([{'pkg_name': pkg_name}]))
 

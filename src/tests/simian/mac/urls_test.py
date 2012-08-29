@@ -32,7 +32,7 @@ import stubout
 from simian.mac import urls
 
 
-class MacsimianMainModuleTest(mox.MoxTestBase):
+class SimianMainModuleTest(mox.MoxTestBase):
   """Test module level portions of urls."""
 
   def setUp(self):

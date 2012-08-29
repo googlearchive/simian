@@ -15,7 +15,7 @@
 # limitations under the License.
 # #
 
-"""Common classes for Macsimian unit tests.
+"""Common classes for Simian unit tests.
 
 Contents:
 

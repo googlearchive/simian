@@ -212,6 +212,19 @@ class BaseModel(db.Model):
     return entities
 
   @classmethod
+  def ResetMemcacheWrappedGetAllFilter(cls, filters=()):
+    """Resets the memcache wrapped response for this GetAllFilter.
+
+    Args:
+      filters: tuple, optional, filter arguments, e.g.
+        ( ( "foo =", True ),
+          ( "zoo =", 1 ), ),
+    """
+    filter_str = '|'.join(map(lambda x: '_%s,%s_' % (x[0], x[1]), filters))
+    memcache_key = 'mwgaf_%s%s' % (cls.kind(), filter_str)
+    memcache.delete(memcache_key)
+
+  @classmethod
   def MemcacheWrappedSet(
       cls, key_name, prop_name, value, memcache_secs=MEMCACHE_SECS):
     """Sets an entity by key name and property wrapped by Memcache.
@@ -1035,6 +1048,22 @@ class BaseManifestModification(BaseModel):
     for kw in kwargs:
       setattr(m, kw, kwargs[kw])
     return m
+
+  @classmethod
+  def ResetModMemcache(cls, mod_type, target):
+    """Clear the memcache associated with this modification type.
+
+    Args:
+      mod_type: str, modification type like 'site', 'owner', etc.
+      target: str, modification target value, like 'foouser', or 'foouuid'.
+    Raises:
+      ValueError: if a manifest mod_type is unknown
+    """
+    model = MANIFEST_MOD_MODELS.get(mod_type, None)
+    if not model:
+      raise ValueError
+
+    model.ResetMemcacheWrappedGetAllFilter((('%s =' % mod_type, target),))
 
 
 class SiteManifestModification(BaseManifestModification):

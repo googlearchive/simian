@@ -99,7 +99,7 @@ class HandlersTest(test.RequestHandlerTest):
         models.OwnerManifestModification,
         'MemcacheWrappedGetAllFilter')
     models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
-        (('owner', owner),)).AndReturn(owner_mods)
+        (('owner =', owner),)).AndReturn(owner_mods)
 
     uuid_mod_one = self.mox.CreateMockAnything()
     uuid_mod_one.manifests = [manifest]
@@ -111,7 +111,7 @@ class HandlersTest(test.RequestHandlerTest):
         models.UuidManifestModification,
         'MemcacheWrappedGetAllFilter')
     models.UuidManifestModification.MemcacheWrappedGetAllFilter(
-        (('uuid', uuid),)).AndReturn(uuid_mods)
+        (('uuid =', uuid),)).AndReturn(uuid_mods)
 
     tag_mod_one = self.mox.CreateMockAnything()
     tag_mod_one.manifests = [manifest]
@@ -128,9 +128,9 @@ class HandlersTest(test.RequestHandlerTest):
         models.TagManifestModification,
         'MemcacheWrappedGetAllFilter')
     models.TagManifestModification.MemcacheWrappedGetAllFilter(
-        (('tag_key_name', 'footag1'),)).AndReturn([])
+        (('tag_key_name =', 'footag1'),)).AndReturn([])
     models.TagManifestModification.MemcacheWrappedGetAllFilter(
-        (('tag_key_name', 'footag2'),)).AndReturn(tag_mods)
+        (('tag_key_name =', 'footag2'),)).AndReturn(tag_mods)
 
     # Setup dict of expected output xml.
     tmp_plist_exp = manifests.plist_module.MunkiManifestPlist(plist_xml)

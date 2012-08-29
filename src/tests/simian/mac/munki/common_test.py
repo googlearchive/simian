@@ -450,6 +450,16 @@ class CommonModuleTest(test.RequestHandlerTest):
     client_id_dict['track'] = 'stable'
     self.assertEqual(client_id_dict, common.ParseClientId(cid))
 
+  def testParseClientIdNewline(self):
+    """Tests ParseClientId when newline in the string."""
+    client_id_str, client_id_dict = self._GetClientIdTestData()
+    client_id_str = client_id_str.replace(
+        'hostname=foohost', 'hostname=foo\nhost')
+    client_id_dict['hostname'] = 'foo_host'
+    cid = client_id_str % 'stable'
+    client_id_dict['track'] = 'stable'
+    self.assertEqual(client_id_dict, common.ParseClientId(cid))
+
   def testParseClientIdOnCorp(self):
     """Tests ParseClientId with on_corp=1."""
     client_id_str, client_id_dict = self._GetClientIdTestData()
@@ -720,7 +730,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.OwnerManifestModification,
         'MemcacheWrappedGetAllFilter')
     common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
-        (('owner', client_id['owner']),)).AndReturn(owner_mods)
+        (('owner =', client_id['owner']),)).AndReturn(owner_mods)
 
     uuid_mod_one = self.mox.CreateMockAnything()
     uuid_mod_one.enabled = False
@@ -729,7 +739,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.UuidManifestModification,
         'MemcacheWrappedGetAllFilter')
     common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
-        (('uuid', client_id['uuid']),)).AndReturn(uuid_mods)
+        (('uuid =', client_id['uuid']),)).AndReturn(uuid_mods)
 
     computer_tags = ['footag1', 'footag2']
     self.mox.StubOutWithMock(common.models.Tag, 'GetAllTagNamesForKey')
@@ -743,9 +753,9 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.TagManifestModification,
         'MemcacheWrappedGetAllFilter')
     common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
-        (('tag_key_name', 'footag1'),)).AndReturn([])
+        (('tag_key_name =', 'footag1'),)).AndReturn([])
     common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
-        (('tag_key_name', 'footag2'),)).AndReturn(tag_mods)
+        (('tag_key_name =', 'footag2'),)).AndReturn(tag_mods)
 
     mock_plist = self.mox.CreateMockAnything()
     managed_installs = ['FooPkg', blocked_package_name]
@@ -818,13 +828,13 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
         (('os_version =', client_id['os_version']),)).AndReturn([])
     common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
-        (('owner', client_id['owner']),)).AndReturn([])
+        (('owner =', client_id['owner']),)).AndReturn([])
     common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
-        (('uuid', client_id['uuid']),)).AndReturn([])
+        (('uuid =', client_id['uuid']),)).AndReturn([])
     common.models.db.Key.from_path('Computer', client_id['uuid']).AndReturn('k')
     common.models.Tag.GetAllTagNamesForKey('k').AndReturn(['tag'])
     common.models.TagManifestModification.MemcacheWrappedGetAllFilter(
-        (('tag_key_name', 'tag'),)).AndReturn([])
+        (('tag_key_name =', 'tag'),)).AndReturn([])
 
     managed_installs = [
         'FooPkg', blocked_package_name, common.FLASH_PLUGIN_NAME]
@@ -888,9 +898,9 @@ class CommonModuleTest(test.RequestHandlerTest):
     common.models.OSVersionManifestModification.MemcacheWrappedGetAllFilter(
         (('os_version =', client_id['os_version']),)).AndReturn([])
     common.models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
-        (('owner', client_id['owner']),)).AndRaise([])
+        (('owner =', client_id['owner']),)).AndRaise([])
     common.models.UuidManifestModification.MemcacheWrappedGetAllFilter(
-        (('uuid', client_id['uuid']),)).AndRaise([])
+        (('uuid =', client_id['uuid']),)).AndRaise([])
     common.models.db.Key.from_path('Computer', client_id['uuid']).AndReturn('k')
     common.models.Tag.GetAllTagNamesForKey('k').AndReturn([])
 

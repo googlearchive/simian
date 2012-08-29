@@ -755,8 +755,10 @@ class PackageInfoTest(mox.MoxTestBase):
     filename = 'filename.dmg'
     name = 'foopkgname'
     catalogs = ['unstable', 'testing']
+    pkgdata_sha256 = 'abcd1234'
     xml = self._GetTestPackageInfoPlist(
-        {'filename': filename, 'name': name, 'catalogs': catalogs})
+        {'filename': filename, 'name': name, 'catalogs': catalogs,
+         'hash': pkgdata_sha256})
 
     pkginfo = self._UpdateTestHelper(
         filename, None, plist_xml=xml, create_new=True)
@@ -766,6 +768,7 @@ class PackageInfoTest(mox.MoxTestBase):
     # Test that catalogs were ignored/wiped.
     self.assertEqual([], pkginfo.catalogs)
     self.assertEqual([], pkginfo.plist['catalogs'])
+    self.assertEqual(pkgdata_sha256, pkginfo.plist['installer_item_hash'])
     self.mox.VerifyAll()
 
   def testUpdateFromPlistCreateNewTrueButPreexistingKeyName(self):

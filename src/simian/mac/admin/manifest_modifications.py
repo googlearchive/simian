@@ -130,6 +130,7 @@ class ManifestModifications(admin.AdminHandler):
         mod_type, target, munki_pkg_name, manifests=manifests,
         install_types=install_types, user=users.get_current_user())
     mod.put()
+    models.BaseManifestModification.ResetModMemcache(mod_type, target)
     msg = 'Manifest Modification successfully saved.'
     self.redirect(
         '/admin/manifest_modifications?mod_type=%s&msg=%s' % (mod_type, msg))

@@ -70,7 +70,6 @@ else:
 SERVER_HOSTNAME = settings.SERVER_HOSTNAME
 SERVER_PORT = settings.SERVER_PORT
 AUTH_DOMAIN = settings.AUTH_DOMAIN
-FACTER_CMD = ['/usr/local/bin/simianfacter']
 CLIENT_SSL_PATH = settings.CLIENT_SSL_PATH
 SEEK_SET = _stdio.SEEK_SET
 SEEK_CUR = _stdio.SEEK_CUR
@@ -995,7 +994,6 @@ class HttpsAuthClient(HttpsClient):
   PUPPET_CA_CERT = 'ca.pem'
   FACTER_CACHE_OSX_PATH = '/Library/Managed Installs/facter.cache'
   FACTER_CACHE_DEFAULT_PATH = None  # disabled
-  FACTER_CACHE_TIME = datetime.timedelta(hours=3)
 
   def __init__(self, *args, **kwargs):
     super(HttpsAuthClient, self).__init__(*args, **kwargs)
@@ -1131,49 +1129,6 @@ class HttpsAuthClient(HttpsClient):
     else:
       return os.path.isfile(filename)
 
-
-  def CacheFacterContents(self, open_fn=open):
-    """Run facter to cache its contents, and also return them.
-
-    Args:
-      open_fn: func, optional, supply an open() function
-    Returns:
-      dict, facter contents (which have now also been cached)
-    Raises:
-      FacterError: if an error occurs when loading or validating facter
-    """
-    facts = {}
-
-    logging.debug('CacheFacterContents()')
-    try:
-      stdout, unused_stderr = self._SudoExec(FACTER_CMD, expect_rc=0)
-    except SudoExecError, e:
-      logging.debug('CacheFacterContents(): could not run facter: %s', str(e))
-      raise FacterError(str(e))
-
-    # Iterate over the facter output and create a dictionary of the output
-    lines = stdout.splitlines()
-    for line in lines:
-      (key, unused_sep, value) = line.split(' ', 2)
-      value = value.strip()
-      facts[key] = value
-
-    logging.debug('CacheFacterContents(): read facter')
-
-
-    if self.FACTER_CACHE_PATH:
-      try:
-        f = open_fn(self.FACTER_CACHE_PATH, 'w')
-      except IOError:
-        return facts
-
-      f.write('\n'.join(lines))
-      f.close()
-      logging.debug(
-          'CacheFacterContents(): wrote cache %s', self.FACTER_CACHE_PATH)
-
-    return facts
-
   def GetFacter(self, open_fn=open):
     """Return facter contents.
 
@@ -1182,50 +1137,53 @@ class HttpsAuthClient(HttpsClient):
     Returns:
       dict, facter contents
     """
-    now = datetime.datetime.now()
+    if self.FACTER_CACHE_PATH is None:
+      return {}
+
+    if not os.path.isfile(self.FACTER_CACHE_PATH):
+      logging.info('GetFacter: facter cache file does not exist.')
+      return {}
+
     facter = {}
+    use_facter_cache = False
+    now = datetime.datetime.now()
+    try:
+      st = os.stat(self.FACTER_CACHE_PATH)
+      # if we are root, and the writer of the cache was not root, OR
+      # if we are not root, the cache was not written by root, and
+      # the cache was not written by ourselves
+      if (os.geteuid() == 0 and st.st_uid != 0) or (
+          os.geteuid() != 0 and st.st_uid != 0 and os.geteuid() != st.st_uid):
+        # don't trust this file.  be paranoid.
+        logging.info('GetFacter: Untrusted facter cache, ignoring')
+        use_facter_cache = False
+      else:
+        use_facter_cache = True
+        cache_mtime = datetime.datetime.fromtimestamp(st.st_mtime)
+        logging.debug('GetFacter: facter cache mtime is %s', cache_mtime)
+    except OSError, e:
+      logging.info('GetFacter: OSError from os.stat(): %s', str(e))
+      use_facter_cache = False
 
-    if self.FACTER_CACHE_PATH:
+    if use_facter_cache:
       try:
-        st = os.stat(self.FACTER_CACHE_PATH)
-        # if we are root, and the writer of the cache was not root, OR
-        # if we are not root, the cache was not written by root, and
-        # the cache was not written by ourselves
-        if (os.geteuid() == 0 and st.st_uid != 0) or (
-            os.geteuid() != 0 and st.st_uid != 0 and os.geteuid() != st.st_uid):
-          # don't trust this file.  be paranoid.
-          logging.debug('GetFacter: Untrusted facter cache, ignoring')
-          cache_mtime = datetime.datetime.fromtimestamp(0)
-        else:
-          cache_mtime = datetime.datetime.fromtimestamp(st.st_mtime)
-          logging.debug('GetFacter: facter cache mtime is %s', cache_mtime)
-      except OSError, e:
-        cache_mtime = datetime.datetime.fromtimestamp(0)
-
-      if now - cache_mtime < self.FACTER_CACHE_TIME:
-        try:
-          logging.debug('GetFacter: reading recent facter cache')
-          f = open_fn(self.FACTER_CACHE_PATH, 'r')
-          facter = {}
+        logging.debug('GetFacter: reading recent facter cache')
+        f = open_fn(self.FACTER_CACHE_PATH, 'r')
+        facter = {}
+        line = f.readline()
+        while line:
+          try:
+            (key, unused_sep, value) = line.split(' ', 2)
+            value = value.strip()
+            facter[key] = value
+          except ValueError:
+            logging.info('GetFacter: ignoring facter cache line: %s', line)
           line = f.readline()
-          while line:
-            try:
-              (key, unused_sep, value) = line.split(' ', 2)
-              value = value.strip()
-              facter[key] = value
-            except ValueError:
-              # invalid cache format, ignore the cache.
-              facter = {}
-              break
-            line = f.readline()
-          f.close()
-          logging.debug('GetFacter: read %d entities', len(facter))
-        except (EOFError, IOError), e:
-          logging.debug('GetFacter: error %s', str(e))
-          facter = {}
-
-    if not facter:
-      facter = self.CacheFacterContents(open_fn=open_fn)
+        f.close()
+        logging.debug('GetFacter: read %d entities', len(facter))
+      except (EOFError, IOError), e:
+        logging.warning('GetFacter: error %s', str(e))
+        facter = {}
 
     return facter
 

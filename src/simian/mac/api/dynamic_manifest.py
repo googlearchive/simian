@@ -100,6 +100,8 @@ class DynamicManifest(handlers.AuthenticationHandler, webapp.RequestHandler):
     except db.Error:
       logging.exception('error on DynamicManifest.put()')
       raise
+    models.BaseManifestModification.ResetModMemcache(
+        self.mod_type, self.target)
 
   def get(self, mod_type=None, target=None, pkg_name=None):
     """DynamicManifest get handler.

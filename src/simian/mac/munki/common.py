@@ -19,6 +19,7 @@
 
 
 
+import base64
 import datetime
 import logging
 import os
@@ -432,6 +433,12 @@ def ParseClientId(client_id, uuid=None):
     Dict. Client id string "foo=bar|key=|one=1" yields
         {'foo': 'bar', 'key': None, 'one': '1'}.
   """
+  if client_id and client_id.find('\n') > -1:
+    logging.warning(
+        'ParseClientId: client_id has newline: %s',
+        base64.b64encode(client_id))
+    client_id = client_id.replace('\n', '_')
+
   # Convert str input to unicode.
   if type(client_id) is str:
     try:
@@ -512,7 +519,7 @@ def SetPanicMode(mode, enabled):
 
 
 def IsPanicModeNoPackages():
-  """Returns True if Macsimian is in no package delivery mode."""
+  """Returns True if in no package delivery mode."""
   return IsPanicMode(PANIC_MODE_NO_PACKAGES)
 
 
@@ -664,10 +671,10 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
           (('os_version =', client_id['os_version']),))
 
   owner_mods = models.OwnerManifestModification.MemcacheWrappedGetAllFilter(
-      (('owner', client_id['owner']),))
+      (('owner =', client_id['owner']),))
 
   uuid_mods = models.UuidManifestModification.MemcacheWrappedGetAllFilter(
-      (('uuid', client_id['uuid']),))
+      (('uuid =', client_id['uuid']),))
 
   tag_mods = []
   if client_id['uuid']:  # not set if viewing a base manifest.
@@ -677,7 +684,7 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
       # NOTE(user): if we feel most computers will have tags, it might make
       #             sense to regularly fetch and cache all mods.
       for tag in computer_tags:
-        t = (('tag_key_name', tag),)
+        t = (('tag_key_name =', tag),)
         tag_mods.extend(
             models.TagManifestModification.MemcacheWrappedGetAllFilter(t))
 
