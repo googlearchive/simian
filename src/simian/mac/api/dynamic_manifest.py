@@ -88,7 +88,7 @@ class DynamicManifest(handlers.AuthenticationHandler, webapp.RequestHandler):
 
     mod = self.model(key_name=self.key_name)
     mod.enabled = True
-    setattr(mod, self.mod_type, self.target)
+    mod.target = self.target
     mod.value = self.pkg_name
     mod.manifests = self.manifests
     mod.install_types = self.install_types
