@@ -8,7 +8,7 @@ SIMIAN_VERSION=2.0.3
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=0.8.3.1634.0
+MUNKI_VERSION=0.8.3.1663.0
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.dmg
 PYTHON_VERSION=2.5
@@ -110,7 +110,7 @@ server_config:
 client_config: settings_check
 
 ${MUNKIFILE}:
-	curl -o $@ http://munki.googlecode.com/files/$@
+	curl -o $@ http://munkibuilds.org/${MUNKI_VERSION}/$@
 	hdiutil verify "$@" || (rm -f "$@" ; exit 1)
 
 add_munkicontents: os_check ${MUNKIFILE}
