@@ -21,6 +21,7 @@
 
 
 from google.appengine.ext import db
+
 from simian.mac.common import util
 from simian.mac.common import compress
 

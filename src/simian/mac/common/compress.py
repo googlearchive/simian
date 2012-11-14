@@ -130,10 +130,10 @@ class CompressedText(object):
     """Returns string roughly representing this instances content."""
     s = str(self)         # note that this decompresses to get the length
     input_bytes = len(s)
-    hash = hashlib.sha256()
-    hash.update(s)
-    hash = hash.hexdigest()
+    hash_obj = hashlib.sha256()
+    hash_obj.update(s)
+    hash_obj = hash_obj.hexdigest()
     compressed_bytes = len(self.Compressed())
     r = 'CompressedText(%s %db->%db, %s)' % (
-        hash, input_bytes, compressed_bytes, self._encoding)
+        hash_obj, input_bytes, compressed_bytes, self._encoding)
     return r

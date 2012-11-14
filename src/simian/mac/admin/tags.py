@@ -22,7 +22,9 @@
 
 
 import urllib
+
 from google.appengine.ext import db
+
 from simian.mac import admin
 from simian.mac import models
 from simian.mac.common import auth
@@ -34,17 +36,17 @@ class Tags(admin.AdminHandler):
   def get(self):
     """GET handler."""
     can_mod_tags = (
-        auth.IsAdminUser() or auth.IsSupportUser or auth.IsSecurityUser())
+        self.IsAdminUser() or auth.IsSupportUser or auth.IsSecurityUser())
     tags = models.Tag.all()
     tags = sorted(tags, key=lambda t: unicode.lower(t.key().name()))
-    d = {'tags': tags, 'can_mod_tags': auth.IsAdminUser(),
+    d = {'tags': tags, 'can_mod_tags': self.IsAdminUser(),
          'report_type': 'tags'}
     self.Render('tags.html', d)
 
   def post(self):
     """POST handler."""
     can_mod_tags = (
-        auth.IsAdminUser() or auth.IsSupportUser or auth.IsSecurityUser())
+        self.IsAdminUser() or auth.IsSupportUser or auth.IsSecurityUser())
     if not can_mod_tags:
       return
 

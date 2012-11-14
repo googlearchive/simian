@@ -68,7 +68,8 @@ class UploadFileHandlerTest(test.RequestHandlerTest):
     mock_computer.put().AndReturn(None)
 
     uploadfile.deferred.defer(
-        uploadfile.SendNotificationEmail, notify_addresses_list, mock_computer)
+        uploadfile.SendNotificationEmail, notify_addresses_list, mock_computer,
+        uploadfile.settings.SERVER_HOSTNAME)
 
     self.mox.ReplayAll()
     self.c.put(file_type=file_type, file_name=file_name)

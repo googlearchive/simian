@@ -34,7 +34,7 @@ class ACLGroups(admin.AdminHandler):
 
   def get(self, group=None):
     """GET handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
 
@@ -55,7 +55,7 @@ class ACLGroups(admin.AdminHandler):
 
   def post(self, group=None):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
 

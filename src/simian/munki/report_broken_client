@@ -11,18 +11,47 @@ flight_import, munkicommon, etc.
 
 
 
+import optparse
 
 import flight_common
 
 
 def main():
-  return_code, stdout, stderr = flight_common.Exec(['facter', '-p'])
-  details = 'Facter Return Code: %s\n\nStdOut: %s\n\nStdErr%s' % (
-      return_code, stdout, stderr)
+  optparser = optparse.OptionParser()
+  optparser.add_option(
+      '-r', '--reason', dest='reason', default='Unknown',
+      help='Reason for brokenness.')
+  optparser.add_option(
+      '-d', '--detail-file', dest='detail_file',
+      help='File with error details.')
+  options, args = optparser.parse_args()
 
+  detail_parts = []
+
+  if options.detail_file:
+    try:
+      detail_parts.append(
+          'Failure detail:\n%s' % open(options.detail_file, 'r').read())
+    except IOError as e:
+      details_parts.append(
+          'Could not read detail file %r:\n%s' % (options.detail_file, e))
+
+  return_code, stdout, stderr = flight_common.Exec(
+      ['facter', '-p'], timeout=60, waitfor=0.5)
+  facter_parts = [
+      'Facter Return Code: %s' % return_code,
+      'Facter StdOut:\n%s' % stdout,
+  ]
+  if stderr:
+    facter_parts.append('Facter StdErr:\n%s' % stderr)
+  detail_parts.append('\n\n'.join(facter_parts))
+
+  details = ('\n\n' + ('*' * 60) + '\n\n').join(
+      [part.strip() for part in detail_parts])
+  params = {'details': details, 'reason': options.reason}
 
   flight_common.PostReportToServer(
-      'broken_client', {'details': details}, login=True)
+      'broken_client', params, login=True)
   print 'Reported broken client to server.'
 
 

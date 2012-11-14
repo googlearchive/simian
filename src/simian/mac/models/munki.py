@@ -447,6 +447,7 @@ class PackageInfo(BaseMunkiModel):
     pkginfo.name = plist['name']
     changed_catalogs = set(pkginfo.catalogs + plist['catalogs'])
     pkginfo.catalogs = plist['catalogs']
+    pkginfo.pkgdata_sha256 = plist['installer_item_hash']
     try:
       cls._PutAndLogPackageInfoUpdate(pkginfo, original_plist, changed_catalogs)
     except PackageInfoUpdateError:

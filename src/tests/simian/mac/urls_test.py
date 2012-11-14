@@ -45,14 +45,12 @@ class SimianMainModuleTest(mox.MoxTestBase):
 
   def testStructure(self):
     """Test the overall structure of the module."""
-    self.assertTrue(hasattr(urls, 'application'))
-    self.assertTrue(hasattr(urls, 'main'))
-    self.assertEqual(types.FunctionType, type(urls.main))
+    self.assertTrue(hasattr(urls, 'app'))
     self.assertEqual(
-        urls.webapp.WSGIApplication, type(urls.application))
+        urls.webapp2.WSGIApplication, type(urls.app))
 
   def testWgsiAppInitArgs(self):
-    """Test the arguments that are supplied to setup the application var."""
+    """Test the arguments that are supplied to setup the app var."""
 
     def wsgiapp_hook(*args, **kwargs):
       o = self.mox.CreateMockAnything()
@@ -62,12 +60,12 @@ class SimianMainModuleTest(mox.MoxTestBase):
       return o
 
     self.stubs.Set(
-        urls.webapp, 'WSGIApplication', wsgiapp_hook)
+        urls.webapp2, 'WSGIApplication', wsgiapp_hook)
     self.mox.ReplayAll()
     reload(urls)
-    app = urls.application
+    app = urls.app
     self.assertNotEqual(
-        urls.webapp.WSGIApplication, type(app))
+        urls.webapp2.WSGIApplication, type(app))
     self.assertTrue(hasattr(app, 'set_by_test_hook'))
     self.assertTrue(type(app.args) is types.TupleType)
     self.assertTrue(type(app.args[0]) is types.ListType)
@@ -75,7 +73,7 @@ class SimianMainModuleTest(mox.MoxTestBase):
 
     for (regex, cls) in app.args[0]:
       unused = re.compile(regex)
-      self.assertTrue(issubclass(cls, urls.webapp.RequestHandler))
+      self.assertTrue(issubclass(cls, urls.webapp2.RequestHandler))
 
     if 'debug' in app.kwargs:
       self.assertTrue(type(app.kwargs['debug']) is types.BooleanType)

@@ -669,29 +669,34 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     new_bar_success.package = 'bar'
     new_bar_success.applesus = False
     new_bar_success.duration_seconds = 10
+    new_bar_success2 = self.mox.CreateMockAnything()
+    new_bar_success2.package = 'bar'
+    new_bar_success2.applesus = False
+    new_bar_success2.duration_seconds = 20
     new_zzz = self.mox.CreateMockAnything()
     new_zzz.package = 'zzz'
     new_zzz.applesus = False
     new_zzz.duration_seconds = None
 
-    new_installs = [new_foo, new_bar, new_bar_success, new_zzz]
+    new_installs = [
+        new_foo, new_bar, new_bar_success, new_zzz, new_bar_success2]
 
     new_install_counts = {
         'foo': {
             'install_count': 2,
             'install_fail_count': 1,
             'applesus': True,
-            'duration_count': 2,
-            'duration_total_seconds': 50,
-            'duration_seconds_avg': int((50)/2),
+            'duration_count': 1,
+            'duration_total_seconds': 30,
+            'duration_seconds_avg': 30,
          },
         'bar': {
-            'install_count': 3,
+            'install_count': 4,
             'install_fail_count': 2,
             'applesus': False,
             'duration_count': 2,
-            'duration_total_seconds': 20,
-            'duration_seconds_avg': 10,
+            'duration_total_seconds': 30,
+            'duration_seconds_avg': 30 / 2,
          },
         'zzz': {
             'install_count': 1,
@@ -706,6 +711,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     new_bar.IsSuccess().AndReturn(False)
     new_bar_success.IsSuccess().AndReturn(True)
     new_zzz.IsSuccess().AndReturn(True)
+    new_bar_success2.IsSuccess().AndReturn(True)
 
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.gae_util, 'ObtainLock')
@@ -793,7 +799,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
              'total': 2,
          },
     }
-    reports_cache.models.ReportsCache.SetTrendingInstalls(1, expected_trending)
+    reports_cache.models.ReportsCache.SetTrendingInstalls(
+        1, mox.SameElementsAs(expected_trending))
 
     self.mox.ReplayAll()
     reports_cache._GenerateTrendingInstallsCache(1)

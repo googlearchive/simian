@@ -58,7 +58,7 @@ SIMIAN_ENTRY_POINTS = ['%s = simian.stubs:%s' % s for s in SIMIAN_STUBS]
 
 setup(
   name = 'simian',
-  version = '2.0.3',
+  version = '2.1',
   url = 'http://code.google.com/p/simian',
   license = 'Apache 2.0',
   description = 'An App Engine-based client & server component for Munki',
@@ -78,7 +78,7 @@ setup(
 
   setup_requires = REQUIRE,
   install_requires = REQUIRE,
-  tests_require = REQUIRE + ['mox>=0.5.3', 'webob', 'django'],
+  tests_require = REQUIRE + ['mox>=0.5.3', 'webapp2', 'django'],
 
   google_test_dir = 'src/tests',
 )

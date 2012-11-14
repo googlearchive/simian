@@ -19,11 +19,9 @@
 
 
 
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
+import webapp2
 
 from simian import settings
-from simian.mac.api import urls as api_urls
 from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import uauth
 from simian.mac.munki.handlers import applesus
@@ -37,7 +35,7 @@ from simian.mac.munki.handlers import uploadfile
 from simian.mac.munki.handlers import uploadpkg
 
 
-class RedirectToAdmin(webapp.RequestHandler):
+class RedirectToAdmin(webapp2.RequestHandler):
   """Redirect the request to the Admin page."""
 
   def get(self):
@@ -45,8 +43,7 @@ class RedirectToAdmin(webapp.RequestHandler):
     self.redirect('/admin')
 
 
-application = webapp.WSGIApplication(
-    api_urls.URLS + [
+app = webapp2.WSGIApplication([
     # GET Apple Software Update Service catalog with header client-id.
     (r'/applesus/?$', applesus.AppleSUS),
     # GET/PUT Apple Software Update Service catalogs.
@@ -77,12 +74,4 @@ application = webapp.WSGIApplication(
     (r'/repair/([\w\-\_\.\=\|\%]+)$', pkgs.ClientRepair),
     (r'/_ah/warmup', RedirectToAdmin),
     (r'/?$', RedirectToAdmin),
-    ], debug=settings.DEBUG)
-
-
-def main():
-    run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-    main()
+], debug=settings.DEBUG)

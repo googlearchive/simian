@@ -23,6 +23,7 @@
 import ctypes
 import ctypes.util
 import datetime
+import errno
 import fcntl
 import logging
 import os
@@ -34,6 +35,7 @@ import signal
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import urllib
 import urlparse
@@ -73,6 +75,7 @@ LEGACY_INSTALL_RESULTS_STRING_REGEX = (
     '^Install of (.*)-(\d+.*): (SUCCESSFUL|FAILED with return code: (\-?\d+))$')
 # Global for holding the auth token to be used to communicate with the server.
 AUTH1_TOKEN = None
+HUNG_MSU_TIMEOUT = datetime.timedelta(seconds=2*60*60)
 
 
 DEBUG = False
@@ -343,7 +346,7 @@ def CacheFacterContents():
     dict, facter contents (which have now also been cached)
   """
   return_code, stdout, unused_stderr = Exec(
-      FACTER_CMD, timeout=60, waitfor=0.5)
+      FACTER_CMD, timeout=300, waitfor=0.5)
 
   # If execution of factor was successful build the client identifier
   if return_code != 0:
@@ -964,11 +967,76 @@ def UploadClientLogFiles():
   params.append('--uploadfile')
   params.append('/var/log/install.log')
 
+  # Upload output of 'ps -ef'.
+  return_code, stdout, _ = Exec(['ps', '-ef'])
+  if not return_code:
+    path = os.path.join(tempfile.mkdtemp(dir='/tmp'), 'ps_ef_output')
+    f = open(path, 'w')
+    f.write(stdout)
+    f.close()
+    params.append('--uploadfile')
+    params.append(path)
+
   # Inform simianauth which type of file(s) we're uploading.
   params.append('--uploadfiletype')
   params.append('log')
 
   PerformServerRequest(params)
+
+
+def KillHungManagedSoftwareUpdate():
+  """Kill hung managedsoftwareupdate instances, if any can be found.
+
+  Returns:
+    True if a managedsoftwareupdate instance was killed, False otherwise.
+  """
+  rc, stdout, stderr = Exec(['/bin/ps', '-eo', 'pid,ppid,lstart,command'])
+  if rc != 0 or not stdout or stderr:
+    return False
+
+  pids = {}
+  msu_pids = []
+
+  for l in stdout.splitlines():
+    a = l.split()
+    if len(a) < 8:
+      continue
+
+    try:
+      pids[int(a[0])] = {
+          'ppid': int(a[1]),
+          'lstart': datetime.datetime(*time.strptime(' '.join(a[2:7]))[0:7]),
+          'command': '\t'.join(a[7:]),
+      }
+    except ValueError:
+      continue
+
+    if re.search(r'(MacOS\/Python|python)', a[7], re.IGNORECASE):
+      if len(a) > 8 and a[8].find('managedsoftwareupdate') > -1:
+        msu_pids.append(int(a[0]))
+
+  now = datetime.datetime.now()
+  kill = []
+
+  for pid in msu_pids:
+    if (now - pids[pid]['lstart']) >= HUNG_MSU_TIMEOUT:
+      for opid in pids:
+        if pids[opid]['ppid'] == pid:
+          kill.append(opid)  # child
+      kill.append(pid)  # parent last
+
+  for pid in kill:
+    if pid == 1:  # sanity check
+      continue
+    try:
+      logging.warning('Sending SIGKILL to pid %d', pid)
+      os.kill(pid, signal.SIGKILL)
+    except OSError, e:
+      # if the process died between ps and now we're OK, otherwise log error.
+      if e.args[0] != errno.ESRCH:
+        logging.warning('OSError on kill(%d, SIGKILL): %s', pid, str(e))
+
+  return bool(len(kill))
 
 
 def RepairClient():
@@ -1015,3 +1083,7 @@ def RepairClient():
 
   unused_return_code, unused_stdout, unused_stderr = Exec(
       ['/usr/bin/hdiutil', 'detach', mount_point, '-force'])
+
+  # If we've just repaired, kill any hung managedsofwareupdate instances, as
+  # that may be the main reason we needed to repair in the first place.
+  KillHungManagedSoftwareUpdate()

@@ -22,14 +22,15 @@
 import datetime
 import logging
 import urllib
+import webapp2
 
 try:
   import icalendar
 except ImportError:
   icalendar = None
 
-from google.appengine.ext import webapp
 from google.appengine.ext import db
+
 from simian import settings
 from simian.mac import common
 from simian.mac import models
@@ -43,7 +44,7 @@ class Error(Exception):
   """Class for domain specific exceptions."""
 
 
-class InfoHandler(webapp.RequestHandler):
+class InfoHandler(webapp2.RequestHandler):
   """Handler for /api/info/*."""
 
   def _DisplayAppleSusPromoCalendar(self):

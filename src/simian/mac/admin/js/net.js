@@ -125,6 +125,26 @@ goog.exportSymbol('simian.deleteClientLogFile', simian.deleteClientLogFile);
 
 
 /**
+ * Uses XHR to delete a manifest modification.
+ * @param {Element} deleteButton The delete button clicked to call this func.
+ */
+simian.deleteManifestModification = function(deleteButton) {
+  var key = deleteButton.name;
+  var success = function(e) {
+    var rowIndex = deleteButton.parentNode.parentNode.rowIndex;
+    var table = deleteButton.parentNode.parentNode.parentNode;
+    table.deleteRow(rowIndex);
+  };
+  var failure = function(e) {
+    alert('Failure deleting the manifest mod; please try again');
+  };
+  var params = 'delete=1&key=' + key
+  simian.xhr('/admin/manifest_modifications', params, 'POST', success, failure);
+};
+goog.exportSymbol('simian.deleteManifestModification', simian.deleteManifestModification);
+
+
+/**
  * Toggles a manifest modification between enabled/disabled.
  */
 simian.toggleManifestModification = function(key, button) {

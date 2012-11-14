@@ -22,12 +22,28 @@
 import datetime
 import logging
 logging.basicConfig(filename='/dev/null')
+import urlparse
 
 from google.apputils import app
 from tests.simian.mac.common import test
 import mox
 import stubout
 from simian.mac.cron import applesus
+
+
+class AppleSusModuleTest(mox.MoxTestBase):
+  def testCatalogsDictionary(self):
+    """Test global CATALOGS value."""
+    self.assertTrue(hasattr(applesus, 'CATALOGS'))
+    self.assertTrue(type(applesus.CATALOGS) is type({}))
+
+    for k in applesus.CATALOGS:
+      # Key should be e.g. "10.6"
+      self.assertTrue(k.startswith('10.'), 'CATALOGS key strange')
+      p = urlparse.urlparse(applesus.CATALOGS[k])
+      self.assertEqual(len(p), 6)
+      self.assertEqual(p[0], 'https')
+      self.assertTrue(p[1].endswith('.apple.com'))
 
 
 class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
@@ -37,6 +53,78 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
 
   def GetTestClassModule(self):
     return applesus
+
+  def testUpdateCatalogIfChanged(self):
+    """Test _UpdateCatalogIfChanged()."""
+    self.mox.StubOutWithMock(applesus.urlfetch, 'fetch')
+    self.mox.StubOutWithMock(self.c, '_UpdateCatalog')
+
+    deadline = 30
+    xml = 'this is xml'
+    catalog = self.mox.CreateMockAnything()
+    catalog.last_modified_header = 'lmh'
+    headers = {'If-Modified-Since': catalog.last_modified_header}
+    response = self.mox.CreateMockAnything()
+    response.status_code = 200
+    response.content = xml
+    response.headers = {'Last-Modified': 'hds'}
+
+    url = applesus.CATALOGS.values()[0]
+
+    applesus.urlfetch.fetch(
+        url, headers=headers, deadline=deadline,
+        validate_certificate=True).AndReturn(response)
+    self.c._UpdateCatalog(xml, entity=catalog, last_modified='hds')
+
+    self.mox.ReplayAll()
+    self.assertTrue(self.c._UpdateCatalogIfChanged(catalog, url))
+    self.mox.VerifyAll()
+
+  def testUpdateCatalogIfChangedWhen304(self):
+    """Test _UpdateCatalogIfChanged()."""
+    self.mox.StubOutWithMock(applesus.urlfetch, 'fetch')
+    self.mox.StubOutWithMock(self.c, '_UpdateCatalog')
+
+    deadline = 30
+    catalog = self.mox.CreateMockAnything()
+    catalog.last_modified_header = 'lmh'
+    headers = {'If-Modified-Since': catalog.last_modified_header}
+    response = self.mox.CreateMockAnything()
+    response.status_code = 304
+
+    url = applesus.CATALOGS.values()[0]
+
+    applesus.urlfetch.fetch(
+        url, headers=headers, deadline=deadline,
+        validate_certificate=True).AndReturn(response)
+
+    self.mox.ReplayAll()
+    self.assertFalse(self.c._UpdateCatalogIfChanged(catalog, url))
+    self.mox.VerifyAll()
+
+  def testUpdateCatalogIfChangedWhenOtherStatusCode(self):
+    """Test _UpdateCatalogIfChanged()."""
+    self.mox.StubOutWithMock(applesus.urlfetch, 'fetch')
+    self.mox.StubOutWithMock(self.c, '_UpdateCatalog')
+
+    deadline = 30
+    catalog = self.mox.CreateMockAnything()
+    catalog.last_modified_header = 'lmh'
+    headers = {'If-Modified-Since': catalog.last_modified_header}
+    response = self.mox.CreateMockAnything()
+    response.status_code = 404
+
+    url = applesus.CATALOGS.values()[0]
+
+    applesus.urlfetch.fetch(
+        url, headers=headers, deadline=deadline,
+        validate_certificate=True).AndReturn(response)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        applesus.urlfetch.DownloadError, self.c._UpdateCatalogIfChanged,
+        catalog, url)
+    self.mox.VerifyAll()
 
   def testUpdateProductDataFromCatalog(self):
     """Tests _UpdateProductDataFromCatalog()."""
@@ -188,6 +276,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
 
     new_products = ['new1', 'new2']
     deprecated_products = ['old1', 'old2']
+    self.mox.StubOutWithMock(applesus.models.AdminAppleSUSProductLog, 'Log')
     self.mox.StubOutWithMock(applesus.plist, 'ApplePlist')
     self.mox.StubOutWithMock(self.c, '_UpdateProductDataFromCatalog')
     self.mox.StubOutWithMock(self.c, '_DeprecateOrphanedProducts')
@@ -204,6 +293,11 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
 
     applesus.applesus.GenerateAppleSUSCatalog(
         os_version, applesus.common.UNSTABLE).AndReturn(None)
+
+    applesus.models.AdminAppleSUSProductLog.Log(
+        new_products, 'new for %s' % os_version)
+    applesus.models.AdminAppleSUSProductLog.Log(
+        deprecated_products, 'deprecated for %s' % os_version)
 
     self.mox.ReplayAll()
     self.c._ProcessCatalogAndNotifyAdmins(mock_catalog, os_version)
@@ -223,16 +317,19 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
     today = datetime.datetime.utcnow().date()
     mock_product_promote_testing= self.mox.CreateMockAnything()
     mock_product_promote_testing.tracks = ['unstable']
+    mock_product_promote_testing.product_id = 'fooid'
     mock_product_promote_testing.manual_override = False
     mock_product_promote_testing.mtime = 'testingpromotetime'
 
     mock_product_toonew = self.mox.CreateMockAnything()
     mock_product_toonew.tracks = ['unstable']
+    mock_product_toonew.product_id = 'fooid2'
     mock_product_toonew.manual_override = False
     mock_product_toonew.mtime = 'toonewtime'
 
     mock_product_promote_stable = self.mox.CreateMockAnything()
     mock_product_promote_stable.tracks = ['unstable', applesus.common.TESTING]
+    mock_product_promote_stable.product_id = 'fooid3'
     mock_product_promote_stable.manual_override = False
     mock_product_promote_stable.mtime = 'stablepromotetime'
 
@@ -241,7 +338,7 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
 
     self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'all')
     self.mox.StubOutWithMock(applesus.applesus, 'GenerateAppleSUSCatalogs')
-    self.mox.StubOutWithMock(applesus.models, 'AdminAppleSUSProductLog')
+    self.mox.StubOutWithMock(applesus.models.AdminAppleSUSProductLog, 'Log')
     self.mox.StubOutWithMock(applesus.applesus, 'GetAutoPromoteDate')
 
     promotions = {}
@@ -256,12 +353,6 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
         applesus.common.TESTING, mock_product_promote_testing).AndReturn(
             today)
     mock_product_promote_testing.put().AndReturn(None)
-    mock_log = self.mox.CreateMockAnything()
-    applesus.models.AdminAppleSUSProductLog(
-        product_id=mock_product_promote_testing.product_id,
-        action='auto-promote to %s' % applesus.common.TESTING,
-        tracks=mock_product_promote_testing.tracks).AndReturn(mock_log)
-    mock_log.put().AndReturn(None)
     promotions[applesus.common.TESTING] = [mock_product_promote_testing]
 
     # the testing product with too new of a datetime does not get promoted.
@@ -278,15 +369,12 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
             today - datetime.timedelta(days=3))
     mock_product_promote_stable.put().AndReturn(None)
     mock_log = self.mox.CreateMockAnything()
-    applesus.models.AdminAppleSUSProductLog(
-        product_id=mock_product_promote_stable.product_id,
-        action='auto-promote to %s' % applesus.common.STABLE,
-        tracks=mock_product_promote_stable.tracks).AndReturn(mock_log)
-    mock_log.put().AndReturn(None)
     promotions[applesus.common.STABLE] = [mock_product_promote_stable]
 
     for track in [applesus.common.TESTING, applesus.common.STABLE]:
       applesus.applesus.GenerateAppleSUSCatalogs(track)
+      applesus.models.AdminAppleSUSProductLog.Log(
+          promotions[track], 'auto-promote to %s' % track).AndReturn(None)
 
     self.mox.StubOutWithMock(self.c, '_NotifyAdminsOfAutoPromotions')
     self.c._NotifyAdminsOfAutoPromotions(promotions).AndReturn(None)

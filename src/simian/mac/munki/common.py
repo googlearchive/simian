@@ -24,11 +24,13 @@ import datetime
 import logging
 import os
 import time
+
 from google.appengine.ext import db
 from google.appengine.ext import deferred
 from google.appengine.api import memcache
 from google.appengine import runtime
 from google.appengine.runtime import apiproxy_errors
+
 from simian.mac import models
 from simian.mac import common
 from simian.mac.munki import plist as plist_module
@@ -321,18 +323,15 @@ def WriteClientLog(model, uuid, **kwargs):
   return kwargs['computer']
 
 
-def WriteBrokenClient(uuid, details):
-  """Parses facter facts and saves a BrokenClient entity.
-
-  This point of doing this over simply using WriteClientLog is that we have a
-  single entry for each unique broken client instead of a entry for each report,
-  and we can manually mark them fixed to exclude them from a report of currently
-  broken clients.
+def WriteBrokenClient(uuid, reason, details):
+  """Saves a BrokenClient entity to Datastore for the given UUID.
 
   Args:
-    uuid: str uuid of client.
-    details: str output of facter.
+    uuid: str, uuid of client.
+    reason: str, short description of broken state the client is reporting.
+    details: str, details or debugging output of the broken report.
   """
+  # If the details string contains facter output, parse it.
   facts = {}
   lines = details.splitlines()
   for line in lines:
@@ -343,15 +342,17 @@ def WriteBrokenClient(uuid, details):
     value = value.strip()
     facts[key] = value
 
+  # Update the existing, or create a new ComputerClientBroken entity.
   uuid = common.SanitizeUUID(uuid)
   bc = models.ComputerClientBroken.get_or_insert(uuid)
+  bc.broken_datetimes.append(datetime.datetime.utcnow())
+  bc.reason = reason
+  bc.details = details
+  bc.fixed = False  # Previously fixed computers will show up again.
   bc.hostname = facts.get('hostname', '')
   bc.owner = facts.get('primary_user', '')
   bc.serial = facts.get('sp_serial_number', '')
-  bc.details = details
-  bc.fixed = False
   bc.uuid = uuid
-  bc.broken_datetimes.append(datetime.datetime.utcnow())
   bc.put()
 
 

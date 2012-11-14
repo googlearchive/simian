@@ -353,7 +353,7 @@ class PackageInfoTest(mox.MoxTestBase):
     """String concatenates a description and returns test plist xml."""
     if not d:
       d = {}
-    for k in ['desc', 'name', 'hash', 'version']:
+    for k in ['desc', 'name', 'installer_item_hash', 'version']:
       if k not in d:
         d[k] = 'foo%s' % k
 
@@ -368,7 +368,7 @@ class PackageInfoTest(mox.MoxTestBase):
     return (
         '<plist><dict><key>name</key><string>%(name)s</string>'
         '<key>version</key><string>%(version)s</string>'
-        '<key>installer_item_hash</key><string>%(hash)s</string>'
+        '<key>installer_item_hash</key><string>%(installer_item_hash)s</string>'
         '<key>installer_item_location</key><string>filename.dmg</string>'
         '<key>catalogs</key><array>%(catalogs)s</array>'
         '<key>description</key><string>%(desc)s</string></dict></plist>' % d)
@@ -720,7 +720,7 @@ class PackageInfoTest(mox.MoxTestBase):
     new_hash = 'zomgHASH'
     new_catalogs = ['unstable', 'testing', 'stable']
     xml = self._GetTestPackageInfoPlist(
-        {'desc': new_desc, 'name': new_name, 'hash': new_hash,
+        {'desc': new_desc, 'name': new_name, 'installer_item_hash': new_hash,
          'catalogs': new_catalogs})
 
     pkginfo = self._UpdateTestHelper('filename.dmg', p, plist_xml=xml)
@@ -729,6 +729,7 @@ class PackageInfoTest(mox.MoxTestBase):
     self.assertEqual(new_name, pkginfo.plist['name'])
     self.assertEqual(new_desc, pkginfo.plist['description'])
     self.assertEqual(new_hash, pkginfo.plist['installer_item_hash'])
+    self.assertEqual(new_hash, pkginfo.pkgdata_sha256)
     self.assertEqual(new_catalogs, pkginfo.catalogs)
     self.assertEqual(new_catalogs, pkginfo.plist['catalogs'])
     self.mox.VerifyAll()
@@ -758,7 +759,7 @@ class PackageInfoTest(mox.MoxTestBase):
     pkgdata_sha256 = 'abcd1234'
     xml = self._GetTestPackageInfoPlist(
         {'filename': filename, 'name': name, 'catalogs': catalogs,
-         'hash': pkgdata_sha256})
+         'installer_item_hash': pkgdata_sha256})
 
     pkginfo = self._UpdateTestHelper(
         filename, None, plist_xml=xml, create_new=True)
@@ -769,6 +770,7 @@ class PackageInfoTest(mox.MoxTestBase):
     self.assertEqual([], pkginfo.catalogs)
     self.assertEqual([], pkginfo.plist['catalogs'])
     self.assertEqual(pkgdata_sha256, pkginfo.plist['installer_item_hash'])
+    self.assertEqual(pkgdata_sha256, pkginfo.pkgdata_sha256)
     self.mox.VerifyAll()
 
   def testUpdateFromPlistCreateNewTrueButPreexistingKeyName(self):

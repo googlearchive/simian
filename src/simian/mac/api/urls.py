@@ -19,12 +19,14 @@
 
 
 
-from google.appengine.ext import webapp
+import webapp2
+
+from simian import settings
 from simian.mac.api import dynamic_manifest
 from simian.mac.api import info
 
 
-class ServeHello(webapp.RequestHandler):
+class ServeHello(webapp2.RequestHandler):
   """Serve hello page."""
 
   def get(self):
@@ -32,7 +34,7 @@ class ServeHello(webapp.RequestHandler):
     self.response.out.write('<p>You\'ve reached the Simian API!</p>')
 
 
-URLS = [
+app = webapp2.WSGIApplication([
     (r'/api/dynamic_manifest/?', dynamic_manifest.DynamicManifest),
     (r'/api/dynamic_manifest/([^/]+)/([^/]+)/?',
      dynamic_manifest.DynamicManifest),
@@ -43,4 +45,4 @@ URLS = [
     (r'/api/info/([^/]+)/?',
      info.InfoHandler),
     (r'/api/?$', ServeHello),
-]
+], debug=settings.DEBUG)

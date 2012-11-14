@@ -26,11 +26,10 @@ Classes:
 
 import datetime
 import logging
-import os
 import time
+import webapp2
 
 from google.appengine.ext import deferred
-from google.appengine.ext import webapp
 from google.appengine.api import taskqueue
 
 from simian.mac import models
@@ -42,7 +41,7 @@ TRENDING_INSTALLS_LIMIT = 5
 RUNTIME_MAX_SECS = 30
 
 
-class ReportsCache(webapp.RequestHandler):
+class ReportsCache(webapp2.RequestHandler):
   """Class to cache reports on a regular basis."""
 
   USER_EVENTS = [
@@ -213,9 +212,9 @@ class ReportsCache(webapp.RequestHandler):
   def _GeneratePendingCounts(self):
     """Generates a dictionary of all install names and their pending count."""
     d = {}
-    for p in models.PackageInfo.all():
-      d[p.munki_name] = models.Computer.AllActive(keys_only=True).filter(
-          'pkgs_to_install =', p.munki_name).count(999999)
+    for munki_name in [p.munki_name for p in models.PackageInfo.all()]:
+      d[munki_name] = models.Computer.AllActive(keys_only=True).filter(
+          'pkgs_to_install =', munki_name).count(999999)
     models.ReportsCache.SetPendingCounts(d)
 
 
@@ -261,23 +260,23 @@ def _GenerateInstallCounts():
       if install.IsSuccess():
         pkgs[pkg_name]['install_count'] = (
             pkgs[pkg_name].setdefault('install_count', 0) + 1)
+        # (re)calculate avg_duration_seconds for this package.
+        if 'duration_seconds_avg' not in pkgs[pkg_name]:
+          pkgs[pkg_name]['duration_count'] = 0
+          pkgs[pkg_name]['duration_total_seconds'] = 0
+          pkgs[pkg_name]['duration_seconds_avg'] = None
+        # only proceed if entity has "duration_seconds" property != None.
+        if getattr(install, 'duration_seconds', None) is not None:
+          pkgs[pkg_name]['duration_count'] += 1
+          pkgs[pkg_name]['duration_total_seconds'] += (
+              install.duration_seconds)
+          pkgs[pkg_name]['duration_seconds_avg'] = int(
+              pkgs[pkg_name]['duration_total_seconds'] /
+              pkgs[pkg_name]['duration_count'])
       else:
         pkgs[pkg_name]['install_fail_count'] = (
             pkgs[pkg_name].setdefault('install_fail_count', 0) + 1)
 
-      # (re)calculate avg_duration_seconds for this package.
-      if 'duration_seconds_avg' not in pkgs[pkg_name]:
-        pkgs[pkg_name]['duration_count'] = 0
-        pkgs[pkg_name]['duration_total_seconds'] = 0
-        pkgs[pkg_name]['duration_seconds_avg'] = None
-      # only proceed if entity has "duration_seconds" property that's not None.
-      if getattr(install, 'duration_seconds', None) is not None:
-        pkgs[pkg_name]['duration_count'] += 1
-        pkgs[pkg_name]['duration_total_seconds'] += (
-            install.duration_seconds)
-        pkgs[pkg_name]['duration_seconds_avg'] = int(
-            pkgs[pkg_name]['duration_total_seconds'] /
-            pkgs[pkg_name]['duration_count'])
 
     # Update any changed packages.
     models.ReportsCache.SetInstallCounts(pkgs)

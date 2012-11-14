@@ -87,6 +87,11 @@ class Auth1ServerDatastoreSession(base.Auth1ServerSession):
     raise NotImplementedError
 
   def _GetConfig(self):
+    """Return a config with deadline set.
+
+    Returns:
+      google.appengine.api.datastore.UserRPC instance
+    """
     config = datastore.CreateRPC(deadline=self.deadline)
     return config
 
@@ -349,9 +354,11 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
   try:
     session = a.GetSessionIfAuthOK(token, require_level)
   except base.AuthSessionError, e:
-    # TODO(user): upgrade this to logging.error once we've sorted out the
-    #   majority of hosts in the field that have broken /usr/local/munki
-    #   permissions.
+    # If this happens, an auth token is being sent but it's not in
+    # memcache/Datastore. It could be that clients are sleeping during Munki
+    # executions, thus when they wake and Munki continues their session is
+    # expired and deleted. Or it could be some bug with saving and accessing
+    # sessions.
     logging.warning('DoMunkiAuth: %s', str(e))
     raise NotAuthenticated
 

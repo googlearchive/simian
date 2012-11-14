@@ -34,6 +34,8 @@ DEFAULT_PACKAGE_LOG_FETCH_LIMIT = 25
 class Packages(admin.AdminHandler):
   """Handler for /admin/packages."""
 
+  XSRF_PROTECT = True
+
   def get(self, report=None):
     """GET handler."""
     auth.DoUserAuth()

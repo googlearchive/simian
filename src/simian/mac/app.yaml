@@ -1,11 +1,25 @@
 application: ###APPID###
 version: 1
-runtime: python
+
+runtime: python27
+threadsafe: no
 api_version: 1
+
 inbound_services:
 - warmup
+
 builtins:
 - remote_api: on
+- deferred: on
+
+libraries:
+- name: django
+  version: 1.3
+- name: webapp2
+  version: latest
+
+env_variables:
+  DJANGO_SETTINGS_MODULE: 'simian.settings'
 
 
 handlers:
@@ -13,10 +27,9 @@ handlers:
 ### Warmup URL
 
 - url: /_ah/warmup
-  script: main.py
+  script: simian.mac.urls.app
   login: admin
   secure: always
-
 
 ### Dev Admin Console
 
@@ -28,77 +41,70 @@ handlers:
 ### URLs commonly requested by Munki clients
 
 - url: /pkgs/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /pkgsinfo/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /catalogs/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /manifests/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /deletepkg
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /reports
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 ### Apple SUS integration, client repair, Munki log uploads, etc.
 
 - url: /applesus/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /repair
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /uploadfile/.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /uploadpkg
-  script: main.py
+  script: simian.mac.urls.app
   # intentionally omit "secure: always" for Scotty/Blobstore functionality.
 
 - url: /auth
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
 
 - url: /uauth
-  script: main.py
+  script: simian.mac.urls.app
   login: required
   secure: always
 
 - url: /loginz
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
   # intentionally omit "login: required" for arriving loginz requests
 
 
 - url: /api/.*
-  script: main.py
+  script: simian.mac.api.urls.app
   secure: always
-
-### Deferred Tasks
-
-- url: /_ah/queue/deferred
-  script: simian/mac/deferred_wrapper.py
-  secure: always
-  login: admin
 
 ### Cron Job Handler
 
 - url: /cron/.*
-  script: simian/mac/cron/main.py
+  script: simian.mac.cron.main.app
   login: admin
   secure: always
 
@@ -122,13 +128,13 @@ handlers:
 ### Admin UI
 
 - url: /admin($|/.*)
-  script: simian/mac/admin/main.py
+  script: simian.mac.admin.main.app
   secure: always
   login: required
 
 ### Catchall handler
 
 - url: /.*
-  script: main.py
+  script: simian.mac.urls.app
   secure: always
   login: required

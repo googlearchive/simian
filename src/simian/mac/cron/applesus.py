@@ -23,15 +23,16 @@ Classes:
 
 
 
-
 import datetime
 import logging
 import urllib2
+import webapp2
+
 from google.appengine.api import mail
 from google.appengine.api import urlfetch
 from google.appengine.ext import db
-from google.appengine.ext import webapp
 from google.appengine.runtime import apiproxy_errors
+
 from simian import settings
 from simian.mac import common
 from simian.mac import models
@@ -40,17 +41,17 @@ from simian.mac.munki import plist
 
 
 # TODO(user): move this map to a Datastore model.
-# NOTE: Since these are HTTP retrievals, we are trusting the App Engine prod
-#       network to not be hijacked and return malicious catalogs.
+# Note: The unit test applesus_test enforces the existence and format of this
+# variable.
 CATALOGS = {
-    '10.5': 'http://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
-    '10.6': 'http://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
-    '10.7': 'http://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
-    '10.8': 'http://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
+    '10.5': 'https://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
+    '10.6': 'https://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
+    '10.7': 'https://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
+    '10.8': 'https://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
 }
 
 
-class AppleSUSCatalogSync(webapp.RequestHandler):
+class AppleSUSCatalogSync(webapp2.RequestHandler):
   """Class to sync SUS catalogs from Apple."""
 
   def _UpdateCatalog(
@@ -123,7 +124,8 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
       urlfetch.Error on failures.
     """
     headers = {'If-Modified-Since': catalog.last_modified_header}
-    response = urlfetch.fetch(url, headers=headers, deadline=30)
+    response = urlfetch.fetch(
+        url, headers=headers, deadline=30, validate_certificate=True)
     if response.status_code == 304:
       return False
     elif response.status_code == 200:
@@ -254,6 +256,11 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
     # any that were previously manually disabled.
     applesus.GenerateAppleSUSCatalog(os_version, common.UNSTABLE)
 
+    models.AdminAppleSUSProductLog.Log(
+        new_products, 'new for %s' % os_version)
+    models.AdminAppleSUSProductLog.Log(
+        deprecated_products, 'deprecated for %s' % os_version)
+
   def get(self):
     """Handle GET."""
     for os_version, url in CATALOGS.iteritems():
@@ -267,7 +274,7 @@ class AppleSUSCatalogSync(webapp.RequestHandler):
         pass
 
 
-class AppleSUSAutoPromote(webapp.RequestHandler):
+class AppleSUSAutoPromote(webapp2.RequestHandler):
   """Class to auto-promote Apple Updates."""
 
   def _NotifyAdminsOfAutoPromotions(self, promotions):
@@ -324,18 +331,14 @@ class AppleSUSAutoPromote(webapp.RequestHandler):
         p.tracks.append(track)
         p.put()
 
-        log = models.AdminAppleSUSProductLog(
-            product_id=p.product_id,
-            action='auto-promote to %s' % track,
-            tracks=p.tracks)
-        log.put()
-
         if track not in promotions:
           promotions[track] = []
         promotions[track].append(p)
 
       if track in promotions:
         applesus.GenerateAppleSUSCatalogs(track)
+        models.AdminAppleSUSProductLog.Log(
+          promotions[track], 'auto-promote to %s' % track)
 
     if promotions:
       self._NotifyAdminsOfAutoPromotions(promotions)

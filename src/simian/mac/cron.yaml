@@ -54,3 +54,4 @@ cron:
 - description: MSU User Logs Summary - 7 days
   url: /cron/reports_cache/msu_user_summary/7
   schedule: every 24 hours
+

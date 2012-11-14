@@ -21,13 +21,15 @@
 
 
 
+import json
+
 from google.appengine.api import users
 from google.appengine.ext import db
+
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import auth
-from simian.mac.common import util
 
 
 # Manifest Modification Type key/value pairs, where the key is used for
@@ -55,19 +57,18 @@ class ManifestModifications(admin.AdminHandler):
   def post(self):
     """POST handler."""
     if self.request.get('add_manifest_mod'):
-      if (not auth.IsAdminUser() and
+      if (not self.IsAdminUser() and
           not auth.IsSupportUser() and
           not auth.IsSecurityUser()):
         self.response.set_status(403)
         return
       self._AddManifestModification()
-    elif self.request.get('enabled'):
-      if not auth.IsAdminUser():
-        self.response.set_status(403)
-        return
+    elif self.IsAdminUser() and self.request.get('delete'):
+      self._DeleteManifestModification()
+    elif self.IsAdminUser() and self.request.get('enabled'):
       self._ToggleManifestModification()
     else:
-      if not auth.IsAdminUser():
+      if not self.IsAdminUser():
         self.response.set_status(403)
         return
       self.response.set_status(404)
@@ -81,7 +82,7 @@ class ManifestModifications(admin.AdminHandler):
     install_types = self.request.get_all('install_types')
 
     # Security users are only able to inject specific packages.
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       grp = None
       if auth.IsSupportUser():
         grp = common.MANIFEST_MOD_SUPPORT_GROUP
@@ -135,6 +136,14 @@ class ManifestModifications(admin.AdminHandler):
     self.redirect(
         '/admin/manifest_modifications?mod_type=%s&msg=%s' % (mod_type, msg))
 
+  def _DeleteManifestModification(self):
+    """Deletes a manifest modifications."""
+    key_str = self.request.get('key')
+    db.delete(db.Key(key_str))
+    data = {'deleted': True, 'key': key_str}
+    self.response.headers['Content-Type'] = 'application/json'
+    self.response.out.write(json.dumps(data))
+
   def _ToggleManifestModification(self):
     """Toggles manifest modifications between enabled and disabled."""
     key_str = self.request.get('key')
@@ -144,7 +153,7 @@ class ManifestModifications(admin.AdminHandler):
     mod.put()
     data = {'enabled': enabled, 'key': key_str}
     self.response.headers['Content-Type'] = 'application/json'
-    self.response.out.write(util.Serialize(data))
+    self.response.out.write(json.dumps(data))
 
   def get(self, report=None, product_id=None):
     """GET handler."""
@@ -164,7 +173,7 @@ class ManifestModifications(admin.AdminHandler):
 
     mods = self.Paginate(mods_query, DEFAULT_MANIFEST_MOD_FETCH_LIMIT)
 
-    is_admin = auth.IsAdminUser()
+    is_admin = self.IsAdminUser()
     is_support = False
     is_security = False
     if not is_admin:

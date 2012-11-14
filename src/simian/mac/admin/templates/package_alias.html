@@ -9,6 +9,10 @@
   {% if is_admin %}
   <fieldset>
   <legend>Add New or Edit Existing Package Alias</legend>
+  <div class="infopanel">
+    To silence "Unknown pkg_alias requested" API warnings,
+    add an alias with a blank Munki package name.
+  </div>
   {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
   <form method="POST">
     <input type="hidden" name="create_package_alias" value="1" />

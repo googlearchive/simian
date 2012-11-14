@@ -22,7 +22,6 @@
 
 
 from simian.mac import admin
-from simian.mac.common import auth
 from simian.mac.munki import common
 
 
@@ -31,7 +30,7 @@ class AdminPanic(admin.AdminHandler):
 
   def get(self):
     """GET handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       return
 
     modes = []
@@ -47,7 +46,7 @@ class AdminPanic(admin.AdminHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       return
 
     mode = self.request.get('mode')

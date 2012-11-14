@@ -42,7 +42,7 @@ class Misc(admin.AdminHandler):
   def post(self, report=None, uuid=None):
     """Misc post handler."""
     #logging.debug('POST called: report=%s, uuid=%s', report, uuid)
-    if not auth.IsAdminUser() and not auth.IsSupportUser():
+    if not self.IsAdminUser() and not auth.IsSupportUser():
       self.response.set_status(403)
       return
 
@@ -107,7 +107,7 @@ class Misc(admin.AdminHandler):
         self.response.out.write('Log not found')
         self.response.set_status(404)
     elif report == 'maintenance':
-      if not auth.IsAdminUser():
+      if not self.IsAdminUser():
         self.response.set_status(403)
         return
       from simian.mac.admin import maintenance

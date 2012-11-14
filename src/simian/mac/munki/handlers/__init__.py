@@ -12,8 +12,7 @@ import os
 import sys
 import traceback
 import urllib
-
-from google.appengine.ext import webapp
+import webapp2
 
 from simian.auth import base as _auth_base
 from simian.mac.munki import common
@@ -140,7 +139,7 @@ def GetClientIdForRequest(request, session=None, client_id_str=None):
   return client_id
 
 
-class AuthenticationHandler(webapp.RequestHandler):
+class AuthenticationHandler(webapp2.RequestHandler):
   """Class which handles NotAuthenticated exceptions."""
 
   def handle_exception(self, exception, debug_mode):
@@ -151,6 +150,12 @@ class AuthenticationHandler(webapp.RequestHandler):
       debug_mode: True if the application is running in debug mode
     """
     if issubclass(exception.__class__, _auth_base.NotAuthenticated):
+      # Log details about the connecting client, if available.
+      client_id = self.request.headers.get('X-munki-client-id', '')
+      if client_id:
+        client_id = urllib.unquote(client_id)
+        logging.warning('Client ID: %s', client_id)
+      # Log the traceback of the exception, then gracefully return 403.
       exc_type, exc_value, exc_tb = sys.exc_info()
       tb = traceback.format_exception(exc_type, exc_value, exc_tb)
       logging.warning('handle_exception: %s', ''.join(tb))

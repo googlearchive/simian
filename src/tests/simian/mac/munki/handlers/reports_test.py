@@ -289,6 +289,8 @@ class HandlersTest(test.RequestHandlerTest):
       session = self.mox.CreateMockAnything()
       session.uuid = uuid
       self.MockDoMunkiAuth(and_return=session)
+      self.computer = self.mox.CreateMockAnything()
+      self.computer.uuid = uuid
     else:
       self.MockDoMunkiAuth(and_return=session)
     self.request.get('_report_type').AndReturn(report_type)
@@ -361,48 +363,64 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests post() with _report_type=postflight."""
     self.PostPreflightOrPostflight(report_type='postflight')
 
-  def PostInstallReportInstallsOld(self, on_corp=True):
+  def PostInstallReportInstallsLegacy(self, on_corp=True):
     """Tests post() with _report_type=install_report with old style strings."""
     uuid = 'foouuid'
+    computer = reports.models.Computer(key_name=uuid)
+    computer.uuid = uuid
+    self.mox.StubOutWithMock(reports.models.Computer, 'get_by_key_name')
+    reports.models.Computer.get_by_key_name(uuid).AndReturn(computer)
     report_type = 'install_report'
     installs = [
-        'Install of Foo App1-1.0.0: SUCCESSFUL',
-        'Install of Foo App2-123123: SUCCESSFUL',
-        'Install of Foo App3-2.1.1: FAILED with return code: 1',
-        'Install of Foo App4-456456: FAILED with return code: -5',
+        'Install of Foo App1-1.0.0: %s' % reports.INSTALL_RESULT_SUCCESSFUL,
+        'Install of Foo App2-123123: %s' % reports.INSTALL_RESULT_SUCCESSFUL,
+        'Install of Foo App3-2.1.1: %s: 1' % reports.INSTALL_RESULT_FAILED,
+        'Install of Foo App4-456456: %s: -5' % reports.INSTALL_RESULT_FAILED,
         'Install of broken string, so m.group(#) raises AttributeError',
     ]
     self.PostSetup(uuid=uuid, report_type=report_type)
+    self.request.get_all('installs').AndReturn(installs)
     if on_corp:
       self.request.get('on_corp').AndReturn('1')
     else:
       self.request.get('on_corp').AndReturn('0')
-    self.request.get_all('installs').AndReturn(installs)
 
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='Foo App1-1.0.0',
+    self.mox.StubOutWithMock(reports.models, 'InstallLog')
+    mock_install = self.mox.CreateMockAnything()
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='Foo App1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None, mtime=None)
-
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='Foo App2-123123',
+        dl_kbytes_per_sec=None,
+        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='Foo App2-123123',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None, mtime=None)
-
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='Foo App3-2.1.1',
+        dl_kbytes_per_sec=None,
+        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='Foo App3-2.1.1',
         status='1', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None, mtime=None)
-
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='Foo App4-456456',
+        dl_kbytes_per_sec=None,
+        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(False)
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='Foo App4-456456',
         status='-5', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None, mtime=None)
-
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package=installs[-1] + '-',
+        dl_kbytes_per_sec=None,
+        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(False)
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package=installs[-1] + '-',
         status='UNKNOWN', on_corp=on_corp, applesus=False,
-        duration_seconds=None, dl_kbytes_per_sec=None, mtime=None)
+        duration_seconds=None, dl_kbytes_per_sec=None,
+        mtime=test.mox.IsA(datetime.datetime)).AndReturn(
+            mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(False)
+
+    self.mox.StubOutWithMock(reports.gae_util, 'BatchDatastoreOp')
+    reports.gae_util.BatchDatastoreOp(reports.models.db.put, test.mox.IsA(list))
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])
@@ -411,17 +429,21 @@ class HandlersTest(test.RequestHandlerTest):
     self.c.post()
     self.mox.VerifyAll()
 
-  def testPostInstallReportInstallsOnCorpOld(self):
+  def testPostInstallReportInstallsOnCorpLegacy(self):
     """Tests post() with _report_type=install_report on_corp=1."""
-    self.PostInstallReportInstallsOld(on_corp=True)
+    self.PostInstallReportInstallsLegacy(on_corp=True)
 
-  def testPostInstallReportInstallsOffCorpOld(self):
+  def testPostInstallReportInstallsOffCorpLegacy(self):
     """Tests post() with _report_type=install_report on_corp=0."""
-    self.PostInstallReportInstallsOld(on_corp=False)
+    self.PostInstallReportInstallsLegacy(on_corp=False)
 
   def PostInstallReportInstalls(self, on_corp=True):
     """Tests post() with _report_type=install_report with old style strings."""
     uuid = 'foouuid'
+    computer = reports.models.Computer(key_name=uuid)
+    computer.uuid = uuid
+    self.mox.StubOutWithMock(reports.models.Computer, 'get_by_key_name')
+    reports.models.Computer.get_by_key_name(uuid).AndReturn(computer)
     report_type = 'install_report'
     installs = [
         ('name=FooApp1|version=1.0.0|applesus=0|status=0|duration_seconds=100'
@@ -440,36 +462,52 @@ class HandlersTest(test.RequestHandlerTest):
          'name=Safari|version=5.1.0|applesus=true|status=0|duration_seconds=4',
     ]
     self.PostSetup(uuid=uuid, report_type=report_type)
+    self.request.get_all('installs').AndReturn(installs)
     if on_corp:
       self.request.get('on_corp').AndReturn('1')
     else:
       self.request.get('on_corp').AndReturn('0')
-    self.request.get_all('installs').AndReturn(installs)
+
+    self.mox.StubOutWithMock(reports.models, 'InstallLog')
+    mock_install = self.mox.CreateMockAnything()
     # successful munki install report, lacking time.
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='FooApp1-1.0.0',
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='FooApp1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=100,
-        mtime=None, dl_kbytes_per_sec=225)
+        mtime=test.mox.IsA(datetime.datetime), dl_kbytes_per_sec=225).AndReturn(
+            mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # failed munki install report, with time.
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='FooApp2-2.1.1',
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='FooApp2-2.1.1',
         status='2', on_corp=on_corp, applesus=False, duration_seconds=200,
-        mtime=datetime.datetime(2011, 8, 8, 15, 42, 59), dl_kbytes_per_sec=1024)
+        mtime=datetime.datetime(2011, 8, 8, 15, 42, 59),
+        dl_kbytes_per_sec=1024).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(False)
     # successful munki install report, with future time.
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='FutureApp-9.9.9',
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='FutureApp-9.9.9',
         status='0', on_corp=on_corp, applesus=False, duration_seconds=60,
-        mtime=None, dl_kbytes_per_sec=None)
+        mtime=test.mox.IsA(datetime.datetime),
+        dl_kbytes_per_sec=None).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with bogus time.
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='iTunes-10.2.0',
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='iTunes-10.2.0',
         status='0', on_corp=on_corp, applesus=True, duration_seconds=300,
-        mtime=None, dl_kbytes_per_sec=None)
+        mtime=test.mox.IsA(datetime.datetime),
+        dl_kbytes_per_sec=None).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with no time.
-    reports.common.WriteClientLog(
-        reports.models.InstallLog, uuid, package='Safari-5.1.0',
+    reports.models.InstallLog(
+        uuid=uuid, computer=computer, package='Safari-5.1.0',
         status='0', on_corp=on_corp, applesus=True, duration_seconds=4,
-        mtime=None, dl_kbytes_per_sec=None)
+        mtime=test.mox.IsA(datetime.datetime),
+        dl_kbytes_per_sec=None).AndReturn(mock_install)
+    mock_install.success = mock_install.IsSuccess().AndReturn(True)
+
+    self.mox.StubOutWithMock(reports.gae_util, 'BatchDatastoreOp')
+    reports.gae_util.BatchDatastoreOp(reports.models.db.put, test.mox.IsA(list))
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])
@@ -491,14 +529,16 @@ class HandlersTest(test.RequestHandlerTest):
     uuid = 'foouuid'
     report_type = 'install_report'
     self.PostSetup(uuid=uuid, report_type=report_type)
-    self.request.get('on_corp').AndReturn('1')
+    computer = self.MockModelStatic('Computer', 'get_by_key_name', uuid)
     self.request.get_all('installs').AndReturn([])
     self.request.get_all('removals').AndReturn(['removal1', 'removal2'])
 
     reports.common.WriteClientLog(
-        reports.models.ClientLog, uuid, action='removal', details='removal1')
+        reports.models.ClientLog, uuid, computer=computer, action='removal',
+        details='removal1')
     reports.common.WriteClientLog(
-        reports.models.ClientLog, uuid, action='removal', details='removal2')
+        reports.models.ClientLog, uuid, computer=computer, action='removal',
+        details='removal2')
     self.request.get_all('problem_installs').AndReturn([])
 
     self.mox.ReplayAll()
@@ -510,17 +550,17 @@ class HandlersTest(test.RequestHandlerTest):
     uuid = 'foouuid'
     report_type = 'install_report'
     self.PostSetup(uuid=uuid, report_type=report_type)
-    self.request.get('on_corp').AndReturn('1')
+    computer = self.MockModelStatic('Computer', 'get_by_key_name', uuid)
     self.request.get_all('installs').AndReturn([])
     self.request.get_all('removals').AndReturn([])
 
     self.request.get_all('problem_installs').AndReturn(['problem1', 'problem2'])
     reports.common.WriteClientLog(
-        reports.models.ClientLog, uuid, action='install_problem',
-        details='problem1')
+        reports.models.ClientLog, uuid, computer=computer,
+        action='install_problem', details='problem1')
     reports.common.WriteClientLog(
-        reports.models.ClientLog, uuid, action='install_problem',
-        details='problem2')
+        reports.models.ClientLog, uuid, computer=computer,
+        action='install_problem', details='problem2')
 
     self.mox.ReplayAll()
     self.c.post()
@@ -544,11 +584,13 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests post() with _report_type=broken_client."""
     uuid = 'foouuid'
     report_type = 'broken_client'
+    reason = 'objc'
     details = 'foodetails'
     self.PostSetup(uuid=uuid, report_type=report_type)
+    self.request.get('reason', 'objc').AndReturn(reason)
     self.request.get('details').AndReturn(details)
     self.mox.StubOutWithMock(reports.common, 'WriteBrokenClient')
-    reports.common.WriteBrokenClient(uuid, details)
+    reports.common.WriteBrokenClient(uuid, reason, details)
 
     self.mox.ReplayAll()
     self.c.post()

@@ -13,7 +13,8 @@ import os
 import re
 import urllib
 
-from google.appengine.ext import webapp
+import webapp2
+
 from google.appengine.ext.webapp import template
 
 from simian import settings
@@ -108,10 +109,12 @@ class Error(Exception):
   """Base Error."""
 
 
-class AdminHandler(webapp.RequestHandler):
+class AdminHandler(webapp2.RequestHandler):
   """Class for Admin UI request handlers."""
 
-  def handle_exception(self, exception, debug_mode):
+  XSRF_PROTECT = False
+
+  def handle_exception(self, *args, **kwargs):
     """Handle an exception.
 
     Args:
@@ -119,7 +122,14 @@ class AdminHandler(webapp.RequestHandler):
       debug_mode: True if the application is running in debug mode
     """
     # TODO(user): this could notify us...
-    super(AdminHandler, self).handle_exception(exception, debug_mode)
+    super(AdminHandler, self).handle_exception(*args, **kwargs)
+
+  def IsAdminUser(self):
+    """Returns True if the current user is an admin, False otherwise."""
+    # NOTE(user): this is definitely not threadsafe.
+    if not hasattr(self, '_is_admin'):
+      self._is_admin = auth.IsAdminUser()
+    return self._is_admin
 
   def Paginate(self, query, default_limit):
     """Returns a list of entities limited to limit, with a next_page cursor."""
@@ -165,11 +175,7 @@ class AdminHandler(webapp.RequestHandler):
     if not settings.DEV_APPSERVER:
       values['static_path'] = 'myapp/%s' % os.getenv('CURRENT_VERSION_ID')
 
-    # TODO(user): some handlers need ot call auth.IsAdminUser outside of simply
-    #    passing the value to the template, so it's being called more than once
-    #    for some handlers.  auth.Is*User() functions should all do more caching
-    #    to ensure multiple calls don't run the entire IsGroupMember check.
-    values['is_admin'] = auth.IsAdminUser()
+    values['is_admin'] = self.IsAdminUser()
 
     values['menu'] = MENU
 
@@ -179,8 +185,8 @@ class AdminHandler(webapp.RequestHandler):
     if 'report_type' not in values:
       values['report_type'] = 'undefined_report'
 
-    # TODO(user): Pass XSRF token only to reports that need it.
-    values['xsrf_token'] = xsrf.XsrfTokenGenerate(values['report_type'])
+    if self.XSRF_PROTECT:
+      values['xsrf_token'] = xsrf.XsrfTokenGenerate(values['report_type'])
 
     if hasattr(self, '_page'):
       values['limit'] = self._page.get('limit')

@@ -86,6 +86,7 @@
        <th>Target</th><th>Package</th><th>Manifests</th>
        <th>Install Types</th><th>Mod Time</th><th>Time Since</th>
        <th>Admin</th><th>Enabled</th>
+       {% if is_admin %}<th>Delete</th>{% endif %}
     </tr>
     {% for m in mods %}
       <tr>
@@ -111,6 +112,11 @@
             {% if is_admin %}onclick="simian.toggleManifestModification('{{ m.key }}', this);"{% endif %}>
           </span>
         </td>
+        {% if is_admin %}
+        <td><button type="button" name="{{ m.key }}" class="red delete"
+                   onclick="javascript:simian.deleteManifestModification(this);">Delete</button>
+        </td>
+        {% endif %}
       </tr>
     {% endfor %}
   </table>

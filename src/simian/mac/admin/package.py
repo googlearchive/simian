@@ -29,7 +29,6 @@ from simian.mac import admin
 from simian.mac import models
 from simian.mac import common
 from simian.mac.admin import xsrf
-from simian.mac.common import auth
 from simian.mac.common import gae_util
 from simian.mac.munki import common as munki_common
 from simian.mac.munki import plist as plist_lib
@@ -38,9 +37,11 @@ from simian.mac.munki import plist as plist_lib
 class Package(admin.AdminHandler):
   """Handler for /admin/package."""
 
+  XSRF_PROTECT = True
+
   def get(self, filename=None):
     """GET handler."""
-    if not auth.IsAdminUser() or not filename:
+    if not self.IsAdminUser() or not filename:
       self.error(404)
       return
 
@@ -85,7 +86,7 @@ class Package(admin.AdminHandler):
 
   def post(self, filename=None):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       self.response.out.write('Access Denied for current user')
       return

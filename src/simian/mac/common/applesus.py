@@ -25,8 +25,10 @@ import datetime
 import logging
 import re
 from xml.dom import minidom
+
 from google.appengine.api import taskqueue
 from google.appengine.ext import deferred
+
 from simian import settings
 from simian.mac import common
 from simian.mac import models

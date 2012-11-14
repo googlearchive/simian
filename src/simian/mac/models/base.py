@@ -473,6 +473,7 @@ class ComputerClientBroken(db.Model):
   uuid = db.StringProperty()
   hostname = db.StringProperty()
   owner = db.StringProperty()
+  reason = db.StringProperty()
   details = db.TextProperty()
   first_broken_datetime = db.DateTimeProperty(auto_now_add=True)
   broken_datetimes = db.ListProperty(datetime.datetime)
@@ -513,14 +514,24 @@ class ComputerLostStolen(db.Model):
     return uuid in cls._GetUuids()
 
   @classmethod
-  def SetLostStolen(cls, uuid):
-    """Sets a UUID as lost/stolen, and refreshes the lost/stolen UUID cache."""
+  def AddUuid(cls, uuid):
+    """Sets a UUID as lost/stolen, and refreshes the UUID cache."""
     if cls.get_by_key_name(uuid):
       logging.warning('UUID already set as lost/stolen: %s', uuid)
       return  # do nothing; the UUID is already set as lost/stolen.
     computer = Computer.get_by_key_name(uuid)
     ls = cls(key_name=computer.uuid, computer=computer, uuid=uuid)
     ls.put()
+    cls._GetUuids(force_refresh=True)
+
+  @classmethod
+  def RemoveUuid(cls, uuid):
+    """Removes a UUID as lost/stolen, and refreshes the UUID cache."""
+    computer = cls.get_by_key_name(uuid)
+    if not computer:
+      logging.warning('UUID is not set as lost/stolen: %s', uuid)
+      return  # do nothing; the UUID is already not set as lost/stolen.
+    computer.delete()
     cls._GetUuids(force_refresh=True)
 
   @classmethod
@@ -688,6 +699,26 @@ class AdminAppleSUSProductLog(AdminLogBase):
   product_id = db.StringProperty()
   action = db.StringProperty()
   tracks = db.StringListProperty()
+
+  @classmethod
+  def Log(cls, products, action):
+    """Puts batches of product changes to AdminAppleSUSProductLog.
+
+    Args:
+      products: list of or single model.AppleSUSProduct entity.
+      action: str, description of the change taking place to the batch.
+    """
+    # Support products being a single product entity.
+    if not isinstance(products, (list, tuple)):
+      products = (products,)
+
+    to_put = []
+    for p in products:
+      log = cls(product_id=p.product_id, action=action, tracks=p.tracks)
+      log.mtime = datetime.datetime.utcnow()
+      to_put.append(log)
+    # Put all log entities together.
+    gae_util.BatchDatastoreOp(db.put, to_put)
 
 
 class KeyValueCache(BaseModel):

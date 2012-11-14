@@ -272,7 +272,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.put(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.assertTrue(mock_model.enabled)
-    self.assertEqual(mock_model.owner, target)
+    self.assertEqual(mock_model.target, target)
     self.assertEqual(mock_model.value, pkg_name)
     self.assertEqual(mock_model.manifests, [])
     self.assertEqual(mock_model.user, user)
@@ -382,12 +382,12 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
         mod_type, target).AndReturn(None)
 
     self.c.response.headers.__setitem__('Content-Type', 'application/json')
-    self.response.out.write(dyn_man.util.Serialize([{'pkg_name': pkg_name}]))
+    self.response.out.write(dyn_man.json.dumps([{'pkg_name': pkg_name}]))
 
     self.mox.ReplayAll()
     self.c.post()
     self.assertTrue(mock_model.enabled)
-    self.assertEqual(mock_model.owner, target)
+    self.assertEqual(mock_model.target, target)
     self.assertEqual(mock_model.value, pkg_name)
     self.assertEqual(mock_model.manifests, [])
     self.assertEqual(mock_model.user, mock_user)

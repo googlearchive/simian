@@ -26,8 +26,9 @@ import re
 import time
 import urllib
 
-from google.appengine.ext import deferred
 from google.appengine.api import mail
+from google.appengine.ext import deferred
+from google.appengine.runtime import apiproxy_errors
 
 from simian import settings
 from simian.auth import gaeserver
@@ -59,7 +60,19 @@ class UploadFile(handlers.AuthenticationHandler):
       l.log_file = self.request.body
       l.uuid = uuid
       l.name = file_name
-      l.put()
+      try:
+        l.put()
+      except apiproxy_errors.RequestTooLargeError:
+        logging.warning('UploadFile log too large; truncating...')
+        # Datastore has a 1MB entity limit and models.ClientLogFile.log_file
+        # uses zlib compression. Anecdotal evidence of a handlful of log files
+        # over 8MB in size compress down to well under 1MB. Therefore, slice
+        # the top of the log data off at a conversative max, before retrying the
+        # Datastore put.
+        max_log_size_bytes = 5 * 1024 * 1024
+        l.log_file = ('*** Log truncated by Simian due to size ***\n\n' +
+                      self.request.body[-1 * max_log_size_bytes:])
+        l.put()
 
       c = models.Computer.get_by_key_name(uuid)
       recipients = c.upload_logs_and_notify
@@ -70,20 +83,22 @@ class UploadFile(handlers.AuthenticationHandler):
       # files may be uploaded in different requests per execution.
       if recipients:
         recipients = recipients.split(',')
-        deferred.defer(SendNotificationEmail, recipients, c)
+        deferred.defer(
+            SendNotificationEmail, recipients, c, settings.SERVER_HOSTNAME)
     else:
       self.error(404)
 
 
-def SendNotificationEmail(recipients, c):
+def SendNotificationEmail(recipients, c, server_fqdn):
   """Sends a log upload notification email to passed recipients.
 
   Args:
     recipients: list, str email addresses to email.
     c: models.Computer entity.
+    server_fqdn: str, fully qualified domain name of the server.
   """
   body = []
-  body.append('https://%s/admin/host/%s\n' % (settings.SERVER_HOSTNAME, c.uuid))
+  body.append('https://%s/admin/host/%s\n' % (server_fqdn, c.uuid))
   body.append('Owner: %s' % c.owner)
   body.append('Hostname: %s' % c.hostname)
   body.append('Client Version: %s' % c.client_version)
@@ -91,7 +106,10 @@ def SendNotificationEmail(recipients, c):
   body.append('Site / Office: %s / %s' % (c.site, c.office))
   body.append('Track / Config Track: %s / %s' % (c.track, c.config_track))
   body.append('Serial Number: %s' % c.serial)
+  body.append('Last preflight: %s' % c.preflight_datetime)
   body.append('Last postflight: %s' % c.postflight_datetime)
+  body.append(('Preflight count since postflight: %s' %
+               c.preflight_count_since_postflight))
   body = '\n'.join(body)
   subject = 'Logs you requested have been uploaded for %s' % c.hostname
   message = mail.EmailMessage(

@@ -27,4 +27,3 @@ ln -s $SIMIAN_REL_PATH/mac/index.yaml $BUNDLE_ROOT/index.yaml
 ln -s $SIMIAN_REL_PATH/mac/queue.yaml $BUNDLE_ROOT/queue.yaml
 ln -s $SIMIAN_REL_PATH/mac/cron.yaml $BUNDLE_ROOT/cron.yaml
 ln -s $SIMIAN_REL_PATH/mac/main.py $BUNDLE_ROOT/main.py
-ln -s $SIMIAN_REL_PATH/mac/appengine_config.py $BUNDLE_ROOT/appengine_config.py

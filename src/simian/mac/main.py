@@ -22,8 +22,6 @@ import logging
 import os
 import sys
 
-import appengine_config
-
 # catch fatal datastore errors and provide a friendly but minimal message.
 CATCH_DATASTORE_FATAL = True
 

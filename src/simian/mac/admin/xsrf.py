@@ -29,7 +29,7 @@ from google.appengine.api import users
 
 from simian import settings
 
-XSRF_DELIMITER = '||'
+XSRF_DELIMITER = '|#|'
 XSRF_VALID_TIME = 3600  # Seconds = 60 minutes
 
 
@@ -45,6 +45,7 @@ def XsrfTokenGenerate(action, user=None, timestamp=None):
   except AttributeError:
     secret = os.urandom(16).encode('base64')[:20]
     settings.XSRF_SECRET = secret
+  secret = str(secret)  # hmac secrets cannot be unicode.
   h = hmac.new(secret, XSRF_DELIMITER.join([user, action, timestr]))
   return base64.b64encode(''.join([h.digest(), XSRF_DELIMITER, timestr]))
 

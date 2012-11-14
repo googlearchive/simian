@@ -45,7 +45,7 @@ class BrokenClients(admin.AdminHandler):
 
   def post(self, uuid=None):
     """POST handler."""
-    if not auth.IsAdminUser() and not auth.IsSupportUser():
+    if not self.IsAdminUser() and not auth.IsSupportUser():
       self.response.set_status(403)
       return
 

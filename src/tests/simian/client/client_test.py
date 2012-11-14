@@ -790,11 +790,71 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = None
     output_filename = None
 
+    self.mox.StubOutWithMock(client.time, 'sleep')
     self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
+    # HTTP 500 should retry.
+    mock_response_fail = self.mox.CreateMockAnything()
+    mock_response_fail.status = 500
+    client.time.sleep(0).AndReturn(None)
     self.client._DoRequestResponse(
-        method, url, body=body, headers={}, output_file=output_file)
+        method, url, body=body, headers={}, output_file=output_file).AndReturn(
+            mock_response_fail)
+    # HTTP 200 should succeed.
+    mock_response = self.mox.CreateMockAnything()
+    mock_response.status = 200
+    client.time.sleep(5).AndReturn(None)
+    self.client._DoRequestResponse(
+        method, url, body=body, headers={}, output_file=output_file).AndReturn(
+            mock_response)
     self.mox.ReplayAll()
     self.client.Do(method, url, body, headers, output_filename)
+    self.mox.VerifyAll()
+
+  def testDoWithRetryHttp500(self):
+    """Test Do() with a HTTP 500, thus a retry."""
+    method = 'GET'
+    url = 'url'
+    body = None
+    headers = None
+    output_file = None
+    output_filename = None
+
+    self.mox.StubOutWithMock(client.time, 'sleep')
+    mock_response = self.mox.CreateMockAnything()
+    mock_response.status = 500
+    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
+    for i in xrange(0, client.DEFAULT_HTTP_ATTEMPTS):
+      client.time.sleep(i * 5).AndReturn(None)
+      self.client._DoRequestResponse(
+          method, url, body=body, headers={},
+          output_file=output_file).AndReturn(mock_response)
+
+    self.mox.ReplayAll()
+    r = self.client.Do(method, url, body, headers, output_filename)
+    self.mox.VerifyAll()
+
+  def testDoWithRetryHttpError(self):
+    """Test Do() with a HTTP 500, thus a retry, but ending with HTTPError."""
+    method = 'GET'
+    url = 'url'
+    body = None
+    headers = None
+    output_file = None
+    output_filename = None
+
+    self.mox.StubOutWithMock(client.time, 'sleep')
+    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
+    for i in xrange(0, client.DEFAULT_HTTP_ATTEMPTS):
+      client.time.sleep(i * 5).AndReturn(None)
+      self.client._DoRequestResponse(
+          method, url, body=body, headers={},
+          output_file=output_file).AndRaise(client.HTTPError)
+
+    self.mox.ReplayAll()
+    self.assertRaises(
+        client.HTTPError,
+        self.client.Do,
+        method, url, body, headers, output_filename)
     self.mox.VerifyAll()
 
   def testDoWithOutputFilename(self):
@@ -807,10 +867,13 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = self.mox.CreateMockAnything()
     output_filename = '/tmpfile'
 
+    mock_response = self.mox.CreateMockAnything()
+    mock_response.status = 200
     self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
     mock_open(output_filename, 'w').AndReturn(output_file)
     self.client._DoRequestResponse(
-        method, url, body=body, headers={}, output_file=output_file)
+        method, url, body=body, headers={}, output_file=output_file).AndReturn(
+            mock_response)
     output_file.close().AndReturn(None)
     self.mox.ReplayAll()
     self.client.Do(
@@ -824,10 +887,13 @@ class HttpsClientTest(mox.MoxTestBase):
     proxy = 'proxyhost:123'
 
     # Working case.
+    mock_response = self.mox.CreateMockAnything()
+    mock_response.status = 200
     test_client = client.HttpsClient(self.hostname, proxy=proxy)
     self.mox.StubOutWithMock(test_client, '_DoRequestResponse')
     test_client._DoRequestResponse(
-        method, url, body=None, headers={}, output_file=None)
+        method, url, body=None, headers={}, output_file=None).AndReturn(
+            mock_response)
     self.mox.ReplayAll()
     test_client.Do(method, url)
     self.mox.VerifyAll()
@@ -1245,113 +1311,6 @@ class SimianClientTest(mox.MoxTestBase):
         self.client._SimianRequest, method, url, headers=headers)
     self.mox.VerifyAll()
 
-  def testSimianRequestRetry(self):
-    """Test _SimianRequestRetry()."""
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.mox.StubOutWithMock(client.time, 'sleep')
-
-    method = 'get'
-    url = '/url'
-    headers = {'foo': 'bar'}
-    retry_on_status = [500]
-
-    response = self.mox.CreateMockAnything()
-    response.status = 200
-    response.IsSuccess().AndReturn(True)
-    response.body = 'OK'
-
-    client.time.sleep(0).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(5).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(10).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndReturn(response)
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        'OK',
-        self.client._SimianRequestRetry(
-            method, url, retry_on_status, headers=headers))
-    self.mox.VerifyAll()
-
-  def testSimianRequestRetryUnsuccessful(self):
-    """Test _SimianRequestRetry()."""
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.mox.StubOutWithMock(client.time, 'sleep')
-
-    method = 'get'
-    url = '/url'
-    headers = {'foo': 'bar'}
-    retry_on_status = [500]
-
-    client.time.sleep(0).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(5).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(10).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        client.SimianServerError,
-        self.client._SimianRequestRetry,
-        method, url, retry_on_status, headers=headers)
-    self.mox.VerifyAll()
-
-  def testSimianRequestRetryUnsuccessfulOtherFailure(self):
-    """Test _SimianRequestRetry()."""
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.mox.StubOutWithMock(client.time, 'sleep')
-
-    method = 'get'
-    url = '/url'
-    headers = {'foo': 'bar'}
-    retry_on_status = [500]
-
-    client.time.sleep(0).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(5).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(500, '500 error'))
-    client.time.sleep(10).AndReturn(None)
-    self.client._SimianRequest(
-        method, url, body=None, headers=headers,
-        output_filename=None, full_response=True).AndRaise(
-            client.SimianServerError(400, 'unexpected error'))
-
-    self.mox.ReplayAll()
-    try:
-      unused_response = self.client._SimianRequestRetry(
-          method, url, retry_on_status, headers=headers)
-      self.fail('the above method should not have succeeded')
-    except client.SimianServerError, e:
-      self.assertEqual(e.args, (400, 'unexpected error'))
-    except Exception, e:
-      self.fail('wrong exception raised: %s' % str(e))
-    self.mox.VerifyAll()
-
   def GenericStubTestAndReturn(
       self,
       method,
@@ -1616,7 +1575,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.GenericStubTest(
         self.client.PostReport, [report_type, params],
-        '_SimianRequestRetry', 'POST', url, [500], body)
+        '_SimianRequest', 'POST', url, body)
 
   def testPostReportWhenFeedback(self):
     """Test PostReport()."""
@@ -1629,7 +1588,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.GenericStubTest(
         self.client.PostReport, [report_type, params, True],
-        '_SimianRequestRetry', 'POST', url, [500], body)
+        '_SimianRequest', 'POST', url, body)
 
   def testPostReportBody(self):
     """Test PostReportBody()."""
@@ -1638,7 +1597,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.GenericStubTest(
         self.client.PostReportBody, [body],
-        '_SimianRequestRetry', 'POST', url, [500], body)
+        '_SimianRequest', 'POST', url, body)
 
   def testPostReportBodyWhenFeedback(self):
     """Test PostReportBody()."""
@@ -1648,7 +1607,7 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.GenericStubTest(
         self.client.PostReportBody, [body, True],
-        '_SimianRequestRetry', 'POST', url, [500], body_with_feedback)
+        '_SimianRequest', 'POST', url, body_with_feedback)
 
   def testUploadFile(self):
     """Test UploadFile()."""

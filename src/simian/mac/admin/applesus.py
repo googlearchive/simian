@@ -21,16 +21,18 @@
 
 
 import calendar
+import json
 import logging
 import os
+
 from google.appengine.api import users
+
 from simian import settings
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import applesus
 from simian.mac.common import auth
-from simian.mac.common import util
 
 
 DEFAULT_APPLESUS_LOG_FETCH = 25
@@ -42,7 +44,7 @@ class AppleSUSAdmin(admin.AdminHandler):
   def post(self, report=None, product_id=None):
     """POST handler."""
     #logging.debug('POST called: report=%s, product_id=%s', report, product_id)
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.response.set_status(403)
       return
 
@@ -120,7 +122,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     log.put()
 
     self.response.headers['Content-Type'] = 'application/json'
-    self.response.out.write(util.Serialize(data))
+    self.response.out.write(json.dumps(data))
 
     # TODO(user): the above should utilize the App Engine Channel API to
     # notify clients of such changes, refreshing the products for any admin

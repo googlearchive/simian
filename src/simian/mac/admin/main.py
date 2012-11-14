@@ -19,12 +19,7 @@
 
 
 
-
-import os
-import appengine_config
-
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
+import webapp2
 
 from simian import settings
 from simian.mac.admin import acl_groups
@@ -45,11 +40,12 @@ from simian.mac.admin import tags
 from simian.mac.admin import uploadpkg
 
 
+from google.appengine.ext import webapp
 webapp.template.register_template_library(
     'simian.mac.admin.custom_filters')
 
 
-application = webapp.WSGIApplication([
+app = webapp2.WSGIApplication([
     (r'/admin/?$', summary.Summary),
 
     (r'/admin/acl_groups/?$', acl_groups.ACLGroups),
@@ -88,12 +84,4 @@ application = webapp.WSGIApplication([
 
     (r'/admin/([\w\-\_\.\=\|\%]+)$', misc.Misc),
     (r'/admin/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$', misc.Misc),
-], debug=settings.DEBUG)
-
-
-def main():
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()
+    ], debug=settings.DEBUG)

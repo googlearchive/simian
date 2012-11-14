@@ -26,7 +26,6 @@ from google.appengine.api import memcache
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
-from simian.mac.common import auth
 from simian.mac.common import gae_util
 
 PACKAGE = 'package'
@@ -34,8 +33,8 @@ CATALOG = 'catalog'
 MANIFEST = 'manifest'
 LOCK_TYPES = {
     PACKAGE: gae_util.LOCK_NAME % 'pkgsinfo_%s',
-    CATALOG: gae_util.LOCK_NAME % 'lock_catalog_%s',
-    MANIFEST: gae_util.LOCK_NAME % 'lock_manifest_%s',
+    CATALOG: gae_util.LOCK_NAME % 'catalog_lock_%s',
+    MANIFEST: gae_util.LOCK_NAME % 'manifest_lock_%s',
 }
 
 
@@ -44,7 +43,7 @@ class LockAdmin(admin.AdminHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       return
 
     lock_type = self.request.get('lock_type')
@@ -58,7 +57,7 @@ class LockAdmin(admin.AdminHandler):
 
   def get(self):
     """GET handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       return
 
     locks = []

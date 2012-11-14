@@ -35,6 +35,7 @@ from simian.mac import common as main_common
 from simian.mac.munki import common
 from simian.mac.munki import handlers
 from simian.mac.common import util
+from simian.mac.common import gae_util
 
 
 
@@ -44,9 +45,13 @@ FORCE_CONTINUE_POSTFLIGHT_DAYS = 5
 # int number of days after which a client is considered broken.
 REPAIR_CLIENT_PRE_POST_DIFF_DAYS = 7
 
+INSTALL_RESULT_FAILED = 'FAILED with return code'
+INSTALL_RESULT_SUCCESSFUL = 'SUCCESSFUL'
+
 # InstallResults legacy string matching regex.
-LEGACY_INSTALL_RESULTS_STRING_REGEX = (
-    '^Install of (.*)-(\d+.*): (SUCCESSFUL|FAILED with return code: (\-?\d+))$')
+LEGACY_INSTALL_RESULTS_STRING_REGEX = re.compile(
+    '^Install of (.*)-(\d+.*): (%s|%s: (\-?\d+))$' % (
+        INSTALL_RESULT_SUCCESSFUL, INSTALL_RESULT_FAILED))
 
 
 def IsExitFeedbackIpAddress(ip_address):
@@ -128,6 +133,91 @@ class Reports(handlers.AuthenticationHandler):
 
     return report
 
+  def _LogInstalls(self, installs, computer):
+    """Logs a batch of installs for a given computer.
+
+    Args:
+      installs: list, of str install data from a preflight/postflight report.
+      computer: models.Computer entity.
+    """
+    if not installs:
+      return
+
+    on_corp = self.request.get('on_corp')
+    if on_corp == '1':
+      on_corp = True
+    elif on_corp == '0':
+      on_corp = False
+    else:
+      on_corp = None
+
+    to_put = []
+    for install in installs:
+      if install.startswith('Install of'):
+        d = {
+            'applesus': 'false',
+            'duration_seconds': None,
+            'download_kbytes_per_sec': None,
+            'name': install,
+            'status': 'UNKNOWN',
+            'version': '',
+        }
+        # support for old 'Install of FooPkg-1.0: SUCCESSFUL' style strings.
+        try:
+          m = LEGACY_INSTALL_RESULTS_STRING_REGEX.search(install)
+          if not m:
+            raise ValueError
+          elif m.group(3) == INSTALL_RESULT_SUCCESSFUL:
+            d['status'] = 0
+          else:
+            d['status'] = m.group(4)
+          d['name'] = m.group(1)
+          d['version'] = m.group(2)
+        except (IndexError, AttributeError, ValueError):
+          logging.warning('Unknown install string format: %s', install)
+      else:
+        # support for new 'name=pkg|version=foo|...' style strings.
+        d = common.KeyValueStringToDict(install)
+
+      name = d.get('name', '')
+      version = d.get('version', '')
+      status = str(d.get('status', ''))
+      applesus = common.GetBoolValueFromString(d.get('applesus', '0'))
+      try:
+        duration_seconds = int(d.get('duration_seconds', None))
+      except (TypeError, ValueError):
+        duration_seconds = None
+      try:
+        dl_kbytes_per_sec = int(d.get('download_kbytes_per_sec', None))
+        # Ignore zero KB/s download speeds, as that's how Munki reports
+        # unknown speed.
+        if dl_kbytes_per_sec == 0:
+          dl_kbytes_per_sec = None
+      except (TypeError, ValueError):
+        dl_kbytes_per_sec = None
+
+      try:
+        install_datetime = util.Datetime.utcfromtimestamp(d.get('time', None))
+      except ValueError, e:
+        logging.warning('Ignoring invalid install_datetime; %s', str(e))
+        install_datetime = datetime.datetime.utcnow()
+      except util.EpochExtremeFutureValueError, e:
+        logging.warning('Ignoring future install_datetime; %s', str(e))
+        install_datetime = datetime.datetime.utcnow()
+      except util.EpochValueError, e:
+        install_datetime = datetime.datetime.utcnow()
+
+      pkg = '%s-%s' % (name, version)
+      entity = models.InstallLog(
+          uuid=computer.uuid, computer=computer, package=pkg, status=status,
+          on_corp=on_corp, applesus=applesus,
+          duration_seconds=duration_seconds, mtime=install_datetime,
+          dl_kbytes_per_sec=dl_kbytes_per_sec)
+      entity.success = entity.IsSuccess()
+      to_put.append(entity)
+
+    gae_util.BatchDatastoreOp(models.db.put, to_put)
+
   def post(self):
     """Reports get handler.
 
@@ -195,85 +285,31 @@ class Reports(handlers.AuthenticationHandler):
 
 
     elif report_type == 'install_report':
-      on_corp = self.request.get('on_corp')
-      if on_corp == '1':
-        on_corp = True
-      elif on_corp == '0':
-        on_corp = False
-      else:
-        on_corp = None
-      for install in self.request.get_all('installs'):
-        if install.startswith('Install of'):
-          # support for old 'Install of FooPkg-1.0: SUCCESSFUL' style strings.
-          try:
-            m = re.search(LEGACY_INSTALL_RESULTS_STRING_REGEX, install)
-            if m.group(3) == 'SUCCESSFUL':
-              status = 0
-            else:
-              status = m.group(4)
-            d = {
-                'name': m.group(1), 'version': m.group(2), 'applesus': 'false',
-                'status': status, 'duration_seconds': None,
-                'download_kbytes_per_sec': None,
-            }
-          except (IndexError, AttributeError):
-            logging.warning('Unknown install string format: %s', install)
-            d = {
-                'name': install, 'version': '', 'applesus': 'false',
-                'status': 'UNKNOWN', 'duration_seconds': None,
-                'download_kbytes_per_sec': None,
-            }
-        else:
-          # support for new 'name=pkg|version=foo|...' style strings.
-          d = common.KeyValueStringToDict(install)
+      computer = models.Computer.get_by_key_name(uuid)
 
-        name = d.get('name', '')
-        version = d.get('version', '')
-        status = str(d.get('status', ''))
-        applesus = common.GetBoolValueFromString(d.get('applesus', '0'))
-        try:
-          duration_seconds = int(d.get('duration_seconds', None))
-        except (TypeError, ValueError):
-          duration_seconds = None
-        try:
-          dl_kbytes_per_sec = int(d.get('download_kbytes_per_sec', None))
-          # Ignore zero KB/s download speeds, as that's how Munki reports
-          # unknown speed.
-          if dl_kbytes_per_sec == 0:
-            dl_kbytes_per_sec = None
-        except (TypeError, ValueError):
-          dl_kbytes_per_sec = None
-        try:
-          install_datetime = util.Datetime.utcfromtimestamp(d.get('time', None))
-        except ValueError, e:
-          logging.warning('Ignoring invalid install_datetime; %s' % str(e))
-          install_datetime = None
-        except util.EpochExtremeFutureValueError, e:
-          logging.warning('Ignoring future install_datetime; %s' % str(e))
-          install_datetime = None
-        except util.EpochValueError, e:
-          install_datetime = None
-        pkg = '%s-%s' % (name, version)
-        common.WriteClientLog(
-            models.InstallLog, uuid, package=pkg, status=status,
-            on_corp=on_corp, applesus=applesus,
-            duration_seconds=duration_seconds, mtime=install_datetime,
-            dl_kbytes_per_sec=dl_kbytes_per_sec)
+      self._LogInstalls(self.request.get_all('installs'), computer)
+
       for removal in self.request.get_all('removals'):
         common.WriteClientLog(
-            models.ClientLog, uuid, action='removal', details=removal)
+            models.ClientLog, uuid, computer=computer, action='removal',
+            details=removal)
+
       for problem in self.request.get_all('problem_installs'):
         common.WriteClientLog(
-            models.ClientLog, uuid, action='install_problem', details=problem)
+            models.ClientLog, uuid, computer=computer,
+            action='install_problem', details=problem)
     elif report_type == 'preflight_exit':
       # NOTE(user): only remains for older clients.
       message = self.request.get('message')
       computer = common.WriteClientLog(
           models.PreflightExitLog, uuid, exit_reason=message)
     elif report_type == 'broken_client':
+      # Default reason of "objc" to support legacy clients, existing when objc
+      # was the only broken state ever reported.
+      reason = self.request.get('reason', 'objc')
       details = self.request.get('details')
-      logging.warning('Broken Munki client: %s', details)
-      common.WriteBrokenClient(uuid, details)
+      logging.warning('Broken Munki client (%s): %s', reason, details)
+      common.WriteBrokenClient(uuid, reason, details)
     elif report_type == 'msu_log':
       details = {}
       for k in ['time', 'user', 'source', 'event', 'desc']:

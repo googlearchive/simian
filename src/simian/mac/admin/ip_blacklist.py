@@ -24,7 +24,6 @@
 import re
 from simian.mac import admin
 from simian.mac import models
-from simian.mac.common import auth
 from simian.mac.common import util
 
 IP_REGEX = '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?$'
@@ -33,7 +32,7 @@ class IPBlacklist(admin.AdminHandler):
 
   def get(self):
     """GET handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
     ips = {}
@@ -51,7 +50,7 @@ class IPBlacklist(admin.AdminHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
     values = self.request.get_all('item_0', None)

@@ -23,12 +23,7 @@ Classes:
 
 
 
-
-import os
-import appengine_config
-
-from google.appengine.ext import webapp
-from google.appengine.ext.webapp.util import run_wsgi_app
+import webapp2
 
 from simian import settings
 from simian.mac.cron import applesus
@@ -36,10 +31,11 @@ from simian.mac.cron import maintenance
 from simian.mac.cron import reports_cache
 
 
-application = webapp.WSGIApplication([
+app = webapp2.WSGIApplication([
     # Apple SUS
     (r'/cron/applesus/catalogsync$', applesus.AppleSUSCatalogSync),
     (r'/cron/applesus/autopromote$', applesus.AppleSUSAutoPromote),
+
 
     # Maintenance
     ('/cron/maintenance/authsession_cleanup', maintenance.AuthSessionCleanup),
@@ -53,12 +49,3 @@ application = webapp.WSGIApplication([
     (r'/cron/reports_cache/([a-z_]+)$', reports_cache.ReportsCache),
     (r'/cron/reports_cache/([a-z_]+)/(.*)$', reports_cache.ReportsCache),
 ], debug=settings.DEBUG)
-
-
-
-def main():
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()

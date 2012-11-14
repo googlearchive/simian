@@ -124,16 +124,16 @@ class ModelsModuleTest(mox.MoxTestBase):
     if type(__builtins__) is dict:
       # __builtins__ is a dict under setuptools + python. ???
       self.mox.StubOutWithMock(models.db.Model, 'put')
-      models.db.Model.put('arg').AndReturn(None)
+      models.db.Model.put().AndReturn(None)
     else:
       self.mox.StubOutWithMock(__builtins__, 'super')
       __builtins__.super(models.BaseModel, b).AndReturn(mock_func)
-      mock_func.put('arg').AndReturn(None)
+      mock_func.put().AndReturn(None)
     self.mox.StubOutWithMock(b, 'MemcacheAutoUpdate')
     b.MemcacheAutoUpdate().AndReturn(None)
 
     self.mox.ReplayAll()
-    b.put('arg')
+    b.put()
     self.mox.VerifyAll()
 
   def testBaseModelResetMemcacheWrap(self):

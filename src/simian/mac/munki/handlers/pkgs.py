@@ -120,20 +120,20 @@ class Packages(
     # match, or the client's file is older than the mod time of this package.
     elif ((etag_nomatch_str and pkg.pkgdata_sha256 and
       etag_nomatch_str != pkg.pkgdata_sha256) or resource_expired):
-      self.response.headers['Content-Disposition'] = (
+      self.response.headers['Content-Disposition'] = str(
           'attachment; filename=%s' % filename)
       # header date empty or package has changed, send blob with last-mod date.
       if pkg.pkgdata_sha256:
-        self.response.headers['ETag'] = pkg.pkgdata_sha256
+        self.response.headers['ETag'] = str(pkg.pkgdata_sha256)
       self.response.headers['Last-Modified'] = pkg_date.strftime(
           handlers.HEADER_DATE_FORMAT)
-      self.response.headers['X-Download-Size'] = pkg_size_bytes
+      self.response.headers['X-Download-Size'] = str(pkg_size_bytes)
       self.send_blob(pkg.blobstore_key)
     else:
       # Client doesn't need to do anything, current version is OK based on
       # ETag and/or last modified date.
       if pkg.pkgdata_sha256:
-        self.response.headers['ETag'] = pkg.pkgdata_sha256
+        self.response.headers['ETag'] = str(pkg.pkgdata_sha256)
       self.response.set_status(304)
 
 

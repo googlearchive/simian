@@ -54,7 +54,7 @@
      <th>Track</th>
      <th>Munki Version</th>
      <th>Dynamic Manifest</th>
-     <th>Tags</th>
+     <th>Tags{% if tags_list %} ({{ tags_list|length }}){% endif %}</th>
      <th>User Settings</th>
   </tr>
   <tr>
@@ -234,6 +234,11 @@
     {% endif %}
   </div>
   <div class="subsubsection">{% include "installs_list.html" %}</div>
+</div>
+
+
+<div class="zippy_toggle sectionheader" title="apple_updates">Apple Software Updates</div>
+<div id="apple_updates" class="subsection">
   <div class="subsubsection">{% include "applesus_installs_list.html" %}</div>
 </div>
 
@@ -256,8 +261,13 @@
   {% endif %}
   <br/>
   <form method="POST">
-    <input type="hidden" name="action" value="set_loststolen"/>
-    <button>Set Client As Lost/Stolen</button>
+    {% if is_lost_stolen %}
+      <input type="hidden" name="action" value="remove_loststolen"/>
+      <button>Remove Client From Lost/Stolen</button>
+    {% else %}
+      <input type="hidden" name="action" value="set_loststolen"/>
+      <button>Set Client As Lost/Stolen</button>
+    {% endif %}
   </form>
   <br />
 </div>

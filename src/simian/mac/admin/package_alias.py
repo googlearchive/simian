@@ -21,10 +21,13 @@
 
 
 
+import json
 import logging
 import os
+
 from google.appengine.api import users
 from google.appengine.ext import db
+
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
@@ -37,7 +40,7 @@ class PackageAlias(admin.AdminHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.response.set_status(403)
       return
 
@@ -53,18 +56,22 @@ class PackageAlias(admin.AdminHandler):
     package_alias = self.request.get('package_alias').strip()
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
 
-    if not package_alias or not munki_pkg_name:
-      msg = 'Package Alias and Munki pkg are both required.'
+    if not package_alias:
+      msg = 'Package Alias is required.'
       self.redirect('/admin/package_alias?msg=%s' % msg)
       return
 
-    if not models.PackageInfo.all().filter('name =', munki_pkg_name).get():
+    if not munki_pkg_name:
+      munki_pkg_name = None
+    elif not models.PackageInfo.all().filter('name =', munki_pkg_name).get():
       msg = 'Munki pkg %s does not exist.' % munki_pkg_name
       self.redirect('/admin/package_alias?msg=%s' % msg)
       return
 
     alias = models.PackageAlias(
         key_name=package_alias, munki_pkg_name=munki_pkg_name)
+    if not munki_pkg_name:
+      alias.enabled = False
     alias.put()
     msg = 'Package Alias successfully saved.'
     self.redirect('/admin/package_alias?msg=%s' % msg)
@@ -78,7 +85,7 @@ class PackageAlias(admin.AdminHandler):
     alias.put()
     data = {'enabled': enabled, 'key_name': key_name}
     self.response.headers['Content-Type'] = 'application/json'
-    self.response.out.write(util.Serialize(data))
+    self.response.out.write(json.dumps(data))
 
   def get(self, report=None, product_id=None):
     """GET handler."""
@@ -88,7 +95,7 @@ class PackageAlias(admin.AdminHandler):
   def _DisplayMain(self):
     """Displays the main Package Alias report."""
     package_aliases = models.PackageAlias.all()
-    is_admin = auth.IsAdminUser()
+    is_admin = self.IsAdminUser()
     # TODO(user): generate PackageInfo dict so admin select box can use display
     #             names, munki package names can link to installs, etc.
     if is_admin:

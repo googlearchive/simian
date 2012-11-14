@@ -29,10 +29,10 @@ import logging
 import os
 import re
 import time
+import webapp2
 
 from google.appengine.api import mail
 from google.appengine.ext import blobstore
-from google.appengine.ext import webapp
 
 from simian import settings
 from simian.auth import gaeserver
@@ -41,7 +41,7 @@ from simian.mac.common import gae_util
 from simian.mac.munki import plist
 
 
-class AuthSessionCleanup(webapp.RequestHandler):
+class AuthSessionCleanup(webapp2.RequestHandler):
   """Class to invoke auth session cleanup routines when called."""
 
   def get(self):
@@ -52,7 +52,7 @@ class AuthSessionCleanup(webapp.RequestHandler):
     #    'AuthSessionCleanup: %d sessions expired.', expired_sessions_count)
 
 
-class MarkComputersInactive(webapp.RequestHandler):
+class MarkComputersInactive(webapp2.RequestHandler):
   """Class to mark all inactive hosts as such in Datastore."""
 
   def get(self):
@@ -62,7 +62,7 @@ class MarkComputersInactive(webapp.RequestHandler):
     #logging.debug('Complete! Marked %s inactive.' % count)
 
 
-class UpdateAverageInstallDurations(webapp.RequestHandler):
+class UpdateAverageInstallDurations(webapp2.RequestHandler):
   """Class to update average install duration pkginfo descriptions reguarly."""
 
   def get(self):
@@ -106,7 +106,7 @@ class UpdateAverageInstallDurations(webapp.RequestHandler):
       models.Catalog.Generate(c.name, delay=delay)
 
 
-class VerifyPackages(webapp.RequestHandler):
+class VerifyPackages(webapp2.RequestHandler):
   """Class to verify all packages have matching Blobstore blobs."""
 
   def get(self):

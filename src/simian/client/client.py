@@ -67,6 +67,7 @@ else:
   import os as _stdio  # pylint: disable-msg=C6204,W0404
 
 
+DEFAULT_HTTP_ATTEMPTS = 4
 SERVER_HOSTNAME = settings.SERVER_HOSTNAME
 SERVER_PORT = settings.SERVER_PORT
 AUTH_DOMAIN = settings.AUTH_DOMAIN
@@ -789,7 +790,8 @@ class HttpsClient(object):
 
   def Do(
       self, method, url,
-      body=None, headers=None, output_filename=None, _open=open):
+      body=None, headers=None, output_filename=None,
+      retry_on_status=(500,), attempt_times=DEFAULT_HTTP_ATTEMPTS, _open=open):
     """Make a request and return the response.
 
     Args:
@@ -798,6 +800,9 @@ class HttpsClient(object):
       body: str or dict or file, optional, body to send with request
       headers: dict, optional, headers to send with request
       output_filename: str, optional, filename to write response body to
+      retry_on_status: list, default [500], int status codes to retry upon
+          receiving.
+      attempt_times: int, default 4, how many times to attempt the request
       _open: func, optional, default builtin open, to open output_filename
     Returns:
       Response object
@@ -816,8 +821,22 @@ class HttpsClient(object):
     else:
       output_file = None
 
-    response = self._DoRequestResponse(
-        method, url, body=body, headers=headers, output_file=output_file)
+    n = 0
+    while n < attempt_times:
+      time.sleep(n * 5)
+      n += 1
+      logging.debug('Do(%s, %s) try #%d', method, url, n)
+      try:
+        response = self._DoRequestResponse(
+            method, url, body=body, headers=headers, output_file=output_file)
+      except HTTPError:
+        logging.warning('HTTPError in Do(%s, %s)', method, url)
+        if n == attempt_times:
+          raise
+      else:
+        if response.status not in retry_on_status:
+          break
+        logging.warning('Retry status hit for Do(%s, %s)', method, url)
 
     if output_filename:
       output_file.close()
@@ -1542,12 +1561,15 @@ class SimianClient(HttpsAuthClient):
           str, body received over http
       otherwise:
         None
-    Raises:
+    Raises
       SimianServerError: if the Simian server returned an error (status != 200)
     """
-    response = self.Do(
-        method, url, body=body, headers=headers,
-        output_filename=output_filename)
+    try:
+      response = self.Do(
+          method, url, body=body, headers=headers,
+          output_filename=output_filename)
+    except HTTPError, e:
+      raise SimianServerError(str(e))
 
     if response.IsSuccess():
       if not full_response:
@@ -1556,61 +1578,6 @@ class SimianClient(HttpsAuthClient):
         return response
     else:
       raise SimianServerError(response.status, response.reason, response.body)
-
-  def _SimianRequestRetry(
-      self, method, url, retry_on_status, body=None, headers=None,
-      output_filename=None, full_response=False, attempt_times=3):
-    """Make a request, retry if not successful, return the body if successful.
-
-    Args:
-      method: str, HTTP method to use, like GET or POST.
-      url: str, url to connect to, like '/foo/1'
-      retry_on_status: list, of int status codes to retry upon receiving
-      body: str or file or dict, optional, body of request
-      headers: optional dict of headers to send with the request.
-      output_filename: str, optional, filename to write response body to
-      full_response: bool, default False, return response object
-      attempt_times: int, default 3, how many times to retry
-    Returns:
-      if output_filename is not supplied:
-        if full_response is True:
-          Response instance
-        else:
-          str, body received over http
-      otherwise:
-        None
-    Raises:
-      SimianServerError: if the Simian server returned an error (status != 200)
-    """
-    n = 0
-    while n < attempt_times:
-      logging.debug('SimianRequestRetry: try #%d %s %s', n, method, url)
-      time.sleep(n * 5)
-      try:
-        response = None
-        last_exc = None
-        response = self._SimianRequest(
-            method, url, body=body, headers=headers,
-            output_filename=output_filename, full_response=True)
-        if response.status not in retry_on_status:
-          break
-      except SimianServerError, e:
-        last_exc = e
-        if e.args[0] not in retry_on_status:
-          raise e
-      n += 1
-
-    if response is not None:
-      if response.IsSuccess() and response.status not in retry_on_status:
-        if full_response:
-          return response
-        else:
-          return response.body
-
-    if last_exc is not None:
-      raise last_exc
-    elif response is not None:
-      raise SimianServerError(response.status, response.reason)
 
   def _GetLoggedOnUser(self):
     """Returns the username of the logged on user."""
@@ -1917,7 +1884,7 @@ class SimianClient(HttpsAuthClient):
     body = '_report_type=%s&%s' % (report_type, body)
     if feedback:
       body = '%s&_feedback=1' % (body)
-    return self._SimianRequestRetry('POST', '/reports', [500], str(body))
+    return self._SimianRequest('POST', '/reports', str(body))
 
   def PostReportBody(self, body, feedback=False):
     """Post a pre-encoded report to the server.
@@ -1936,7 +1903,7 @@ class SimianClient(HttpsAuthClient):
       body = '%s&_feedback=1' % str(body)
     else:
       body = str(body)
-    return self._SimianRequestRetry('POST', url, [500], body)
+    return self._SimianRequest('POST', url, body)
 
   def UploadFile(self, file_path, file_type, _open=open):
     """Uploads a given log file to the server.

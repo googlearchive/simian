@@ -27,9 +27,11 @@ import time
 
 from google.appengine.ext import webapp
 
+# TODO(user): remove this _internal hack import; switch away from webapp
+#             template rendering throughout the codebase.
 try:
-  from django.utils.html import conditional_escape
-  from django.utils.safestring import mark_safe
+  from google.appengine._internal.django.utils.safestring import mark_safe
+  from google.appengine._internal.django.utils.html import conditional_escape
 except ImportError:
   # For unit tests, just return the same string.
   mark_safe = lambda x: x
@@ -119,6 +121,8 @@ def host_uuid_link(uuid):
   """Returns an HTML anchor tag linking to the report for the given uuid."""
   return mark_safe(
       '<a href="/admin/host/%s/" class="uuidhover">%s</a>' % (uuid, uuid))
+host_uuid_link.allow_tags = True
+host_uuid_link.is_safe = True
 
 
 @register.filter

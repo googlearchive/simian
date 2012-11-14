@@ -22,6 +22,7 @@
 
 
 import base64
+import json
 import os
 
 from simian import settings as settings_module
@@ -29,8 +30,6 @@ from simian.auth import x509
 from simian.mac import admin
 from simian.mac import models
 from simian.mac.admin import xsrf
-from simian.mac.common import auth
-from simian.mac.common import util
 
 MISSING = 'Missing'
 VALID = 'Valid'
@@ -43,6 +42,8 @@ PEM = {
 
 
 class Config(admin.AdminHandler):
+
+  XSRF_PROTECT = True
 
   def __init__(self, *args, **kwargs):
     super(Config, self).__init__(*args, **kwargs)
@@ -66,7 +67,7 @@ class Config(admin.AdminHandler):
 
   def get(self):
     """GET handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
     settings = models.Settings.GetAll()
@@ -82,13 +83,13 @@ class Config(admin.AdminHandler):
 
   def post(self):
     """POST handler."""
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
     xsrf_token = self.request.get('xsrf_token', None)
     if not xsrf.XsrfTokenValidate(xsrf_token, 'config'):
       self.error(400)
-      self.response.out.write(util.Serialize(
+      self.response.out.write(json.dumps(
           {'error': 'Invalid XSRF token. Refresh page and try again.'}))
       return
     if self.request.get('action', None) == 'pem_upload':
@@ -109,10 +110,10 @@ class Config(admin.AdminHandler):
           setattr(settings_module, setting.upper(), value)
         except (TypeError, ValueError), e:
           self.error(400)
-          self.response.out.write(util.Serialize({'error': str(e)}))
+          self.response.out.write(json.dumps({'error': str(e)}))
         else:
           new_value = getattr(settings_module, setting.upper())
-          self.response.out.write(util.Serialize(
+          self.response.out.write(json.dumps(
               {'values': [{'name': 'value', 'value': new_value}]}))
       elif setting_type == 'random_str':
         random_str = os.urandom(16).encode('base64')[:20]
@@ -121,11 +122,11 @@ class Config(admin.AdminHandler):
           self.redirect(
               '/admin/config?msg=XSRF secret successfully regenerated.')
         else:
-          self.response.out.write(util.Serialize(
+          self.response.out.write(json.dumps(
               {'values': [{'name': 'value', 'value': random_str}]}))
     else:
       self.error(400)
-      self.response.out.write(util.Serialize(
+      self.response.out.write(json.dumps(
           {'error': 'Trying to set invalid setting.'}))
 
   def _GetPems(self, pem_settings={}):

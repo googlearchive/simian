@@ -21,6 +21,8 @@
 
 
 
+import json
+
 from google.appengine.api import users
 
 from simian import settings
@@ -45,7 +47,7 @@ class Host(admin.AdminHandler):
 
   def post(self, uuid=None):
     """POST handler."""
-    if not auth.IsAdminUser() and not auth.IsSupportUser():
+    if not self.IsAdminUser() and not auth.IsSupportUser():
       self.response.set_status(403)
       return
 
@@ -61,8 +63,12 @@ class Host(admin.AdminHandler):
       msg = 'Host set as inactive.'
 
     elif action == 'set_loststolen':
-      models.ComputerLostStolen.SetLostStolen(uuid)
+      models.ComputerLostStolen.AddUuid(uuid)
       msg = 'Host set as lost/stolen.'
+
+    elif action == 'remove_loststolen':
+      models.ComputerLostStolen.RemoveUuid(uuid)
+      msg = 'Host removed from lost/stolen.'
 
     elif action == 'upload_logs':
       c = models.Computer.get_by_key_name(uuid)
@@ -74,7 +80,7 @@ class Host(admin.AdminHandler):
       self.response.set_status(200)
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(
-          util.Serialize({'email': c.upload_logs_and_notify}))
+          json.dumps({'email': c.upload_logs_and_notify}))
       return
 
     else:
@@ -127,7 +133,7 @@ class Host(admin.AdminHandler):
       for tag in models.Tag.GetAllTagNames():
         if tag not in tags:
           tags[tag] = False
-      tags = util.Serialize(tags)
+      tags = json.dumps(tags)
 
       admin.AddTimezoneToComputerDatetimes(computer)
       computer.connection_dates.reverse()
@@ -156,6 +162,7 @@ class Host(admin.AdminHandler):
         'tags': tags,
         'tags_list': tags_list,
         'host_report': True,
+        'is_lost_stolen': models.ComputerLostStolen.IsLostStolen(uuid),
         'limit': SINGLE_HOST_DATA_FETCH_LIMIT,
         'is_support_user': auth.IsSupportUser(),
         'is_security_user': auth.IsSecurityUser(),

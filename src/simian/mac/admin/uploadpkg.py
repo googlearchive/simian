@@ -28,7 +28,6 @@ from google.appengine.ext.webapp import blobstore_handlers
 
 from simian.mac import admin
 from simian.mac import models
-from simian.mac.common import auth
 from simian.mac.common import gae_util
 from simian.mac.munki import handlers
 
@@ -63,7 +62,7 @@ class UploadPackage(
       # enforce security in app.yaml and not do this check here.
       return
 
-    if not auth.IsAdminUser():
+    if not self.IsAdminUser():
       self.error(403)
       return
 

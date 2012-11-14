@@ -51,7 +51,9 @@ or rebuilding various caches.
 
 
 import logging
+
 from google.appengine.ext import deferred
+
 from simian.mac import models
 from simian.mac.common import gae_util
 from simian.mac.admin import applesus_update_names

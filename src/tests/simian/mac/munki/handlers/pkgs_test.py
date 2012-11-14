@@ -56,7 +56,7 @@ class PackagesHandlerTest(PackagesTest):
 
   def testGetSuccessHelper(self, pkg_modified_since=True, supply_etag='etag'):
     """Tests Packages.get()."""
-    filename = 'good name.dmg'
+    filename = u'good name.dmg'
     filename_quoted = 'good%20name.dmg'
     blobinfo_memcache_key = 'blobinfo_%s' % filename
     blobstore_key = 'fookey'
@@ -87,12 +87,12 @@ class PackagesHandlerTest(PackagesTest):
     pkgs.handlers.IsClientResourceExpired(pkg_date, mod_since_date).AndReturn(
         pkg_modified_since)
     if pkg_modified_since:
-      self.response.headers['Content-Disposition'] = (
+      self.response.headers['Content-Disposition'] = str(
           'attachment; filename=%s' % filename)
       self.response.headers['ETag'] = supply_etag
       self.response.headers['Last-Modified'] = pkg_date.strftime(
           pkgs.handlers.HEADER_DATE_FORMAT)
-      self.response.headers['X-Download-Size'] = pkg_size
+      self.response.headers['X-Download-Size'] = str(pkg_size)
       self.c.send_blob(blobstore_key).AndReturn(None)
     else:
       if supply_etag:
@@ -138,7 +138,7 @@ class PackagesHandlerTest(PackagesTest):
       pkgs.handlers.IsClientResourceExpired(
           pkg_date, mod_since_date).AndReturn(is_expired)
     if pkg_etag and status == 304:
-      self.response.headers['ETag'] = pkg_etag
+      self.response.headers['ETag'] = str(pkg_etag)
     self.response.set_status(status)
 
     self.mox.ReplayAll()
@@ -162,7 +162,7 @@ class PackagesHandlerTest(PackagesTest):
     self._GetFailureHelper(
         412,
         mod_since_date='',
-        pkg_etag='etag1',
+        pkg_etag=u'etag1',
         match_etag='etag2',
         is_expired=False)
 
@@ -171,7 +171,7 @@ class PackagesHandlerTest(PackagesTest):
     self._GetFailureHelper(
         304,
         mod_since_date='',
-        pkg_etag='etag1',
+        pkg_etag=u'etag1',
         nomatch_etag='etag1',
         is_expired=False)
 
