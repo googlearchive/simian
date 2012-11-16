@@ -4,14 +4,14 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.0.3
+SIMIAN_VERSION=2.1
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
 MUNKI_VERSION=0.8.3.1663.0
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.dmg
-PYTHON_VERSION=2.5
+PYTHON_VERSION=2.6
 PYTHON=$(shell type -p python${PYTHON_VERSION})
 TS=$(shell date '+%s')
 # This is the version that opensource.apple.com offers
@@ -147,10 +147,9 @@ install_name_tool:
 
 m2crypto:
 	for egg in \
-	M2Crypto-0.21.1-py2.5-macosx-10.8-x86_64.egg \
-	M2Crypto-0.21.1-py2.5-macosx-10.7-x86_64.egg \
-	M2Crypto-0.21.1-py2.5-macosx-10.6-i386.egg \
-	M2Crypto-0.21.1-py2.5-macosx-10.5-i386.egg ; do \
+	M2Crypto-0.21.1-py2.6-macosx-10.8-intel.egg \
+	M2Crypto-0.21.1-py2.6-macosx-10.7-intel.egg \
+	M2Crypto-0.21.1-py2.6-macosx-10.6-universal.egg ; do \
 	  [[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "http://chandlerproject.org/pub/Projects/MeTooCrypto/$${egg}" ; \
 	done		
 	
@@ -163,7 +162,6 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.5-*.egg \
 	-R simian_M2Crypto-*-10.6-*.egg \
 	-R simian_M2Crypto-*-10.7-*.egg \
 	-R simian_M2Crypto-*-10.8-*.egg \
@@ -188,7 +186,6 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.5-*.egg \
 	-R simian_M2Crypto-*-10.6-*.egg \
 	-R simian_M2Crypto-*-10.7-*.egg \
 	-R simian_M2Crypto-*-10.8-*.egg \
@@ -213,7 +210,6 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.5-*.egg \
 	-R simian_M2Crypto-*-10.6-*.egg \
 	-R simian_M2Crypto-*-10.7-*.egg \
 	-R simian_M2Crypto-*-10.8-*.egg \
@@ -236,7 +232,6 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.5-*.egg \
 	-R simian_M2Crypto-*-10.6-*.egg \
 	-R simian_M2Crypto-*-10.7-*.egg \
 	-R simian_M2Crypto-*-10.8-*.egg \

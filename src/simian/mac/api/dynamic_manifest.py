@@ -19,16 +19,16 @@
 
 
 
+import json
 import logging
 import urllib
-from google.appengine.ext import webapp
+
 from google.appengine.ext import db
+
 from simian import settings
-from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.munki import handlers
-from simian.mac.common import util
 
 
 class Error(Exception):
@@ -39,11 +39,12 @@ class InvalidModificationType(Error):
   """An invalid modification type was given."""
 
 
-class DynamicManifest(handlers.AuthenticationHandler, webapp.RequestHandler):
+class DynamicManifest(handlers.AuthenticationHandler):
   """Handler for /api/dynamic_manifest/"""
 
-  def __init__(self):
+  def __init__(self, *args, **kwargs):
     self.user = None
+    super(DynamicManifest, self).__init__(*args, **kwargs)
 
   def _ParseParameters(self, mod_type, target, pkg_name):
     """ParseParameters instance variables.
@@ -213,7 +214,7 @@ class DynamicManifest(handlers.AuthenticationHandler, webapp.RequestHandler):
     try:
       self._PutMod()
       self.response.headers['Content-Type'] = 'application/json'
-      self.response.out.write(util.Serialize([{'pkg_name': pkg_name}]))
+      self.response.out.write(json.dumps([{'pkg_name': pkg_name}]))
     except ValueError:
       self.error(400)
     except db.Error:
