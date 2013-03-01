@@ -110,7 +110,7 @@ server_config:
 client_config: settings_check
 
 ${MUNKIFILE}:
-	curl -o $@ http://munkibuilds.org/%20older/${MUNKI_VERSION}/$@
+	curl -o $@ http://munkibuilds.org/${MUNKI_VERSION}/$@
 	hdiutil verify "$@" || (rm -f "$@" ; exit 1)
 
 add_munkicontents: os_check ${MUNKIFILE}
