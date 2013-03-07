@@ -78,7 +78,7 @@ setup(
 
   setup_requires = REQUIRE,
   install_requires = REQUIRE,
-  tests_require = REQUIRE + ['mox>=0.5.3', 'webapp2', 'django'],
+  tests_require = REQUIRE + ['mox>=0.5.3', 'webapp2', 'django==1.4'],
 
   google_test_dir = 'src/tests',
 )
