@@ -26,7 +26,6 @@ import re
 import time
 import urllib
 
-from google.appengine.ext import deferred
 from google.appengine.runtime import apiproxy_errors
 
 from simian.auth import gaeserver
@@ -50,7 +49,7 @@ INSTALL_RESULT_SUCCESSFUL = 'SUCCESSFUL'
 
 # InstallResults legacy string matching regex.
 LEGACY_INSTALL_RESULTS_STRING_REGEX = re.compile(
-    '^Install of (.*)-(\d+.*): (%s|%s: (\-?\d+))$' % (
+    r'^Install of (.*)-(\d+.*): (%s|%s: (\-?\d+))$' % (
         INSTALL_RESULT_SUCCESSFUL, INSTALL_RESULT_FAILED))
 
 

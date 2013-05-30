@@ -136,20 +136,38 @@ class ModelsModuleTest(mox.MoxTestBase):
     b.put()
     self.mox.VerifyAll()
 
-  def testBaseModelResetMemcacheWrap(self):
-    """Test BaseModel.ResetMemcacheWrap()."""
+  def testBaseModelDeleteMemcacheWrap(self):
+    """Test BaseModel.DeleteMemcacheWrap()."""
     self.mox.StubOutWithMock(models, 'memcache', True)
-    self.mox.StubOutWithMock(models.BaseModel, 'kind')
-    self.mox.StubOutWithMock(models.BaseModel, 'get_by_key_name')
 
-    memcache_key = 'mwg_kind_key'
-    models.BaseModel.kind().AndReturn('kind')
-    models.BaseModel.get_by_key_name('key').AndReturn('entity')
-    models.memcache.set(
-        memcache_key, 'entity', models.MEMCACHE_SECS).AndReturn(None)
+    memcache_key = 'mwg_BaseModel_key'
+    models.memcache.delete(memcache_key).AndReturn(None)
+
+    prop_name = 'foo_name'
+    memcache_key_with_prop_name = 'mwgpn_BaseModel_key_%s' % prop_name
+    models.memcache.delete(memcache_key_with_prop_name).AndReturn(None)
 
     self.mox.ReplayAll()
-    models.BaseModel.ResetMemcacheWrap('key')
+    models.BaseModel.DeleteMemcacheWrap('key')
+    models.BaseModel.DeleteMemcacheWrap('key', prop_name=prop_name)
+    self.mox.VerifyAll()
+
+  def testBaseModelResetMemcacheWrap(self):
+    """Test BaseModel.ResetMemcacheWrap()."""
+    self.mox.StubOutWithMock(models.BaseModel, 'DeleteMemcacheWrap', True)
+    self.mox.StubOutWithMock(models.BaseModel, 'MemcacheWrappedGet', True)
+
+    key_name = 'mwg_BaseModel_key'
+    prop_name = 'foo_name'
+
+    models.BaseModel.DeleteMemcacheWrap(
+        key_name, prop_name=prop_name).AndReturn(None)
+    models.BaseModel.MemcacheWrappedGet(
+        key_name, prop_name=prop_name, memcache_secs=10).AndReturn(None)
+
+    self.mox.ReplayAll()
+    models.BaseModel.ResetMemcacheWrap(
+        key_name, prop_name=prop_name, memcache_secs=10)
     self.mox.VerifyAll()
 
   def testBaseModelMemcacheWrappedGet(self):
@@ -493,8 +511,8 @@ class BaseManifestModificationTest(mox.MoxTestBase):
     mod_type = models.MANIFEST_MOD_MODELS.keys()[0]
     mod_type_cls = models.MANIFEST_MOD_MODELS[mod_type]
 
-    self.mox.StubOutWithMock(mod_type_cls, 'ResetMemcacheWrappedGetAllFilter')
-    mod_type_cls.ResetMemcacheWrappedGetAllFilter(
+    self.mox.StubOutWithMock(mod_type_cls, 'DeleteMemcacheWrappedGetAllFilter')
+    mod_type_cls.DeleteMemcacheWrappedGetAllFilter(
         (('%s =' % mod_type, target),)).AndReturn(None)
 
     self.mox.ReplayAll()

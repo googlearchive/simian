@@ -203,7 +203,8 @@ class ReportsCache(webapp2.RequestHandler):
     else:
       models.ReportsCache.SetMsuUserSummary(
           summary, since=since)
-      models.KeyValueCache.ResetMemcacheWrap(cursor_name)
+      models.KeyValueCache.DeleteMemcacheWrap(
+          cursor_name, prop_name='text_value')
       summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
           since=since, tmp=True)
 

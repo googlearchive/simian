@@ -21,7 +21,8 @@ goog.require('goog.ui.TriStateMenuItem');
 simian.createNewTag = function(e) {
   var item = e.target;
   var itemContent = item.getContentElement();
-  var tag = goog.dom.getTextContent(goog.dom.$$('b', null, itemContent)[0]);
+  var tag = goog.dom.getTextContent(
+      goog.dom.getElementsByTagNameAndClass('b', null, itemContent)[0]);
   var uuid = goog.dom.$('uuid').innerHTML;
   // If the tag is checked when this event is fired, it'll be unchecked!
   var params = 'action=create&tag=' + tag + '&uuid=' + uuid;

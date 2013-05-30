@@ -31,20 +31,24 @@ simian.shortcutHandler = new goog.ui.KeyboardShortcutHandler(document);
 simian.renderCharts = function(opt_el) {
   var width = 200;
   goog.array.forEach(
-    goog.dom.$$('table', 'barChart', opt_el ? goog.dom.$(opt_el) : null),
+    goog.dom.getElementsByTagNameAndClass(
+        'table', 'barChart', opt_el ? goog.dom.$(opt_el) : null),
     function(table) {
       var values = [];
       var valueStrings = [];
       var dataCells = [];
-      goog.array.forEach(goog.dom.$$('tr', null, table), function(tr) {
-        var dataCell = goog.dom.getLastElementChild(tr);
-        dataCells.push(dataCell);
-        goog.dom.classes.add(dataCell, 'datacell');
-        goog.dom.setProperties(dataCell, {'width': width});
-        goog.dom.classes.add(goog.dom.getFirstElementChild(tr), 'labelcell');
-        values.push(parseFloat(goog.dom.getTextContent(dataCell)));
-        valueStrings.push(goog.dom.getTextContent(dataCell));
-        goog.dom.removeChildren(dataCell);
+      goog.array.forEach(
+          goog.dom.getElementsByTagNameAndClass('tr', null, table),
+          function(tr) {
+            var dataCell = goog.dom.getLastElementChild(tr);
+            dataCells.push(dataCell);
+            goog.dom.classes.add(dataCell, 'datacell');
+            goog.dom.setProperties(dataCell, {'width': width});
+            goog.dom.classes.add(
+                goog.dom.getFirstElementChild(tr), 'labelcell');
+            values.push(parseFloat(goog.dom.getTextContent(dataCell)));
+            valueStrings.push(goog.dom.getTextContent(dataCell));
+            goog.dom.removeChildren(dataCell);
       });
       var maximum = Math.max.apply(Math, values);
       goog.array.forEach(dataCells, function(dataCell) {
@@ -80,7 +84,8 @@ goog.exportSymbol('simian.renderCharts', simian.renderCharts);
  */
 simian.zippyfy = function(opt_el, opt_inanimate) {
   goog.array.forEach(
-    goog.dom.$$(null, 'zippy_toggle', opt_el ? goog.dom.$(opt_el) : null),
+    goog.dom.getElementsByTagNameAndClass(
+        null, 'zippy_toggle', opt_el ? goog.dom.$(opt_el) : null),
     function(zippy) {
       var content = goog.dom.$(zippy.title);
       if (content) {
@@ -102,19 +107,19 @@ goog.exportSymbol('simian.zippyfy', simian.zippyfy);
  */
 simian.makeUUIDHover = function() {
   var div =
-      goog.dom.$dom('div',
+      goog.dom.createDom('div',
           {'id': 'host_popup_container',
            'style': 'display: none; position: absolute; z-index: 840;'},
-          goog.dom.$dom('div', {'id': 'host_popup'},
-              goog.dom.$dom('span', {'class': 'popup_pointer'}),
-              goog.dom.$dom('div',
+          goog.dom.createDom('div', {'id': 'host_popup'},
+              goog.dom.createDom('span', {'class': 'popup_pointer'}),
+              goog.dom.createDom('div',
                   {'id': 'host_popup_loading', 'style': 'display: none;'},
-                  goog.dom.$dom('img',
+                  goog.dom.createDom('img',
                       {'src': '/admin/static/loading_222.gif',
                        'style': 'width: 16px; height: 16px; margin: 5px 3px;',
                        'alt': 'loading'})
               ),
-              goog.dom.$dom('div', {'id': 'host_popup_info'})
+              goog.dom.createDom('div', {'id': 'host_popup_info'})
           )
       );
   goog.dom.appendChild(document.body, div);

@@ -618,7 +618,8 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
         # child classes which will likely override _Set().
         if GAE:
           DictSettings._Set(
-              self, 'server_hostname', os.environ.get('HTTP_HOST'))
+              self, 'server_hostname',
+              os.environ.get('DEFAULT_VERSION_HOSTNAME'))
         else:
           # Only calculate a value if the other values are present.
           # _Get() raises AttributeError if not.

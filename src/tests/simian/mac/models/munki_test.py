@@ -76,15 +76,15 @@ class CatalogTest(mox.MoxTestBase):
     name = 'goodname'
     plist1 = '<dict><key>foo</key><string>bar</string></dict>'
     mock_plist1 = self.mox.CreateMockAnything()
-    pkg1 = test.GenericContainer(plist=mock_plist1)
+    pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
     plist2 = '<dict><key>foo</key><string>bar</string></dict>'
     mock_plist2 = self.mox.CreateMockAnything()
-    pkg2 = test.GenericContainer(plist=mock_plist2)
+    pkg2 = test.GenericContainer(plist=mock_plist2, name='bar')
 
     self.mox.StubOutWithMock(models.Manifest, 'Generate')
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     self.mox.StubOutWithMock(models.Catalog, 'get_or_insert')
-    self.mox.StubOutWithMock(models.Catalog, 'ResetMemcacheWrap')
+    self.mox.StubOutWithMock(models.Catalog, 'DeleteMemcacheWrap')
 
     self._MockObtainLock('catalog_lock_%s' % name)
 
@@ -98,7 +98,8 @@ class CatalogTest(mox.MoxTestBase):
     models.Catalog.get_or_insert(name).AndReturn(mock_catalog)
     mock_catalog.put().AndReturn(None)
 
-    models.Catalog.ResetMemcacheWrap(name).AndReturn(None)
+    models.Catalog.DeleteMemcacheWrap(
+        name, prop_name='plist_xml').AndReturn(None)
     models.Manifest.Generate(name, delay=1).AndReturn(None)
     self._MockReleaseLock('catalog_lock_%s' % name)
 
@@ -106,8 +107,9 @@ class CatalogTest(mox.MoxTestBase):
     models.Catalog.Generate(name)
     self.assertEqual(mock_catalog.name, name)
     xml = '\n'.join([plist1, plist2])
-    expected_plist = models.CATALOG_PLIST_XML % xml
+    expected_plist = models.constants.CATALOG_PLIST_XML % xml
     self.assertEqual(expected_plist, mock_catalog.plist)
+    self.assertEqual(mock_catalog.package_names, ['foo', 'bar'])
     self.mox.VerifyAll()
 
   def testGenerateWithNoPkgsinfo(self):
@@ -128,9 +130,8 @@ class CatalogTest(mox.MoxTestBase):
   def testGenerateWithPlistParseError(self):
     """Tests Generate() where plist.GetXmlDocument() raises plist.Error."""
     name = 'goodname'
-    plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist1 = self.mox.CreateMockAnything()
-    pkg1 = test.GenericContainer(plist=mock_plist1)
+    pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
     self._MockObtainLock('catalog_lock_%s' % name)
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
@@ -150,10 +151,10 @@ class CatalogTest(mox.MoxTestBase):
     catalog = self.mox.CreateMockAnything()
     plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist1 = self.mox.CreateMockAnything()
-    pkg1 = test.GenericContainer(plist=mock_plist1)
+    pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
     plist2 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist2 = self.mox.CreateMockAnything()
-    pkg2 = test.GenericContainer(plist=mock_plist2)
+    pkg2 = test.GenericContainer(plist=mock_plist2, name='bar')
 
     self._MockObtainLock('catalog_lock_%s' % name)
 
@@ -235,13 +236,12 @@ class ManifestTest(mox.MoxTestBase):
 
   def testGenerateSuccess(self):
     """Tests the success path for Manifest.Generate()."""
-    xml = 'fooxml'
     name = 'goodname'
     pkg1 = test.GenericContainer(install_types=['footype1'], name='pkg1')
     pkg2 = test.GenericContainer(
         install_types=['footype1', 'footype2'], name='pkg2')
     manifest_dict = {
-        'catalogs': [name],
+        'catalogs': [name, 'apple_update_metadata'],
         pkg1.install_types[0]: [pkg1.name, pkg2.name],
         pkg2.install_types[1]: [pkg2.name],
     }
@@ -263,8 +263,8 @@ class ManifestTest(mox.MoxTestBase):
     models.Manifest.get_or_insert(name).AndReturn(mock_manifest)
     mock_manifest.plist.SetContents(manifest_dict)
     mock_manifest.put().AndReturn(None)
-    self.mox.StubOutWithMock(models.Manifest, 'ResetMemcacheWrap')
-    models.Manifest.ResetMemcacheWrap(name).AndReturn(None)
+    self.mox.StubOutWithMock(models.Manifest, 'DeleteMemcacheWrap')
+    models.Manifest.DeleteMemcacheWrap(name).AndReturn(None)
 
     self._MockReleaseLock('manifest_lock_%s' % name)
 
@@ -517,6 +517,10 @@ class PackageInfoTest(mox.MoxTestBase):
         else:
           pkginfo.Update(**kwargs)
         return
+
+    self.mox.StubOutWithMock(pkginfo, 'VerifyPackageIsEligibleForNewCatalogs')
+    pkginfo.VerifyPackageIsEligibleForNewCatalogs(
+        mox.IsA(list)).AndReturn(None)
 
     self.mox.StubOutWithMock(pkginfo, 'put')
     pkginfo.put().AndReturn(None)

@@ -6,7 +6,7 @@
 
 {% if cached_pkgs_list %}
   <table class="stats-table">
-  <tr><th>Package</th><th>Avg Duration Secs</th><th>Success</th><th>Failed</th></tr>
+  <tr><th>Package</th><th>Avg Duration Secs</th><th>Success</th><th>Failed</th><th>Pending</th></tr>
   {% for pkg in packages %}
     <tr>
       <td>{{ pkg.name }}</td>
@@ -16,6 +16,9 @@
       </td>
       <td>
         <a href="/admin/installs?pkg={{ pkg.name }}&failures=1&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.fail_count }}</a>
+      </td>
+      <td>
+        <a href="/admin/installs?pkg={{ applesus|yesno:"AppleSUS: ," }}{{ pkg.name }}&pending=1">View Pending</a>
       </td>
     </tr>
   {% endfor %}
@@ -37,9 +40,15 @@
   </div>
 
   <div id="newpackage" class="modaldialog">
+  <h2>Create PackageInfo</h2><br/><br/>
+  <form action="/admin/package" method="post" enctype="multipart/form-data">
+    <input type="file" name="new_pkginfo_plist" />
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+    <button type="submit">Upload</button>
+  </form>
+  <br />
   <form action="/admin/package" method="post">
-    <h2>Create PackageInfo</h2><br/><br/>
-    <label for="new_pkginfo_plist" style="text-align:left">PackageInfo Plist (XML)</label>
+    <label for="new_pkginfo_plist" style="text-align:left">Copy/Paste PackageInfo Plist (XML)</label>
     <textarea name="new_pkginfo_plist" style="width:450px"></textarea><br/><br/>
     <div style="text-align:right">
     <input type="button" class="button" value="Close"

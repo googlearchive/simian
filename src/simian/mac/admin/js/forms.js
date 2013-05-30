@@ -19,11 +19,11 @@ goog.require('goog.ui.InputDatePicker');
  * @param {boolean} enabled Enable or disable.
  */
 simian.toggleFormEnabled = function(form, enabled) {
-  goog.array.forEach(goog.dom.$$('input', null, form),
+  goog.array.forEach(goog.dom.getElementsByTagNameAndClass('input', null, form),
                      function(input) {
                        input.disabled = !enabled;
                      });
-  goog.array.forEach(goog.dom.$$('button', null, form),
+  goog.array.forEach(goog.dom.getElementsByTagNameAndClass('button', null, form),
                      function(button) {
                        button.disabled = !enabled;
                      });
@@ -76,8 +76,7 @@ simian.makeDateInput = function(input, opt_callback) {
   var idp = new goog.ui.InputDatePicker(formatter, parser);
   idp.decorate(input);
   if (opt_callback) {
-    goog.events.listen(idp, 'change', opt_callback);
+    goog.events.listen(idp, goog.ui.DatePicker.Events.CHANGE, opt_callback);
   }
 }
 goog.exportSymbol('simian.makeDateInput', simian.makeDateInput);
-

@@ -5,7 +5,7 @@
 {% block page-content %}
 
 <div class="zippy_toggle expanded sectionheader" title="py_computers">
-  Broken Python Clients <span class="count">({{ py_computers|length }})</span>
+  Broken Clients <span class="count">({{ py_computers|length }})</span>
 </div>
 <div id="py_computers">
   {% if py_computers %}
@@ -38,7 +38,7 @@
     {% endfor %}
     </table>
   {% else %}
-    <p>Yay!! There are currently no broken Python clients.</p>
+    <p>Yay!! There are currently no broken clients.</p>
   {% endif %}
 </div>
 

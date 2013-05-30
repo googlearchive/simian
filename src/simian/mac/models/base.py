@@ -37,8 +37,9 @@ from simian.mac.common import ipcalc
 from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.common import util
-from simian.mac.munki import plist as plist_lib
+from simian.mac.models import constants
 from simian.mac.models import properties
+from simian.mac.munki import plist as plist_lib
 
 
 class Error(Exception):
@@ -93,16 +94,32 @@ class BaseModel(db.Model):
       getattr(cls, func)(*args, **kwargs)
 
   @classmethod
-  def ResetMemcacheWrap(cls, key_name, memcache_secs=MEMCACHE_SECS):
-    """Deletes a cached entity from memcache.
+  def DeleteMemcacheWrap(cls, key_name, prop_name=None):
+    """Deletes a cached entity or property from memcache.
 
     Args:
-      key_name: str key name of the entity to fetch.
+      key_name: str key name of the entity to delete.
+      prop_name: optional, default None, property name to delete.
+    """
+    if prop_name:
+      memcache_key = 'mwgpn_%s_%s_%s' % (cls.kind(), key_name, prop_name)
+    else:
+      memcache_key = 'mwg_%s_%s' % (cls.kind(), key_name)
+    memcache.delete(memcache_key)
+
+  @classmethod
+  def ResetMemcacheWrap(
+      cls, key_name, prop_name=None, memcache_secs=MEMCACHE_SECS):
+    """Deletes and repopulates a cached entity or property from Datastore.
+
+    Args:
+      key_name: str key name of the entity to delete.
+      prop_name: optional, default None, property name to delete.
       memcache_secs: int seconds to store in memcache; default MEMCACHE_SECS.
     """
-    memcache_key = 'mwg_%s_%s' % (cls.kind(), key_name)
-    entity = cls.get_by_key_name(key_name)
-    memcache.set(memcache_key, entity, memcache_secs)
+    cls.DeleteMemcacheWrap(key_name, prop_name=prop_name)
+    cls.MemcacheWrappedGet(
+        key_name, prop_name=prop_name, memcache_secs=memcache_secs)
 
   @classmethod
   def MemcacheWrappedGet(
@@ -212,8 +229,8 @@ class BaseModel(db.Model):
     return entities
 
   @classmethod
-  def ResetMemcacheWrappedGetAllFilter(cls, filters=()):
-    """Resets the memcache wrapped response for this GetAllFilter.
+  def DeleteMemcacheWrappedGetAllFilter(cls, filters=()):
+    """Deletes the memcache wrapped response for this GetAllFilter.
 
     Args:
       filters: tuple, optional, filter arguments, e.g.
@@ -705,7 +722,7 @@ class AdminAppleSUSProductLog(AdminLogBase):
     """Puts batches of product changes to AdminAppleSUSProductLog.
 
     Args:
-      products: list of or single model.AppleSUSProduct entity.
+      products: list of or single models.AppleSUSProduct entity.
       action: str, description of the change taking place to the batch.
     """
     # Support products being a single product entity.
@@ -968,13 +985,52 @@ class AppleSUSProduct(BaseModel):
   name = db.StringProperty()
   version = db.StringProperty()
   description = db.TextProperty()
+  force_install_after_date = db.DateTimeProperty()
   apple_mtime = db.DateTimeProperty()
   tracks = db.StringListProperty()
   mtime = db.DateTimeProperty(auto_now=True)
   # If manual_override, then auto-promotion will not occur.
   manual_override = db.BooleanProperty(default=False)
+  # If unattended, then unattended installation will proceed.
+  unattended = db.BooleanProperty(default=False)
   # If deprecated, then the product is entirely hidden and unused.
   deprecated = db.BooleanProperty(default=False)
+
+  @classmethod
+  def AllActive(cls, keys_only=False):
+    """Returns a query for all Computer entities that are active."""
+    return cls.all(keys_only=keys_only).filter('deprecated =', False)
+
+  def _GetPkginfoPlist(self):
+    """Returns a pkginfo plist for an Apple Update Product."""
+    d = {
+        'installer_type': 'apple_update_metadata',
+        'name': self.product_id,
+    }
+    if self.unattended:
+      d['unattended_install'] = self.unattended
+    if self.force_install_after_date:
+      d['force_install_after_date'] = self.force_install_after_date
+    d['version'] = '1.0'  # TODO(user): find out if this is needed.
+
+    plist = plist_lib.ApplePlist()
+    plist.SetContents(d)
+    return plist
+
+  plist = property(_GetPkginfoPlist)
+
+  def _GetForceInstallAfterDateStr(self):
+    """Returns the force_install_after_date property in Munki catalog format."""
+    if self.force_install_after_date:
+      return self.force_install_after_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+  def _SetForceInstallAfterDateStr(self, str_dt):
+    """Sets the force_install_after_date property from a string."""
+    dt = datetime.datetime.strptime(str_dt, '%Y-%m-%d %H:%M')
+    self.force_install_after_date = dt
+
+  force_install_after_date_str = property(
+      _GetForceInstallAfterDateStr, _SetForceInstallAfterDateStr)
 
 
 class Tag(BaseModel):
@@ -1094,7 +1150,7 @@ class BaseManifestModification(BaseModel):
     if not model:
       raise ValueError
 
-    model.ResetMemcacheWrappedGetAllFilter((('%s =' % mod_type, target),))
+    model.DeleteMemcacheWrappedGetAllFilter((('%s =' % mod_type, target),))
 
 
 class SiteManifestModification(BaseManifestModification):

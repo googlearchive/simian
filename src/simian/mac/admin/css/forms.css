@@ -83,6 +83,7 @@ input[type="checkbox"].tags + label, .ajaxtags {
   -moz-border-radius: 3px;
   border-radius: 3px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 input[type="checkbox"][disabled].tags + label, .ajaxtags.processing {
@@ -322,7 +323,6 @@ form.saved button[type="submit"] {
   border-radius: 2px;
   color: #222;
   font-size: 0.9em;
-  white-space: nowrap;
   width: 17px;
   height: 17px;
   text-align: center;
@@ -332,6 +332,7 @@ form.saved button[type="submit"] {
   background-color: #FDD;
   border-color: #DBB;
   background-image: url('/admin/static/x.png');
+  white-space: nowrap;
 }
 .ajaxtoggle.istrue {
   background-color: #DFD;

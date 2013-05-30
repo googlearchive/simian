@@ -39,7 +39,7 @@
 
   <div class="infopanel">
     {% if auto_promote_enabled %}
-      Unless "Manual Override" is enabled, Apple Updates will auto-promote from unstable to testing after {{ unstable_grace_period_days }} days (excluding weekends) and from testing to stable on the next {{ auto_promote_stable_weekday }} that is {{ testing_grace_period_days }}+ days past the testing promotion date.
+      Unless "Auto-Promo Override" is enabled, Apple Updates will auto-promote from unstable to testing after {{ unstable_grace_period_days }} days (excluding weekends) and from testing to stable on the next {{ auto_promote_stable_weekday }} that is {{ testing_grace_period_days }}+ days past the testing promotion date.
     {% else %}
       Apple Update Auto-Promotions are disabled! To enable, visit Admin Tools - Configuration.
     {% endif %}
@@ -57,22 +57,35 @@
        <th>Version</th>
        <th>Product ID</th>
        <th>Apple Release</th>
-       <th>Testing Date</th>
-       <th>Stable Date</th>
-       <th>Manual Override</th>
+       <th>Force After Install Date<br />YYYY-MM-DD HH:MM</th>
+       <th>Unattended</th>
+       <th>Auto-Promo<br />Override</th>
        <th>Tracks</th>
     </tr>
     {% for p in products %}
       <tr>
         <td>{{ p.name }}</td>
         <td>{{ p.version }}</td>
-        <td><a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');">{{ p.product_id }}</a></td>
-        <td>{{ p.apple_mtime }}</td>
-        <td><span id="{{ p.product_id }}-testing-promote-date">
-          {{ p.testing_promote_date }}</span>
+        <td>
+          <div style="width: 7em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+            <a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');">{{ p.product_id }}</a>
+          </div>
         </td>
-        <td><span id="{{ p.product_id }}-stable-promote-date">
-          {{ p.stable_promote_date }}</span>
+        <td>{{ p.apple_mtime|date }}</td>
+        <td>
+          {% if is_admin %}
+            <input type="text" name="force_install_after_date"
+                   style="width: 10em;"
+                   value="{{p.force_install_after_date|date:"Y-m-d H:i"}}"
+                   onchange="applesus.setForceInstallAfterDate('{{ p.product_id }}', this);" />
+          {% else %}
+            {{ p.force_install_after_date }}
+          {% endif %}
+        </td>
+        <td>
+          <span class="ajaxtoggle {% if p.unattended %}istrue{% endif %}"
+            {% if is_admin %}onclick="applesus.toggleProductUnattended('{{ p.product_id }}', this);"{% endif %}>
+          </span>
         </td>
         <td>
           <span class="ajaxtoggle {% if p.manual_override %}istrue{% endif %}"
@@ -85,7 +98,15 @@
                 {% if is_admin %}
                   onclick="applesus.toggleProductTrack('{{ p.product_id }}', '{{ track }}', this);"
                 {% endif %}
-                >{{ track }}</span>
+              {% if track == 'testing' and p.testing_promote_date %}
+                >{{ track }} ({{ p.testing_promote_date|date:"b d" }})</span>
+              {% else %}
+                {% if track == 'stable' and p.stable_promote_date %}
+                  >{{ track }} ({{ p.stable_promote_date|date:"b d" }})</span>
+                {% else %}
+                  >{{ track }}</span>
+                {% endif %}
+              {% endif %}
           {% endfor %}
         </td>
       </tr>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # 
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2013 Google Inc. All Rights Reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+# """Constants used as portions of various model entities."""
 
-VERSION = 'simian-2.2'
+from simian.mac.munki import plist as plist_lib
+
+
+# Munki catalog plist XML with Apple DTD/etc, and empty array for filling.
+CATALOG_PLIST_XML = (
+    plist_lib.PLIST_HEAD + '<array>\n%s\n</array>' + plist_lib.PLIST_FOOT)

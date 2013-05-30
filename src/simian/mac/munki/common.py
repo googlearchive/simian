@@ -282,8 +282,9 @@ def LogClientConnection(
         __UpdateComputerEntity,
         event, client_id, user_settings, pkgs_to_install,
         apple_updates_to_install, ip_address, report_feedback, c=computer)
-  except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
-    logging.exception('LogClientConnection put() failure; deferring...')
+  except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError) as e:
+    logging.warning(
+        'LogClientConnection put() error %s: %s', e.__class__.__name__, str(e))
     LogClientConnection(
         event, client_id, user_settings, pkgs_to_install,
         apple_updates_to_install, ip_address, report_feedback,

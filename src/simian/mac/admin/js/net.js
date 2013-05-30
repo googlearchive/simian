@@ -93,7 +93,7 @@ simian.ajaxSubmit = function(form, opt_successCallback) {
   };
 
   var params = '';
-  goog.array.forEach(goog.dom.$$('input', null, form),
+  goog.array.forEach(goog.dom.getElementsByTagNameAndClass('input', null, form),
                      function(input) {
                        params += '&' + input.name + '=' + input.value;
                      });
@@ -180,6 +180,40 @@ applesus.toggleProductTrack = function(productId, track, button) {
     '/admin/applesus/product/' + productId, enable, disable, button);
 };
 goog.exportSymbol('applesus.toggleProductTrack', applesus.toggleProductTrack);
+
+
+/**
+ * Use XHR to set or unset force_install_after_date on an Apple SUS product.
+ * @param {string} productId Apple SUS Product ID like 042-1234.
+ * @param {Element} input The input that contains the desired date.
+ */
+applesus.setForceInstallAfterDate = function(productId, input) {
+  input.disabled = true;
+  var success = function(e) {
+    input.disabled = false;
+  };
+  var failure = function(e) {
+    alert('Failure setting force_install_after_date; please try again');
+  };
+  var params = 'force_install_after_date=' + input.value;
+  simian.xhr(
+      '/admin/applesus/product/' + productId, params, 'POST', success, failure);
+};
+goog.exportSymbol('applesus.setForceInstallAfterDate',
+                   applesus.setForceInstallAfterDate);
+
+
+/**
+ * Use XHR to set or unset unattended flag on a given Apple SUS product.
+ * @param {string} productId Apple SUS Product ID like 042-1234.
+ * @param {Element} button The button that sets the state.
+ */
+applesus.toggleProductUnattended = function(productId, button) {
+  simian.ajaxToggle('/admin/applesus/product/' + productId,
+      'unattended=1', 'unattended=0', button, 'unattended');
+};
+goog.exportSymbol('applesus.toggleProductUnattended',
+                   applesus.toggleProductUnattended);
 
 
 /**

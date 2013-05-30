@@ -49,7 +49,7 @@ conn = httplib.HTTPConnection(CLOSURE_SERVICE_DOMAIN)
 conn.request('POST', '/compile', params, headers)
 response = conn.getresponse()
 response_text = response.read()
-conn.close
+conn.close()
 
 if response.status != 200 or response_text.startswith('Error'):
   print >>sys.stderr, 'JS compilation failed: %s' % response_text

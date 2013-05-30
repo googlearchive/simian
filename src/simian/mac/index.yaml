@@ -157,6 +157,11 @@ indexes:
   - name: apple_mtime
     direction: desc
 
+- kind: AppleSUSProduct
+  properties:
+  - name: deprecated
+  - name: force_install_after_date
+
 - kind: AdminPackageLog
   properties:
   - name: filename

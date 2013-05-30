@@ -36,6 +36,7 @@ from google.appengine.ext import blobstore
 
 from simian import settings
 from simian.auth import gaeserver
+from simian.mac import common
 from simian.mac import models
 from simian.mac.common import gae_util
 from simian.mac.munki import plist
@@ -101,9 +102,9 @@ class UpdateAverageInstallDurations(webapp2.RequestHandler):
 
     # Asyncronously regenerate all Catalogs to include updated pkginfo plists.
     delay = 0
-    for c in models.Catalog.all():
+    for track in common.TRACKS:
       delay += 5
-      models.Catalog.Generate(c.name, delay=delay)
+      models.Catalog.Generate(track, delay=delay)
 
 
 class VerifyPackages(webapp2.RequestHandler):

@@ -101,10 +101,6 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
 
     pkginfos = [pkginfo1]
 
-    catalog1 = self.mox.CreateMockAnything()
-    catalog1.name = 'cat1'
-    catalogs = [catalog1]
-
     install_counts = {
         pkg1_munki_name: {
             'install_count': 3,
@@ -140,8 +136,10 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
     pkginfo1.put().AndReturn(None)
     maint.gae_util.ReleaseLock(pkg1_lock).AndReturn(None)
 
-    maint.models.Catalog.all().AndReturn(catalogs)
-    maint.models.Catalog.Generate(catalog1.name, delay=5)
+    delay = 0
+    for track in maint.common.TRACKS:
+      delay += 5
+      maint.models.Catalog.Generate(track, delay=delay)
 
     self.mox.ReplayAll()
     self.c.get()

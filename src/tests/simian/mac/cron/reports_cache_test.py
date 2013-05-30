@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-#
+# 
 # Copyright 2010 Google Inc. All Rights Reserved.
-#
+# 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -180,8 +180,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since=None).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor')
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor', prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since=None, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock('msu_user_summary_lock').AndReturn(True)
@@ -245,8 +245,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since=None).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor')
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor', prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since=None, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock('msu_user_summary_lock').AndReturn(True)
@@ -329,8 +329,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since=None).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor')
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor', prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since=None, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock('msu_user_summary_lock').AndReturn(True)
@@ -396,8 +396,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since='%dD' % since_days).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor_%dD' % since_days)
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor_%dD' % since_days, prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since='%dD' % since_days, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock(lock_name).AndReturn(True)
@@ -464,7 +464,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_empty, since='%dD' % since_days).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(cursor_name)
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        cursor_name, prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since='%dD' % since_days, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock(lock_name).AndReturn(True)
@@ -536,8 +537,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since=None).AndReturn(None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor')
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor', prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since=None, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock('msu_user_summary_lock').AndReturn(True)
@@ -636,8 +637,8 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     lquery.fetch(rc.FETCH_LIMIT).AndReturn(None)
     reports_cache.models.ReportsCache.SetMsuUserSummary(
         summary_output, since=None)
-    reports_cache.models.KeyValueCache.ResetMemcacheWrap(
-        'msu_user_summary_cursor')
+    reports_cache.models.KeyValueCache.DeleteMemcacheWrap(
+        'msu_user_summary_cursor', prop_name='text_value')
     reports_cache.models.ReportsCache.DeleteMsuUserSummary(
         since=None, tmp=True).AndReturn(None)
     reports_cache.gae_util.ReleaseLock('msu_user_summary_lock').AndReturn(True)

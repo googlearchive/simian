@@ -62,6 +62,8 @@ class AppleSUSAdmin(admin.AdminHandler):
     if tracks:
       applesus.GenerateAppleSUSCatalogs(tracks=tracks, delay=1)
       self.redirect('/admin/applesus?msg=Catalog regeneration in progress.')
+    else:
+      self.redirect('/admin/applesus?msg=Select at least one catalog!')
 
   def _ChangeProduct(self, product_id):
     """Method to change properties of a given Apple SUS product."""
@@ -70,6 +72,9 @@ class AppleSUSAdmin(admin.AdminHandler):
     track = self.request.get('track')
     enabled = self.request.get('enabled', None)
     manual_override = self.request.get('manual_override', None)
+    unattended = self.request.get('unattended', None)
+    force_install_after_date = self.request.get(
+        'force_install_after_date', None)
 
     product = models.AppleSUSProduct.get_by_key_name(product_id)
     if not product:
@@ -97,6 +102,22 @@ class AppleSUSAdmin(admin.AdminHandler):
            if prom_date:
              data['%s_promote_date' % track] = prom_date.strftime('%b. %d, %Y')
       data['manual_override'] = manual_override
+    # set/unset force_install_after_date property
+    elif force_install_after_date is not None:
+      if force_install_after_date:
+        product.force_install_after_date_str = force_install_after_date
+      else:
+        product.force_install_after_date = None
+      product.put()
+      data['force_install_after_date'] = force_install_after_date
+      log_action = 'force_install_after_date=%s' % force_install_after_date
+    # set/unset unattended property
+    elif unattended is not None:
+      unattended = bool(int(unattended))
+      product.unattended = unattended
+      product.put()
+      data['unattended'] = unattended
+      log_action = 'unattended=%s' % unattended
     # add/remove track to product
     elif enabled is not None:
       enabled = bool(int(enabled))
@@ -141,8 +162,7 @@ class AppleSUSAdmin(admin.AdminHandler):
       self.response.set_status(404)
 
   def _DisplayMain(self):
-    query = models.AppleSUSProduct.all().filter(
-        'deprecated =', False).order('-apple_mtime')
+    query = models.AppleSUSProduct.AllActive().order('-apple_mtime')
     products = []
     # NOTE(user): the following adds about 700ms onto the request, so we may
     #             want to pre-calculate this in a cron in the future.

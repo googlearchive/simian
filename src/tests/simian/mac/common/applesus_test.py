@@ -20,6 +20,8 @@
 
 
 
+import plistlib
+
 import tests.appenginesdk
 import datetime
 from google.apputils import app
@@ -283,6 +285,51 @@ class DistFileDocumentTest(mox.MoxTestBase):
     """Test GetInstallerScript()."""
     self.dfd._installer_script = 'foo'
     self.assertEqual('foo', self.dfd.GetInstallerScript())
+
+
+class GenerateAppleSUSMetadataCatalogTest(mox.MoxTestBase):
+
+  def testNominal(self):
+    mock_product1 = applesus.models.AppleSUSProduct(
+        product_id='ID1', name='Any Widget', version='2.0', unattended=True)
+    mock_product2 = applesus.models.AppleSUSProduct(
+        product_id='ID2', name='Any Widget 2', version='2.1',
+        force_install_after_date=datetime.datetime.utcnow())
+
+    mock_query = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(applesus.models, 'AppleSUSProduct')
+
+    applesus.models.AppleSUSProduct.AllActive().AndReturn(mock_query)
+    mock_query.filter('unattended =', True).AndReturn([mock_product1])
+    applesus.models.AppleSUSProduct.AllActive().AndReturn(mock_query)
+    mock_query.filter('force_install_after_date !=', None).AndReturn(
+        [mock_product2])
+
+    mock_cat = applesus.models.AppleSUSCatalog()
+    self.mox.StubOutWithMock(mock_cat, 'put')
+    self.mox.StubOutWithMock(applesus.models, 'Catalog')
+    applesus.models.Catalog(key_name=mox.IsA(str)).AndReturn(mock_cat)
+    mock_cat.put()
+
+    self.mox.StubOutWithMock(applesus.models.Catalog, 'DeleteMemcacheWrap')
+    applesus.models.Catalog.DeleteMemcacheWrap(
+        'apple_update_metadata', prop_name='plist_xml').AndReturn(None)
+
+    self.mox.ReplayAll()
+    result = applesus.GenerateAppleSUSMetadataCatalog()
+    self.mox.VerifyAll()
+
+    self.assertEquals(mock_cat, result)
+    plist = plistlib.readPlistFromString(mock_cat.plist)
+    print plist
+    self.assertEquals(2, len(plist))
+    self.assertTrue(all(isinstance(x, dict) for x in plist))
+    self.assertTrue(all('installer_type' in x for x in plist))
+    self.assertTrue(all('name' in x for x in plist))
+    self.assertTrue(all(
+        'unattended_install' in x for x in plist if x['name'] == 'ID1'))
+    self.assertTrue(all(
+        'force_install_after_date' in x for x in plist if x['name'] == 'ID2'))
 
 
 def main(unused_argv):

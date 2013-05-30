@@ -24,6 +24,7 @@
 import datetime
 import logging
 import re
+import xml
 from xml.dom import minidom
 
 from google.appengine.api import taskqueue
@@ -32,6 +33,7 @@ from google.appengine.ext import deferred
 from simian import settings
 from simian.mac import common
 from simian.mac import models
+from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
@@ -179,6 +181,18 @@ def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
       else:
         GenerateAppleSUSCatalog(os_version, track)
 
+  if delay:
+    now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
+    deferred_name = 'gen-sus-metadata-catalog-%s' % now_str
+    deferred_name = re.sub(r'[^\w-]', '', deferred_name)
+    try:
+      deferred.defer(
+          GenerateAppleSUSMetadataCatalog, _name=deferred_name)
+    except taskqueue.TaskAlreadyExistsError:
+      logging.info('Skipping duplicate Apple SUS Catalog generation task.')
+  else:
+    GenerateAppleSUSMetadataCatalog()
+
 
 def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   """Generates an Apple SUS catalog for a given os_version and track.
@@ -225,6 +239,39 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   c.plist = catalog_plist_xml
   c.put()
   return c, new_plist
+
+
+def GenerateAppleSUSMetadataCatalog():
+  """Generates the Apple SUS metadata catalog.
+
+  Returns:
+    The Catalog instance created.
+  """
+  logging.info('Generating catalog: apple_update_metadata')
+
+  products = {}
+  # Currently, items need to exist in this catalog if they're unattended or
+  # have a force_install_after_date date set.
+  unattended = models.AppleSUSProduct.AllActive().filter('unattended =', True)
+  force_install_after_date = models.AppleSUSProduct.AllActive().filter(
+      'force_install_after_date !=', None)
+  for p in unattended:
+    products[p.product_id] = p
+  for p in force_install_after_date:
+    products[p.product_id] = p
+
+  catalog_plist_xml_fragments = [
+      p.plist.GetXmlContent() for p in products.values()]
+  catalog_plist_xml = constants.CATALOG_PLIST_XML % (
+      '\n'.join(catalog_plist_xml_fragments))
+
+  # Overwrite the catalog being served for this os_version/track pair.
+  c = models.Catalog(key_name='apple_update_metadata')
+  c.plist = catalog_plist_xml
+  c.put()
+  models.Catalog.DeleteMemcacheWrap(
+      'apple_update_metadata', prop_name='plist_xml')
+  return c
 
 
 def ParseDist(dist_str):

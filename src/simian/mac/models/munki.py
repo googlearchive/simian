@@ -32,12 +32,8 @@ from google.appengine.ext import deferred
 from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.models import base
+from simian.mac.models import constants
 from simian.mac.munki import plist as plist_lib
-
-
-# Munki catalog plist XML with Apple DTD/etc, and empty array for filling.
-CATALOG_PLIST_XML = '%s<array>\n%s\n</array>%s' % (
-    plist_lib.PLIST_HEAD, '%s', plist_lib.PLIST_FOOT)
 
 
 class MunkiError(base.Error):
@@ -88,6 +84,8 @@ class Catalog(BaseMunkiModel):
   Note: There is also an "all" catalog that includes all packages.
   """
 
+  package_names = db.StringListProperty()
+
   PLIST_LIB_CLASS = plist_lib.MunkiPlist
 
   @classmethod
@@ -115,6 +113,7 @@ class Catalog(BaseMunkiModel):
       return
 
     #logging.debug('Creating catalog: %s', name)
+    package_names = []
     try:
       pkgsinfo_dicts = []
       package_infos = PackageInfo.all().filter('catalogs =', name)
@@ -123,23 +122,25 @@ class Catalog(BaseMunkiModel):
         raise CatalogGenerateError('No pkgsinfo found with catalog: %s' % name)
 
       for p in package_infos:
+        package_names.append(p.name)
         pkgsinfo_dicts.append(p.plist.GetXmlContent(indent_num=1))
 
-      catalog = CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
+      catalog = constants.CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
 
       c = cls.get_or_insert(name)
+      c.package_names = package_names
       c.name = name
       c.plist = catalog
       c.put()
-      cls.ResetMemcacheWrap(name)
+      cls.DeleteMemcacheWrap(name, prop_name='plist_xml')
       #logging.debug('Generated catalog successfully: %s', name)
       # Generate manifest for newly generated catalog.
       Manifest.Generate(name, delay=1)
     except (CatalogGenerateError, db.Error, plist_lib.Error):
       logging.exception('Catalog.Generate failure for catalog: %s', name)
-      gae_util.ReleaseLock(lock)
       raise
-    gae_util.ReleaseLock(lock)
+    finally:
+      gae_util.ReleaseLock(lock)
 
 
 class Manifest(BaseMunkiModel):
@@ -192,7 +193,7 @@ class Manifest(BaseMunkiModel):
           install_types[install_type].append(p.name)
 
       # Generate a dictionary of the manifest data.
-      manifest_dict = {'catalogs': [name]}
+      manifest_dict = {'catalogs': [name, 'apple_update_metadata']}
       for k, v in install_types.iteritems():
         manifest_dict[k] = v
 
@@ -201,14 +202,14 @@ class Manifest(BaseMunkiModel):
       # Turn the manifest dictionary into XML.
       manifest_entity.plist.SetContents(manifest_dict)
       manifest_entity.put()
-      cls.ResetMemcacheWrap(name)
+      cls.DeleteMemcacheWrap(name)
       #logging.debug(
       #    'Manifest %s created successfully', name)
     except (ManifestGenerateError, db.Error, plist_lib.Error):
       logging.exception('Manifest.Generate failure: %s', name)
-      gae_util.ReleaseLock(lock)
       raise
-    gae_util.ReleaseLock(lock)
+    finally:
+      gae_util.ReleaseLock(lock)
 
 
 class PackageInfo(BaseMunkiModel):
@@ -346,22 +347,38 @@ class PackageInfo(BaseMunkiModel):
       gae_util.SafeBlobDel(self.blobstore_key)
     return ret
 
+  def VerifyPackageIsEligibleForNewCatalogs(self, new_catalogs):
+    """Ensure a package with the same name does not exist in the new catalogs.
+
+    Args:
+      new_catalogs: list of str catalogs to verify the package name is not in.
+    Raises:
+      PackageInfoUpdateError: a new catalog contains a pkg with the same name.
+    """
+    for catalog in new_catalogs:
+      if self.name in Catalog.get_by_key_name(catalog).package_names:
+        raise PackageInfoUpdateError(
+            '%r already exists in %r catalog' % (self.name, catalog))
+
   @classmethod
   def _PutAndLogPackageInfoUpdate(
-      cls, pkginfo, original_plist, changed_catalogs):
+      cls, pkginfo, original_plist, original_catalogs):
     """Helper method called by Update or UpdateFromPlist to put/log the update.
 
     Args:
       pkginfo: a PackageInfo entity ready to be put to Datastore.
       original_plist: str XML of the original pkginfo plist, before updates.
-      changed_catalogs: a list of str catalog names that have changed and need
-          to be regenerated.
+      original_catalogs: list of catalog names the pkg was previously in.
     Raises:
       PackageInfoUpdateError: there were validation problems with the pkginfo.
     """
+    new_catalogs = [c for c in pkginfo.catalogs if c not in original_catalogs]
+    pkginfo.VerifyPackageIsEligibleForNewCatalogs(new_catalogs)
+
     pkginfo.put()
 
     delay = 0
+    changed_catalogs = set(original_catalogs + pkginfo.catalogs)
     for track in sorted(changed_catalogs, reverse=True):
       delay += 5
       Catalog.Generate(track, delay=delay)
@@ -445,11 +462,12 @@ class PackageInfo(BaseMunkiModel):
 
     pkginfo.plist = plist
     pkginfo.name = plist['name']
-    changed_catalogs = set(pkginfo.catalogs + plist['catalogs'])
+    original_catalogs = pkginfo.catalogs
     pkginfo.catalogs = plist['catalogs']
     pkginfo.pkgdata_sha256 = plist['installer_item_hash']
     try:
-      cls._PutAndLogPackageInfoUpdate(pkginfo, original_plist, changed_catalogs)
+      cls._PutAndLogPackageInfoUpdate(
+          pkginfo, original_plist, original_catalogs)
     except PackageInfoUpdateError:
       gae_util.ReleaseLock(lock)
       raise
@@ -552,17 +570,17 @@ class PackageInfo(BaseMunkiModel):
               'PackageInfo is not safe to modify; move to unstable first.')
 
     if catalogs is not None:
-      changed_catalogs = set(self.catalogs + catalogs)
+      original_catalogs = self.catalogs
       self.catalogs = catalogs
       self.plist['catalogs'] = catalogs
     else:
-      changed_catalogs = self.catalogs
+      original_catalogs = self.catalogs
 
     if manifests is not None:
       self.manifests = manifests
 
     try:
-      self._PutAndLogPackageInfoUpdate(self, original_plist, changed_catalogs)
+      self._PutAndLogPackageInfoUpdate(self, original_plist, original_catalogs)
     except PackageInfoUpdateError:
       gae_util.ReleaseLock(lock)
       raise
