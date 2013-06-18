@@ -44,7 +44,7 @@ REQUIRE = [
     'pyasn1==0.1.2',
     'tlslite==0.3.8',
     'M2Crypto==0.21.1',
-    'pyyaml==3.05',
+    'pyyaml==3.10',
     'unittest2==0.5.1',
     'icalendar==1.2',
     'WebOb==1.1.1',
