@@ -13,6 +13,7 @@
         <th>UUID</th>
       {% endif %}
       <th>Status</th>
+      <th>Unattended</th>
       <th>On Corp</th>
       <th>Time</th>
       <th>Time Since</th>
@@ -28,6 +29,7 @@
       </td>
       {% endif %}
       <td>{{ install.status }}</td>
+      <td>{{ install.unattended|default_if_none:"N/A" }}</td>
       <td>{{ install.on_corp }}</td>
       <td>{{ install.mtime }}</td>
       <td>{{ install.mtime|timesince }}</td>

@@ -389,31 +389,31 @@ class HandlersTest(test.RequestHandlerTest):
     mock_install = self.mox.CreateMockAnything()
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App1-1.0.0',
-        status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None,
+        status='0', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=None, dl_kbytes_per_sec=None,
         mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App2-123123',
-        status='0', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None,
+        status='0', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=None, dl_kbytes_per_sec=None,
         mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App3-2.1.1',
-        status='1', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None,
+        status='1', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=None, dl_kbytes_per_sec=None,
         mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App4-456456',
-        status='-5', on_corp=on_corp, applesus=False, duration_seconds=None,
-        dl_kbytes_per_sec=None,
+        status='-5', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=None, dl_kbytes_per_sec=None,
         mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package=installs[-1] + '-',
-        status='UNKNOWN', on_corp=on_corp, applesus=False,
+        status='UNKNOWN', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
         mtime=test.mox.IsA(datetime.datetime)).AndReturn(
             mock_install)
@@ -456,10 +456,11 @@ class HandlersTest(test.RequestHandlerTest):
          '|duration_seconds=60|time=9999999999.1415989'
          '|download_kbytes_per_sec=0'),
 
-        ('name=iTunes|version=10.2.0|applesus=1|status=0|duration_seconds=300'
-         '|time=asdf'),
+        ('name=iTunes|version=10.2.0|applesus=1|unattended=false|status=0'
+         '|duration_seconds=300|time=asdf'),
 
-         'name=Safari|version=5.1.0|applesus=true|status=0|duration_seconds=4',
+        ('name=Safari|version=5.1.0|applesus=true|unattended=true|status=0'
+         '|duration_seconds=4'),
     ]
     self.PostSetup(uuid=uuid, report_type=report_type)
     self.request.get_all('installs').AndReturn(installs)
@@ -473,36 +474,36 @@ class HandlersTest(test.RequestHandlerTest):
     # successful munki install report, lacking time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='FooApp1-1.0.0',
-        status='0', on_corp=on_corp, applesus=False, duration_seconds=100,
-        mtime=test.mox.IsA(datetime.datetime), dl_kbytes_per_sec=225).AndReturn(
-            mock_install)
+        status='0', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=100, mtime=test.mox.IsA(datetime.datetime),
+        dl_kbytes_per_sec=225).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # failed munki install report, with time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='FooApp2-2.1.1',
-        status='2', on_corp=on_corp, applesus=False, duration_seconds=200,
-        mtime=datetime.datetime(2011, 8, 8, 15, 42, 59),
+        status='2', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=200, mtime=datetime.datetime(2011, 8, 8, 15, 42, 59),
         dl_kbytes_per_sec=1024).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
     # successful munki install report, with future time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='FutureApp-9.9.9',
-        status='0', on_corp=on_corp, applesus=False, duration_seconds=60,
-        mtime=test.mox.IsA(datetime.datetime),
+        status='0', on_corp=on_corp, applesus=False, unattended=False,
+        duration_seconds=60, mtime=test.mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with bogus time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='iTunes-10.2.0',
-        status='0', on_corp=on_corp, applesus=True, duration_seconds=300,
-        mtime=test.mox.IsA(datetime.datetime),
+        status='0', on_corp=on_corp, applesus=True, unattended=False,
+        duration_seconds=300, mtime=test.mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with no time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Safari-5.1.0',
-        status='0', on_corp=on_corp, applesus=True, duration_seconds=4,
-        mtime=test.mox.IsA(datetime.datetime),
+        status='0', on_corp=on_corp, applesus=True, unattended=True,
+        duration_seconds=4, mtime=test.mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
 

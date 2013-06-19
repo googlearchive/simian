@@ -157,7 +157,8 @@ class AppleSUSAdmin(admin.AdminHandler):
     if report == 'product':
       self._DisplayProductDescription(product_id)
     elif report == 'logs':
-      self._DisplayUpdateLog()
+      product_id = self.request.get('product_id')
+      self._DisplayUpdateLogs(product_id=product_id)
     else:
       self.response.set_status(404)
 
@@ -196,10 +197,19 @@ class AppleSUSAdmin(admin.AdminHandler):
     product = models.AppleSUSProduct.get_by_key_name(product)
     self.response.out.write(product.description)
 
-  def _DisplayUpdateLog(self):
-    logs = models.AdminAppleSUSProductLog.all().order('-mtime')
+  def _DisplayUpdateLogs(self, product_id=None):
+    display_name = None
+    logs_query = models.AdminAppleSUSProductLog.all()
+    if product_id:
+      logs_query.filter('product_id =', product_id)
+      update_entity = models.AppleSUSProduct.get_by_key_name(product_id)
+      if update_entity:
+        display_name = '%s - %s' % (update_entity.name, update_entity.version)
+    logs_query.order('-mtime')
     values = {
-        'logs': self.Paginate(logs, DEFAULT_APPLESUS_LOG_FETCH),
+        'display_name': display_name,
+        'product_id': product_id,
+        'logs': self.Paginate(logs_query, DEFAULT_APPLESUS_LOG_FETCH),
         'report_type': 'apple_logs',
     }
     self.Render('applesus_log.html', values)

@@ -4,11 +4,11 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.2
+SIMIAN_VERSION=2.2.1
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=0.8.3.1663.0
+MUNKI_VERSION=0.9.0.1803.0
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.dmg
 PYTHON_VERSION=2.6

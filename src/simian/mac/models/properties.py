@@ -29,7 +29,7 @@ from simian.mac.common import compress
 class SerializedProperty(db.TextProperty):
   """TextProperty class that serializes and deserializes data."""
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def get_value_for_datastore(self, model_instance):
     """Sends a serialized representation of self._obj to Datastore."""
     if self._obj is None:
@@ -37,7 +37,7 @@ class SerializedProperty(db.TextProperty):
     else:
       return db.Text(util.Serialize(self._obj))
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def __get__(self, model_instance, model_class):
     """Returns the already deserialized object."""
     value = super(SerializedProperty, self).__get__(
@@ -49,7 +49,7 @@ class SerializedProperty(db.TextProperty):
       return self
     return self._obj
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def __set__(self, model_instance, value):
     """Deserializes db.Text values and simply sets other types to self._obj."""
     if value is None or value == '':
@@ -70,7 +70,7 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
   operations, such as slicing.
   """
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def get_value_for_datastore(self, model_instance):
     """Compresses the blob value on it's way to Datastore."""
     value = super(CompressedUtf8BlobProperty, self).get_value_for_datastore(
@@ -82,7 +82,7 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
     return db.Blob(
         compress.CompressedText(value, encoding='utf-8').Compressed())
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def __get__(self, model_instance, model_class):
     """Decompresses the blob value when the property is accessed."""
     value = super(CompressedUtf8BlobProperty, self).__get__(
@@ -95,7 +95,7 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
     return unicode(
         compress.CompressedText(value, encoding='utf-8')).encode('utf-8')
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def __set__(self, model_instance, value):
     """Compresses the value when the property is set."""
     if not value:
@@ -106,7 +106,7 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
       value = compress.CompressedText(value, encoding='utf-8').Compressed()
       super(CompressedUtf8BlobProperty, self).__set__(model_instance, value)
 
-  # pylint: disable-msg=C6409
+  # pylint: disable=g-bad-name
   def __len__(self):
     """Returns the length of the uncompressed blob data."""
     return self.length

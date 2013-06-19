@@ -627,7 +627,9 @@ class CommonModuleTest(test.RequestHandlerTest):
     }
     dt = common.datetime.datetime.utcnow()
     key = '%s_%s_%s' % (uuid, details['source'], details['event'])
-    mock_model = self.MockModelStatic('ComputerMSULog', 'get_or_insert', key)
+    mock_model = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(common.models, 'ComputerMSULog')
+    common.models.ComputerMSULog(key_name=key).AndReturn(mock_model)
     common.util.Datetime.utcfromtimestamp('1292013344.12').AndReturn(dt)
     mock_model.mtime = None
     mock_model.put().AndReturn(None)
@@ -653,7 +655,9 @@ class CommonModuleTest(test.RequestHandlerTest):
         'desc': 'desc',
     }
     key = '%s_%s_%s' % (uuid, details['source'], details['event'])
-    mock_model = self.MockModelStatic('ComputerMSULog', 'get_or_insert', key)
+    mock_model = self.mox.CreateMockAnything()
+    self.mox.StubOutWithMock(common.models, 'ComputerMSULog')
+    common.models.ComputerMSULog(key_name=key).AndReturn(mock_model)
     mock_model.mtime = common.datetime.datetime(2011, 1, 1, 0, 0, 0)
 
     self.mox.ReplayAll()

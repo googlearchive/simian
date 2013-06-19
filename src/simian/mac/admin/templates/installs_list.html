@@ -13,6 +13,7 @@
         <th>UUID</th>
       {% endif %}
       <th>Status</th>
+      <th>Unattended</th>
       <th>On Corp</th>
       <th>Download Speed</th>
       <th>Install Duration Secs</th>
@@ -31,6 +32,7 @@
       </td>
       {% endif %}
       <td>{{ install.status }}</td>
+      <td>{{ install.unattended|default_if_none:"N/A" }}</td>
       <td>{{ install.on_corp }}</td>
       <td>{{ install.dl_kbytes_per_sec|download_speed }}</td>
       <td>{{ install.duration_seconds|default_if_none:"N/A" }}</td>

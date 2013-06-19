@@ -54,24 +54,28 @@
   <table class="stats-table">
     <tr class="multi-header">
        <th>Name</th>
-       <th>Version</th>
        <th>Product ID</th>
+       <th>Logs</th>
        <th>Apple Release</th>
-       <th>Force After Install Date<br />YYYY-MM-DD HH:MM</th>
+       <th>Restart Required</th>
+       <th>Force Install After Date<br />YYYY-MM-DD HH:MM</th>
        <th>Unattended</th>
        <th>Auto-Promo<br />Override</th>
        <th>Tracks</th>
     </tr>
     {% for p in products %}
       <tr>
-        <td>{{ p.name }}</td>
-        <td>{{ p.version }}</td>
+        <td>{{ p.name }} {% if p.version %}- {{ p.version }}{% endif %}</td>
         <td>
           <div style="width: 7em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
             <a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');">{{ p.product_id }}</a>
           </div>
         </td>
+        <td>
+          <a href="/admin/applesus/logs?product_id={{ p.product_id }}">logs</a>
+        </td>
         <td>{{ p.apple_mtime|date }}</td>
+        <td>{{ p.restart_required|default_if_none:"Unknown" }}</td>
         <td>
           {% if is_admin %}
             <input type="text" name="force_install_after_date"

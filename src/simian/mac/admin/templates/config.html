@@ -50,18 +50,33 @@
       </form>
     {% else %}
       {# TODO: change to elif when GAE supports Django 1.4 #}
-      {% if setting.type == "random_str" %}
-        {% ifequal name "xsrf_secret" %}
-          <form action="/admin/config" method="post">
-        {% else %}
-          <form action="/admin/config" method="post"
-                onsubmit="return simian.ajaxSubmit(this, function(json) {document.getElementById('setting_{{ name }}').innerHTML = json['values'][0]['value'];});">
-        {% endifequal %}
+      {% if setting.type == "bool" %}
+        <form action="/admin/config" method="post" onsubmit="return simian.ajaxSubmit(this);" class="saved">
           <input type="hidden" name="setting" value="{{ name }}"/>
           <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
-          <span id="setting_{{ name }}">{{ setting.value }}</span>
-          <button type="submit" name="submit" style="display: inline;">Regenerate</button>
+          <input type="checkbox" name="value" value="value"
+                 onclick="simian.removeClass(this.form, 'saved');"
+                 {% if setting.value %}
+                 checked
+                 {% endif %}
+                 /> Enable
+          <button type="submit" name="submit">Save</button>
         </form>
+      {% else %}
+        {# TODO: change to elif when GAE supports Django 1.4 #}
+        {% if setting.type == "random_str" %}
+          {% ifequal name "xsrf_secret" %}
+            <form action="/admin/config" method="post">
+          {% else %}
+            <form action="/admin/config" method="post"
+                  onsubmit="return simian.ajaxSubmit(this, function(json) {document.getElementById('setting_{{ name }}').innerHTML = json['values'][0]['value'];});">
+          {% endifequal %}
+            <input type="hidden" name="setting" value="{{ name }}"/>
+            <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+            <span id="setting_{{ name }}">{{ setting.value }}</span>
+            <button type="submit" name="submit" style="display: inline;">Regenerate</button>
+          </form>
+        {% endif %}
       {% endif %}
     {% endif %}
 

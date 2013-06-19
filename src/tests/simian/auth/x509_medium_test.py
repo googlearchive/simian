@@ -123,6 +123,42 @@ Xw==
          '+T1fI9Y2inMtktDeaZt4sw0GskHXOHIUXyJ6pMzV8=')
         )
 
+  def testX509SubjectKnownOids(self):
+    """Use a self-signed cert and load it. Check OIDs.
+
+    The cert was generated as follows:
+       openssl genrsa 1024 > host.key
+       openssl req -new -x509 -subj \
+         /CN=_cn_/C=US/L=_l_/ST=NY/O=_o_/OU=_ou_/emailAddress=_emailaddress_/DC=_dc_ \
+         -nodes -sha1 \
+         -days 365 -key host.key -set_serial 12345 > host.cert
+    """
+    s = """
+-----BEGIN CERTIFICATE-----
+MIIC2zCCAkSgAwIBAgICMDkwDQYJKoZIhvcNAQEFBQAwgYkxDTALBgNVBAMMBF9j
+bl8xCzAJBgNVBAYTAlVTMQwwCgYDVQQHDANfbF8xCzAJBgNVBAgMAk5ZMQwwCgYD
+VQQKDANfb18xDTALBgNVBAsMBF9vdV8xHTAbBgkqhkiG9w0BCQEWDl9lbWFpbGFk
+ZHJlc3NfMRQwEgYKCZImiZPyLGQBGRYEX2RjXzAeFw0xMzA2MTkyMTQ5MTVaFw0x
+NDA2MTkyMTQ5MTVaMIGJMQ0wCwYDVQQDDARfY25fMQswCQYDVQQGEwJVUzEMMAoG
+A1UEBwwDX2xfMQswCQYDVQQIDAJOWTEMMAoGA1UECgwDX29fMQ0wCwYDVQQLDARf
+b3VfMR0wGwYJKoZIhvcNAQkBFg5fZW1haWxhZGRyZXNzXzEUMBIGCgmSJomT8ixk
+ARkWBF9kY18wgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBANtV4UwAEfTnHdJB
+G1Vb7Zd7VWYvVR2Q9wWyzsnRGelDCNhgkcqqpEcvBxaYcMwZ3uFSV2IpUqEBNn32
+NQOJRn0pYJ7Q6/9CHmo1ZScGP/sgY4x7QLdU05V9AJB0m5rHrDQPIcWjRjSLRwgL
+gbLV0mCv1uIsh3QV2l5EQGWkJENNAgMBAAGjUDBOMB0GA1UdDgQWBBQKtue/if3t
+EZIcAc9as9uP7cv5JTAfBgNVHSMEGDAWgBQKtue/if3tEZIcAc9as9uP7cv5JTAM
+BgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBBQUAA4GBABCWIYv/F/YxdqnTCetgPH0t
+vTzfiJJCo6RYQPDyMu8fDxNz8QJ4okSlfyY8V/EQ+makm4dYAA67LOTDqXj2ofyJ
+C1z3sVaXQ234Yocn5oss5DPcQHjfM8INiacG2goqQzXaXRZ7BmrOUXo+eDOkulps
+zTJLQhojaNNS6RcqtgAl
+-----END CERTIFICATE-----
+"""
+    x = x509.LoadCertificateFromPEM(s)
+    x.CheckAll()
+    self.assertEqual(
+        ('CN=_cn_,C=US,L=_l_,ST=NY,O=_o_,OU=_ou_,'
+         'emailAddress=_emailaddress_,DC=_dc_'), x.GetSubject())
+
 
   def testLoadCertificateFromPEMWhenGarbageInput(self):
     """Test LoadCertificateFromPEM() with garbage input."""

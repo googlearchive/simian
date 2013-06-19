@@ -160,6 +160,7 @@ class Reports(handlers.AuthenticationHandler):
             'name': install,
             'status': 'UNKNOWN',
             'version': '',
+            'unattended': 'false',
         }
         # support for old 'Install of FooPkg-1.0: SUCCESSFUL' style strings.
         try:
@@ -182,6 +183,7 @@ class Reports(handlers.AuthenticationHandler):
       version = d.get('version', '')
       status = str(d.get('status', ''))
       applesus = common.GetBoolValueFromString(d.get('applesus', '0'))
+      unattended = common.GetBoolValueFromString(d.get('unattended', '0'))
       try:
         duration_seconds = int(d.get('duration_seconds', None))
       except (TypeError, ValueError):
@@ -209,7 +211,7 @@ class Reports(handlers.AuthenticationHandler):
       pkg = '%s-%s' % (name, version)
       entity = models.InstallLog(
           uuid=computer.uuid, computer=computer, package=pkg, status=status,
-          on_corp=on_corp, applesus=applesus,
+          on_corp=on_corp, applesus=applesus, unattended=unattended,
           duration_seconds=duration_seconds, mtime=install_datetime,
           dl_kbytes_per_sec=dl_kbytes_per_sec)
       entity.success = entity.IsSuccess()

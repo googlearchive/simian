@@ -5,23 +5,33 @@
 {% block page-content %}
 
 {% if cached_pkgs_list %}
-  <table class="stats-table">
-  <tr><th>Package</th><th>Avg Duration Secs</th><th>Success</th><th>Failed</th><th>Pending</th></tr>
-  {% for pkg in packages %}
-    <tr>
-      <td>{{ pkg.name }}</td>
-      <td>{{ pkg.duration_seconds_avg }}</td>
-      <td>
-        <a href="/admin/installs?pkg={{ pkg.name }}&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.count }}</a>
-      </td>
-      <td>
-        <a href="/admin/installs?pkg={{ pkg.name }}&failures=1&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.fail_count }}</a>
-      </td>
-      <td>
-        <a href="/admin/installs?pkg={{ applesus|yesno:"AppleSUS: ," }}{{ pkg.name }}&pending=1">View Pending</a>
-      </td>
-    </tr>
-  {% endfor %}
+  <table class="stats-table sortable-table">
+    <thead>
+      <tr>
+        <th class="sortable-column-sortby-alpha">Package</th>
+        <th>Avg Duration Secs</th>
+        <th>Success</th>
+        <th>Failed</th>
+        <th>Pending</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for pkg in packages %}
+      <tr>
+        <td>{{ pkg.name }}</td>
+        <td>{{ pkg.duration_seconds_avg }}</td>
+        <td>
+          <a href="/admin/installs?pkg={{ pkg.name }}&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.count }}</a>
+        </td>
+        <td>
+          <a href="/admin/installs?pkg={{ pkg.name }}&failures=1&applesus={{ applesus|yesno:"1,0" }}">{{ pkg.fail_count }}</a>
+        </td>
+        <td>
+          <a href="/admin/installs?pkg={{ applesus|yesno:"AppleSUS: ," }}{{ pkg.name }}&pending=1">View Pending</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
   <p>* success/failure counts last cached {{ counts_mtime|timesince }} ago.</p>
 {% else %}
@@ -34,6 +44,9 @@
       });
     }
   </script>
+  <style>
+    &#9660;
+  </style>
 
   <div style="margin: 15px 0;">
     <button class="red upload" onclick="showPackageCreator(); void(0);">New Package</button>
@@ -60,81 +73,91 @@
   </div>
 
   {% if packages %}
-    <table class="stats-table" id="pkg-table">
-    <tr>
-      <th>Package</th>
-      <th>Logs</th>
-      {% if is_admin or is_support_user %}
-        <th style="min-width: 120px;">Files</th>
-      {% else %}
-        <th style="min-width: 70px;">File</th>
-      {% endif %}
-      <th>Success*</th>
-      <th>Failed*</th>
-      <th>Avg Secs</th>
-      <th>Pending**</th>
-      <th>Properties</th>
-      <th style="min-width: 60px;">Catalogs</th>
-      <th style="min-width: 60px;">Manifests</th>
-      <th>Manifest Mod Access</th>
-    </tr>
-    {% for pkg in packages %}
-      <tr {% if pkg.filename == active_pkg %} class="activepkg"{% endif %}
-          id="package-{{ pkg.filename }}">
-        <td>
+    <table class="stats-table sortable-table" id="pkg-table">
+      <thead>
+        <tr>
+          <th class="sortable-column-sortby-alpha">Package</th>
+          <th>Logs</th>
           {% if is_admin or is_support_user %}
-            <a href="/admin/package/{{ pkg.filename }}"
-               title="{{ pkg.description|escape }}">{{ pkg.munki_name }}</a>
+            <th style="min-width: 120px;">Files</th>
           {% else %}
-            <span title="{{ pkg.description|escape }}">
-              {{ pkg.munki_name }}
-            </span>
+            <th style="min-width: 70px;">File</th>
           {% endif %}
-        </td>
-        <td><a href="/admin/packages/logs?filename={{ pkg.filename }}">logs</a></td>
-          {% if is_admin or is_support_user %}
+          <th>Success*</th>
+          <th>Failed*</th>
+          <th>Avg Secs</th>
+          <th>Pending**</th>
+          <th class="sortable-column-sortby-alpha">Properties</th>
+          <th class="sortable-column-sortby-alpha" style="min-width: 60px;">Catalogs</th>
+          <th class="sortable-column-sortby-alpha" style="min-width: 60px;">Manifests</th>
+          <th class="sortable-column-sortby-alpha">Manifest Mod Access</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for pkg in packages %}
+        <tr {% if pkg.filename == active_pkg %} class="activepkg"{% endif %}
+            id="package-{{ pkg.filename }}">
           <td>
-            <a href="/admin/package/{{ pkg.filename }}?plist_xml=1"
-               title="View pkginfo"><img src="/admin/static/file.png"
-                                         alt="View pkginfo" /></a>
-            <a href="/pkgs/{{ pkg.filename }}" title="{{ pkg.filename }}"
-               class="downloadpkg">{{ pkg.file_size|filesizeformat }}</a>
-          {% else %}
+            {% if is_admin or is_support_user %}
+              <a href="/admin/package/{{ pkg.filename }}"
+                 title="{{ pkg.description|escape }}">{{ pkg.munki_name }}</a>
+            {% else %}
+              <span title="{{ pkg.description|escape }}">
+                {{ pkg.munki_name }}
+              </span>
+            {% endif %}
+          </td>
+          <td><a href="/admin/packages/logs?filename={{ pkg.filename }}">logs</a></td>
+            {% if is_admin or is_support_user %}
+            <td>
+              <a href="/admin/package/{{ pkg.filename }}?plist_xml=1"
+                 title="View pkginfo"><img src="/admin/static/file.png"
+                                           alt="View pkginfo" /></a>
+              <a href="/pkgs/{{ pkg.filename }}" title="{{ pkg.filename }}"
+                 class="downloadpkg">{{ pkg.file_size|filesizeformat }}</a>
+            {% else %}
+            <td style="text-align: right;">
+              <span title="{{ pkg.filename }}">
+                {{ pkg.file_size|filesizeformat }}
+              </span>
+            {% endif %}
+          </td>
           <td style="text-align: right;">
-            <span title="{{ pkg.filename }}">
-              {{ pkg.file_size|filesizeformat }}
-            </span>
-          {% endif %}
-        </td>
-        <td style="text-align: right;">
-          <a href="/admin/installs?pkg={{ pkg.munki_name }}"
-             title="Successful Installs">{{ pkg.count }}</a>
-        </td>
-        <td style="text-align: right;">
-          <a href="/admin/installs?pkg={{ pkg.munki_name }}&failures=1"
-             title="Failed Installs">{{ pkg.fail_count }}</a>
-        </td>
-        <td style="text-align: right;">{{ pkg.duration_seconds_avg }}</td>
-        <td style="text-align: right;">
-          <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1"
-             title="Pending Installs">{{ pkg.pending_count }}</a>
-        </td>
-        <td>
-          {% spaceless %}
-            {{ pkg.install_types|munki_properties }}
-            {% if pkg.unattended %}{{ 'unattended_install'|munki_property }}{% endif %}
-            {{ pkg.force_install_after_date|munki_property_forcedate }}
-          {% endspaceless %}
-        </td>
-        <td>{{ pkg.catalogs|tracks_display }}</td>
-        <td>{{ pkg.manifests|tracks_display }}</td>
-        <td>{{ pkg.manifest_mod_access|join:", " }}</td>
-      </tr>
-    {% endfor %}
+            <a href="/admin/installs?pkg={{ pkg.munki_name }}"
+               title="Successful Installs">{{ pkg.count }}</a>
+          </td>
+          <td style="text-align: right;">
+            <a href="/admin/installs?pkg={{ pkg.munki_name }}&failures=1"
+               title="Failed Installs">{{ pkg.fail_count }}</a>
+          </td>
+          <td style="text-align: right;">{{ pkg.duration_seconds_avg }}</td>
+          <td style="text-align: right;">
+            <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1"
+               title="Pending Installs">{{ pkg.pending_count }}</a>
+          </td>
+          <td>
+            {% spaceless %}
+              {{ pkg.install_types|munki_properties }}
+              {% if pkg.unattended %}{{ 'unattended_install'|munki_property }}{% endif %}
+              {{ pkg.force_install_after_date|munki_property_forcedate }}
+            {% endspaceless %}
+          </td>
+          <td>{{ pkg.catalogs|tracks_display }}</td>
+          <td>{{ pkg.manifests|tracks_display }}</td>
+          <td>{{ pkg.manifest_mod_access|join:', ' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
     </table>
+
+    <script>
+      simian.makeTableSortable();
+    </script>
     <p>* success/failure counts last cached {{ counts_mtime|timesince }} ago.</p>
     <p>** pending counts last cached {{ pending_mtime|timesince }} ago.</p>
   {% endif %}
+
+
 {% endif %}
 
 {% endblock %}

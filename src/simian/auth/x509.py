@@ -57,16 +57,22 @@ OID_NAME = {
     (2, 5, 4, 10): 'O',
     (2, 5, 4, 11): 'OU',
     (1, 2, 840, 113549, 1, 9, 1): 'emailAddress',
+    (0, 9, 2342, 19200300, 100, 1, 25): 'DC',
 }
 
 # OIDs as a dict, for quick lookup of the string, e.g. 'CN'
 OID_ID = {}
 for k, v in OID_NAME.iteritems():
   OID_ID[v] = k
+OID_ID['domainComponent'] = OID_ID['DC']  # alias
+
 
 # OID SHA1 Hash with RSA Encryption
 # http://www.alvestrand.no/objectid/1.2.840.11359.html
 OID_SHA1_WITH_RSA_ENC = (1, 2, 840, 113549, 1, 1, 5)
+# OID SHA256 Hash with RSA Encryption
+# http://www.alvestrand.no/objectid/1.2.840.113549.1.1.11.html
+OID_SHA256_WITH_RSA_ENC = (1, 2, 840, 113549, 1, 1, 11)
 
 # Microsoft specific OIDs
 # http://support.microsoft.com/kb/287547
@@ -180,7 +186,7 @@ class BaseDataObject(object):
 class X509Certificate(BaseDataObject):
   """X509 Certificate class."""
 
-  SIGNATURE_ALGORITHMS = [OID_SHA1_WITH_RSA_ENC]
+  SIGNATURE_ALGORITHMS = [OID_SHA1_WITH_RSA_ENC, OID_SHA256_WITH_RSA_ENC]
   TIMESTAMP_FMT = '%y%m%d%H%M%SZ'
 
   def __init__(self):
@@ -696,10 +702,14 @@ class X509Certificate(BaseDataObject):
     if not other_cert.GetMayActAsCA():
       raise CertificateValueError('Other cert is not a CA cert')
 
-    # pylint: disable-msg=E1101
-    return other_cert.GetPublicKey().hashAndVerify(
-        self._StrToArray(self.GetSignatureData()),
-        self._StrToArray(self.GetFieldsData()))
+    sig = self._StrToArray(self.GetSignatureData())
+    fields = self._StrToArray(self.GetFieldsData())
+    pk = other_cert.GetPublicKey()
+
+    if self._cert['sig_algorithm'] == OID_SHA256_WITH_RSA_ENC:
+      return pk.hashAndVerify256(sig, fields)
+    else:
+      return pk.hashAndVerify(sig, fields)
 
 
 def LoadPemGeneric(s, header, footer, skip_info=True):

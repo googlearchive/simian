@@ -799,13 +799,13 @@ def GetInstallResults(install_results):
         item = {
             'name': m.group(1), 'version': m.group(2), 'applesus': False,
             'status': status, 'duration_seconds': None,
-            'download_kbytes_per_sec': None,
+            'download_kbytes_per_sec': None, 'unattended': None,
         }
       except (IndexError, AttributeError):
         item = {
             'name': item, 'version': '', 'applesus': False,
             'status': 'UNKNOWN', 'duration_seconds': None,
-            'download_kbytes_per_sec': None,
+            'download_kbytes_per_sec': None, 'unattended': None,
         }
     out.append(item)
   return out

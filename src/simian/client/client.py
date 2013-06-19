@@ -62,9 +62,9 @@ warnings.filterwarnings(
 if sys.version_info[0] <= 2 and sys.version_info[1] <= 4:
   warnings.filterwarnings(
       'ignore', '', DeprecationWarning, 'posixfile', 0)
-  import posixfile as _stdio  # pylint: disable-msg=C6204
+  import posixfile as _stdio  # pylint: disable=g-import-not-at-top
 else:
-  import os as _stdio  # pylint: disable-msg=C6204,W0404
+  import os as _stdio  # pylint: disable=g-import-not-at-top,reimported
 
 
 DEFAULT_HTTP_ATTEMPTS = 4
@@ -207,7 +207,7 @@ class Response(object):
     return self.status >= 400 and self.status <= 599
 
 
-class MultiBodyConnection:  # pylint: disable-msg=C6601,W0232
+class MultiBodyConnection:  # pylint: disable=g-old-style-class,no-init
   """Connection which can send multiple items as request body."""
 
   # types we are willing to send in one block

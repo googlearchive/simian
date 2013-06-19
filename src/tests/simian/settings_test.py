@@ -75,7 +75,7 @@ class BaseSettingsTestBase(mox.MoxTestBase):
     # function. This makes testing more predictable as the contents
     # of the settings module may change at any time.
     class DerivedSettingsClass(self.settings_class):
-      def _Globals(xself):  # pylint: disable-msg=E0213
+      def _Globals(xself):  # pylint: disable=no-self-argument
         """Returns globals dict like globals()."""
         return self._Globals()
     self.settings = DerivedSettingsClass(self.module)
@@ -390,7 +390,7 @@ class ModuleSettingsTest(BaseSettingsTestBase):
     # methods. Goal: make testing of the important parts easier.
 
     class ModuleSettingsTestModule(settings.ModuleSettings):
-      def _LoadSettingsModule(xself):  # pylint: disable-msg=E0213
+      def _LoadSettingsModule(xself):  # pylint: disable=no-self-argument
         k = random.randint(0, 100000)
         self.module_name = 'FOO%s' % k
         sys.modules[self.module_name] = self.module

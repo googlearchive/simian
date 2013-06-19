@@ -95,7 +95,11 @@ simian.ajaxSubmit = function(form, opt_successCallback) {
   var params = '';
   goog.array.forEach(goog.dom.getElementsByTagNameAndClass('input', null, form),
                      function(input) {
-                       params += '&' + input.name + '=' + input.value;
+                       if (input.type == 'checkbox') {
+                         params += '&' + input.name + '=' + input.checked;
+                       } else {
+                         params += '&' + input.name + '=' + input.value;
+                       }
                      });
   simian.toggleFormEnabled(form, false);
   simian.xhr(form.action, params, form.method, success, failure);

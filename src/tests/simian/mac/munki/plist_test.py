@@ -1074,6 +1074,12 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.assertRaises(
         plist.InvalidPlistError, self.munki._ValidateInstallsFilePath)
 
+  def testValidateInstallsIsList(self):
+    """Tests _ValidateInstallsFilePath() with a non-list installs value."""
+    self.munki._plist = {'installs': 'this is not a list!'}
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki._ValidateInstallsFilePath)
+
   def testGetPackageName(self):
     """Tests the _GetPackageName()."""
     name = 'foo pkg name'

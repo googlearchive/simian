@@ -13,7 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+# 
+#!/usr/bin/python2.4
+#
 
 """applesus module tests."""
 
@@ -133,12 +135,14 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     product_two_id = '2productid'
     product_two_url = 'http://example.com/%s.dist' % product_one_id
     product_two_dist = {
-        'version': 'twover', 'title': 'twotitle', 'description': 'twodesc'}
+        'version': 'twover', 'title': 'twotitle', 'description': 'twodesc',
+        'restart_required': False,
+    }
     product_three_id = '3productid'
     product_three_url = 'http://example.com/%s.dist' % product_three_id
     product_three_dist = {
         'version': 'threever', 'title': 'threetitle',
-        'description': 'threedesc'
+        'description': 'threedesc', 'restart_required': True,
     }
     catalog = {
         'Products': {
@@ -158,7 +162,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     }
     self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'all')
     self.mox.StubOutWithMock(applesus.urllib2, 'urlopen')
-    self.mox.StubOutWithMock(applesus.applesus, 'ParseDist')
+    self.mox.StubOutWithMock(applesus.applesus, 'DistFileDocument')
     self.mox.StubOutWithMock(applesus.models, 'AppleSUSProduct')
 
     mock_urllib_return = self.mox.CreateMockAnything()
@@ -173,8 +177,12 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     # product_two
     applesus.urllib2.urlopen(product_two_url).AndReturn(mock_urllib_return)
     mock_urllib_return.read().AndReturn(product_two_dist)
-    applesus.applesus.ParseDist(product_two_dist).AndReturn(
-        product_two_dist)
+    mock_dfd_two = self.mox.CreateMockAnything()
+    applesus.applesus.DistFileDocument().AndReturn(mock_dfd_two)
+    mock_dfd_two.LoadDocument(product_two_dist).AndReturn(None)
+    for k, v in product_two_dist.iteritems():
+      setattr(mock_dfd_two, k, v)
+
     mock_product_two = self.mox.CreateMockAnything()
     applesus.models.AppleSUSProduct(key_name=product_two_id).AndReturn(
         mock_product_two)
@@ -183,8 +191,12 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     # product_three
     applesus.urllib2.urlopen(product_three_url).AndReturn(mock_urllib_return)
     mock_urllib_return.read().AndReturn(product_three_dist)
-    applesus.applesus.ParseDist(product_three_dist).AndReturn(
-        product_three_dist)
+    mock_dfd_three = self.mox.CreateMockAnything()
+    applesus.applesus.DistFileDocument().AndReturn(mock_dfd_three)
+    mock_dfd_three.LoadDocument(product_three_dist).AndReturn(None)
+    for k, v in product_three_dist.iteritems():
+      setattr(mock_dfd_three, k, v)
+
     mock_product_three = self.mox.CreateMockAnything()
     applesus.models.AppleSUSProduct(key_name=product_three_id).AndReturn(
         mock_product_three)
@@ -195,8 +207,12 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     self.assertEqual(new_products, [mock_product_two, mock_product_three])
     self.assertEqual(mock_product_two.name, 'twotitle')
     self.assertEqual(mock_product_two.apple_mtime, 'twodate')
+    self.assertFalse(mock_product_two.restart_required)
+    self.assertTrue(mock_product_two.unattended)
     self.assertEqual(mock_product_three.version, 'threever')
     self.assertEqual(mock_product_three.description, 'threedesc')
+    self.assertTrue(mock_product_three.restart_required)
+    self.assertFalse(mock_product_three.unattended)
     self.mox.VerifyAll()
 
   def testDeprecateOrphanedProducts(self):
@@ -228,6 +244,10 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
         '10.8_testing': ['product5'],
         '10.8_stable': ['product5'],
         '10.8_untouched': ['product7'],
+        '10.9_unstable': ['product5', 'product6'],
+        '10.9_testing': ['product5'],
+        '10.9_stable': ['product5'],
+        '10.9_untouched': ['product7'],
     }
     deprecated_products = []
     for p in ['product2', 'product3', 'product7', 'deprecateme', 'andme']:

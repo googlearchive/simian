@@ -4,12 +4,18 @@
 
 {% block page-content %}
 
+{% if product_id %}
+  <h2>Apple Update Logs: {{ product_id }} {{ display_name|default_if_none:"" }}</h2>
+{% endif %}
+
 {% include "results_pagination.html" %}
 
 {% if logs %}
   <table class="stats-table">
     <tr>
+       {% if not product_id %}
        <th>Update ID</th>
+       {% endif %}
        <th>Action</th>
        <th>Tracks</th>
        <th>User</th>
@@ -18,7 +24,10 @@
     </tr>
     {% for log in logs %}
       <tr>
-        <td>{{ log.product_id }}</td>
+        {% if not product_id %}
+          <td><a href="/admin/applesus/logs?product_id={{ log.product_id }}">{{ log.product_id }}</a>
+          </td>
+        {% endif %}
         <td>{{ log.action }}</td>
         <td>{{ log.tracks|tracks_display }}</td>
         <td>{{ log.user|default_if_none:"(auto)" }}</td>

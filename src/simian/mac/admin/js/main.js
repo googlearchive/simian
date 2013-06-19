@@ -17,6 +17,7 @@ goog.require('goog.ui.KeyboardShortcutHandler');
 goog.require('goog.ui.AnimatedZippy');
 goog.require('goog.ui.Zippy');
 goog.require('simian.menu');
+goog.require('goog.ui.TableSorter');
 
 
 // Global shortcutHandler for Keyboard Shortcuts.
@@ -215,6 +216,82 @@ window.onload = function() {
 
   // Make UUID links HoverCards for all pages after load.
   simian.makeUUIDHover();
+};
+
+
+/**
+ * Make a table sortable by clicking the header.
+ * The table must have THEAD and TBODY tags.
+ * @param {String} sortableTableClass Class name of tables to sort.
+ * @param {String} alphaSortClass Class name of th/td's that should be sorted
+ *     alphabetically instead of numerically.
+ */
+simian.makeTableSortable = function(sortableTableClass, alphaSortClass) {
+
+  if (!sortableTableClass) {
+    sortableTableClass = 'sortable-table';
+  }
+  if (!alphaSortClass) {
+    alphaSortClass = 'sortable-column-sortby-alpha';
+  }
+
+  var tableToSort, headers;
+  var sortableTables = goog.dom.getElementsByClass(sortableTableClass);
+  for (var i = 0, tableToSort; tableToSort = sortableTables[i]; i++) {
+    var tableSorter = new goog.ui.TableSorter();
+    tableSorter.decorate(tableToSort);
+    headers = simian.getTableHeaders(tableToSort);
+    // If a header's class is tagged to sort by alpha, use its index to set sort
+    for (var index = 0, node; node = headers[index]; index++) {
+      if (node.className) {
+        if (node.className.split(' ').indexOf(alphaSortClass) >= 0) {
+          tableSorter.setSortFunction(index, goog.ui.TableSorter.alphaSort);
+        }
+      }
+    }
+  }
+};
+goog.exportSymbol('simian.makeTableSortable', simian.makeTableSortable);
+
+
+/**
+ * Get table headers (th) for a table.
+ * @param {Element} table Table element to look within for.
+ * @return {Array.<Element>} Array of th elements.
+ */
+simian.getTableHeaders = function(table) {
+  var headers = [];
+  var node;
+  // Get the thead in the table
+  var thead;
+  node = table.firstElementChild;
+  do {
+    if (node.tagName == 'THEAD') {
+      thead = node;
+    } else {
+      node = node.nextElementSibling;
+    }
+  } while (!thead && node);
+
+  if (thead) {
+    // Get the tr in thead
+    var tr;
+    node = thead.firstElementChild;
+    do {
+      if (node.tagName == 'TR') {
+        tr = node;
+      } else {
+        node = node.nextElementSibling;
+      }
+    } while (!tr && node);
+
+    if (tr) {
+      for (node = tr.firstElementChild; node; node = node.nextElementSibling) {
+        headers.push(node);
+      }
+    }
+  }
+  return headers;
 };
 
 

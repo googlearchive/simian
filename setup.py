@@ -37,18 +37,29 @@ except ImportError:
   raise SystemExit(1)
 
 
-REQUIRE = [
+REQUIRE_BASE = [
     'setuptools>=0.6c9',     # fix bugs with old version on Leopard
-    'google_apputils>=0.2',
     'python-dateutil>=1.4,<2',  # because of google_apputils
     'pyasn1==0.1.2',
     'tlslite==0.3.8',
-    'M2Crypto==0.21.1',
-    'pyyaml==3.10',
+    'pyyaml>=3.10',
     'unittest2==0.5.1',
     'icalendar==1.2',
     'WebOb==1.1.1',
 ]
+
+REQUIRE_SETUP = REQUIRE_BASE + [
+    'google_apputils>=0.2',
+    'M2Crypto==0.21.1',
+]
+
+REQUIRE_TEST = REQUIRE_BASE + [
+    'mox>=0.5.3',
+    'webapp2',
+    'django',
+]
+
+REQUIRE_INSTALL = REQUIRE_BASE
 
 SIMIAN_STUBS = [
     ('simianadmin', 'RunSimianAdmin'),
@@ -58,7 +69,7 @@ SIMIAN_ENTRY_POINTS = ['%s = simian.stubs:%s' % s for s in SIMIAN_STUBS]
 
 setup(
   name = 'simian',
-  version = '2.2',
+  version = '2.2.1',
   url = 'http://code.google.com/p/simian',
   license = 'Apache 2.0',
   description = 'An App Engine-based client & server component for Munki',
@@ -76,9 +87,9 @@ setup(
       'console_scripts': SIMIAN_ENTRY_POINTS,
   },
 
-  setup_requires = REQUIRE,
-  install_requires = REQUIRE,
-  tests_require = REQUIRE + ['mox>=0.5.3', 'webapp2', 'django'],
+  setup_requires = REQUIRE_SETUP,
+  install_requires = REQUIRE_INSTALL,
+  tests_require = REQUIRE_TEST,
 
   google_test_dir = 'src/tests',
 )

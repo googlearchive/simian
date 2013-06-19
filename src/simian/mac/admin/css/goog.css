@@ -495,3 +495,15 @@ td.goog-date-picker-selected {
   border-color: #246 #9bd #9bd #246;
   color: #fff;
 }
+
+.sortable-table thead {
+  cursor: pointer;
+}
+
+.goog-tablesorter-sorted:after {
+  content: '\25B2';
+}
+
+.goog-tablesorter-sorted-reverse:after {
+  content: '\25BC';
+}

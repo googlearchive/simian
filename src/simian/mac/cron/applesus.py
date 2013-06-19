@@ -47,7 +47,8 @@ CATALOGS = {
     '10.5': 'https://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
     '10.6': 'https://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
     '10.7': 'https://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
-    '10.8': 'https://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
+    '10.8': 'https://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
+    '10.9': 'https://swscan.apple.com/content/catalogs/others/index-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
 }
 
 
@@ -88,8 +89,10 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       new_products: a list of models.AppleSUSProduct objects.
       deprecated_products: a list of models.AppleSUSProduct objects.
     """
-    new_products = ['%s: %s %s' % (p.product_id, p.name, p.version)
-                    for p in new_products]
+    new_products = [
+        '%s: %s %s (restart_required: %s)' % (
+            p.product_id, p.name, p.version, p.restart_required)
+        for p in new_products]
     deprecated_products = ['%s: %s %s' % (p.product_id, p.name, p.version)
                            for p in deprecated_products]
     if not new_products and not deprecated_products:
@@ -149,7 +152,7 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
     Returns:
       list of new models.AppleSUSProduct objects, or empty list.
     """
-    if not 'Products' in catalog_plist:
+    if 'Products' not in catalog_plist:
       logging.error('Products not found in Apple Updates catalog')
       return []
 
@@ -183,15 +186,21 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
         #logging.warning('Skipping dist where HTTP status != 200')
         continue
       dist_str = r.read()
-      dist = applesus.ParseDist(dist_str)
+      dist = applesus.DistFileDocument()
+      dist.LoadDocument(dist_str)
 
       product = models.AppleSUSProduct(key_name=key)
       product.product_id = key
-      product.name = dist['title']
+      product.name = dist.title
       product.apple_mtime = catalog_plist['Products'][key]['PostDate']
-      product.version = dist['version']
-      product.description = dist['description']
+      product.version = dist.version
+      product.description = dist.description
       product.tracks = [common.UNSTABLE]
+      product.restart_required = dist.restart_required
+      if not dist.restart_required and settings.APPLE_AUTO_UNATTENDED_ENABLED:
+        product.unattended = True
+      else:
+        product.unattended = False
       product.put()
       new_products.append(product)
 
@@ -338,7 +347,7 @@ class AppleSUSAutoPromote(webapp2.RequestHandler):
       if track in promotions:
         applesus.GenerateAppleSUSCatalogs(track)
         models.AdminAppleSUSProductLog.Log(
-          promotions[track], 'auto-promote to %s' % track)
+            promotions[track], 'auto-promote to %s' % track)
 
     if promotions:
       self._NotifyAdminsOfAutoPromotions(promotions)

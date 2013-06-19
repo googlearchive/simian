@@ -188,35 +188,17 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
-  def testIsAdminUserWhenAppEngineAdminUser(self):
-    """Test IsAdminUser() when a user is an App Engine admin."""
-    self.mox.StubOutWithMock(auth, 'users')
-    admin_user = 'admin3@example.com'
-
-    mock_user = self.mox.CreateMockAnything()
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(admin_user)
-    auth.users.is_current_user_admin().AndReturn(True)
-
-    self.mox.ReplayAll()
-    self.assertTrue(auth.IsAdminUser(admin_user))
-    self.mox.VerifyAll()
-
-  def testIsAdminUserWhenNotAppEngineAdminUser(self):
-    """Test IsAdminUser() when a user is not an App Engine admin."""
+  def testIsAdminUser(self):
+    """Test IsAdminUser() with a passed email address."""
     self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth, 'IsGroupMember')
 
-    admin_user = 'admin4@example.com'
+    admin_email = 'admin4@example.com'
 
-    mock_user = self.mox.CreateMockAnything()
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(admin_user)
-    auth.users.is_current_user_admin().AndReturn(False)
-    auth.IsGroupMember(email=admin_user, group_name='admins').AndReturn(False)
+    auth.IsGroupMember(email=admin_email, group_name='admins').AndReturn(False)
 
     self.mox.ReplayAll()
-    self.assertFalse(auth.IsAdminUser(admin_user))
+    self.assertFalse(auth.IsAdminUser(admin_email))
     self.mox.VerifyAll()
 
   def testIsAdminUserWithNoPassedEmail(self):
@@ -224,14 +206,12 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth, 'IsGroupMember')
 
-    admin_user = 'admin5@example.com'
+    admin_email = 'admin5@example.com'
 
     mock_user = self.mox.CreateMockAnything()
     auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(admin_user)
-    mock_user.email().AndReturn(admin_user)
-    auth.users.is_current_user_admin().AndReturn(False)
-    auth.IsGroupMember(email=admin_user, group_name='admins').AndReturn(False)
+    mock_user.email().AndReturn(admin_email)
+    auth.IsGroupMember(email=admin_email, group_name='admins').AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertFalse(auth.IsAdminUser())

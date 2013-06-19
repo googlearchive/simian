@@ -42,7 +42,7 @@ and gMac, not gWindows.
 # intends to use readline, but we don't need it to work properly here in
 # simianauth.
 #
-# pylint: disable-msg=C6204,C6203
+# pylint: disable=g-import-not-at-top,g-bad-import-order
 import os
 import sys
 _term = os.environ.get('TERM', None)

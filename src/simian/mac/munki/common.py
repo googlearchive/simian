@@ -358,7 +358,7 @@ def WriteBrokenClient(uuid, reason, details):
 
 
 def WriteComputerMSULog(uuid, details):
-  """Write log details from MSU GUI into ComputerMSUState model.
+  """Write log details from MSU GUI into ComputerMSULog model.
 
   Args:
     uuid: str, computer uuid to update
@@ -372,7 +372,7 @@ def WriteComputerMSULog(uuid, details):
   """
   uuid = common.SanitizeUUID(uuid)
   key = '%s_%s_%s' % (uuid, details['source'], details['event'])
-  c = models.ComputerMSULog.get_or_insert(key)
+  c = models.ComputerMSULog(key_name=key)
   c.uuid = uuid
   c.event = details['event']
   c.source = details['source']

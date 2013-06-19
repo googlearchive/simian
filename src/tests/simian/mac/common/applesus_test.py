@@ -53,15 +53,6 @@ class AppleModuleTest(mox.MoxTestBase):
     f.close()
     return ''.join(buf)
 
-  def testParseDist(self):
-    """Test that ParseDist() works."""
-    dist_str = self._GetTestData('041-0120.English.dist')
-    dist = applesus.ParseDist(dist_str)
-    self.assertEqual('iWork Update 5', dist['title'])
-    self.assertEqual('9.0.5', dist['version'])
-    self.assertEqual(
-        'I am the description.\nI have been replaced, though.\n',
-        dist['description'])
 
   def testGenerateAppleSUSCatalog(self):
     """Test GenerateAppleSUSCatalog()."""
@@ -274,17 +265,12 @@ class DistFileDocumentTest(mox.MoxTestBase):
     doc.childNodes = [doc]
     doc.nodeValue = 'hello'
 
-    self.dfd._ParseInstallerScriptString('hello').AndReturn('return')
+    self.dfd._ParseInstallerScriptString('hello').AndReturn({'foo': True})
 
     self.mox.ReplayAll()
     self.dfd.LoadDocument(docstr)
-    self.assertEqual(self.dfd._installer_script, 'return')
+    self.assertEqual(self.dfd._installer_script, {'foo': True})
     self.mox.VerifyAll()
-
-  def testGetInstallerScript(self):
-    """Test GetInstallerScript()."""
-    self.dfd._installer_script = 'foo'
-    self.assertEqual('foo', self.dfd.GetInstallerScript())
 
 
 class GenerateAppleSUSMetadataCatalogTest(mox.MoxTestBase):
@@ -321,7 +307,6 @@ class GenerateAppleSUSMetadataCatalogTest(mox.MoxTestBase):
 
     self.assertEquals(mock_cat, result)
     plist = plistlib.readPlistFromString(mock_cat.plist)
-    print plist
     self.assertEquals(2, len(plist))
     self.assertTrue(all(isinstance(x, dict) for x in plist))
     self.assertTrue(all('installer_type' in x for x in plist))

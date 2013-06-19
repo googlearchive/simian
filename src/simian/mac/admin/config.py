@@ -25,11 +25,14 @@ import base64
 import json
 import os
 
+from google.appengine.api import users
+
 from simian import settings as settings_module
 from simian.auth import x509
 from simian.mac import admin
 from simian.mac import models
 from simian.mac.admin import xsrf
+from simian.mac.common import mail
 
 MISSING = 'Missing'
 VALID = 'Valid'
@@ -42,6 +45,7 @@ PEM = {
 
 
 class Config(admin.AdminHandler):
+  """Handler for admin/config."""
 
   XSRF_PROTECT = True
 
@@ -97,9 +101,17 @@ class Config(admin.AdminHandler):
     else:
       self._UpdateSettingValue()
 
+  def NotifyAdminsOfChange(self, setting, value):
+    """Notify Admins of changes to Settings."""
+    subject_line = 'Simian Settings Change by %s' % (users.get_current_user())
+    main_body = '%s set to: %s' % (setting, value)
+    mail.SendMail(settings_module.EMAIL_ADMIN_LIST, subject_line, main_body)
+
   def _UpdateSettingValue(self):
     self.response.headers['Content-Type'] = 'application/json'
     setting = self.request.get('setting', None)
+    if settings_module.EMAIL_ON_EVERY_CHANGE:
+      self.NotifyAdminsOfChange(setting, self.request.get('value', None))
     if setting and setting in models.SETTINGS:
       setting_type = models.SETTINGS[setting]['type']
       if setting_type in ['integer', 'string']:
@@ -124,6 +136,14 @@ class Config(admin.AdminHandler):
         else:
           self.response.out.write(json.dumps(
               {'values': [{'name': 'value', 'value': random_str}]}))
+      elif setting_type == 'bool':
+        value = self.request.get('value', None)
+        if value == 'true':
+          setattr(settings_module, setting.upper(), True)
+        else:
+          setattr(settings_module, setting.upper(), False)
+        self.response.out.write(json.dumps(
+            {'values': [{'name': 'value', 'value': value == 'true'}]}))
     else:
       self.error(400)
       self.response.out.write(json.dumps(

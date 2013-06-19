@@ -32,16 +32,23 @@ SETTINGS = {
         'title': 'API Info Key',
     },
     'apple_auto_promote_enabled': {
-        'type': 'integer',
+        'type': 'bool',
         'title': 'Apple Update Auto-Promotion Enabled',
-        'comment': '1 to enable, 0 to disable.',
-        'default': 1,
+        'comment': 'If enabled, items auto-promote through release tracks.',
+        'default': True,
     },
     'apple_auto_promote_stable_weekday': {
         'type': 'integer',
         'title': 'Apple Update Stable Auto-Promote Weekday',
         'comment': 'Integer weekday, where Monday is 0 and Sunday is 6.',
         'default': 2,
+    },
+    'apple_auto_unattended_enabled': {
+        'type': 'bool',
+        'title': 'Apple Update Auto-Unattended Enabled',
+        'comment': ('If enabled, new updates not requiring a restart are set '
+                    'as unattended automatically.'),
+        'default': True,
     },
     'apple_unstable_grace_period_days': {
         'type': 'integer',
@@ -75,6 +82,12 @@ SETTINGS = {
         'type': 'string',
         'title': 'Email reply-to',
         'comment': 'e.g. Simian Team <admin@example.com>',
+    },
+    'email_on_every_change': {
+        'type': 'bool',
+        'title': 'Notify Admins of all changes.',
+        'comment': 'Check to send a mail to all admins on every change.',
+        'default': False,
     },
     'uuid_lookup_url': {
         'type': 'string',

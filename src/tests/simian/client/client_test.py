@@ -454,7 +454,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):  # pylint: disable-msg=C6409
+    def __connect(address):  # pylint: disable=g-bad-name
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = ['subject1']
       return None
@@ -496,7 +496,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):  # pylint: disable-msg=C6409
+    def __connect(address):  # pylint: disable=g-bad-name
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = []
       return None
@@ -525,7 +525,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     client.SSL.Context().AndReturn(context)
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
-    def __connect(address):  # pylint: disable-msg=C6409
+    def __connect(address):  # pylint: disable=g-bad-name
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
       self.mbc._cert_valid_subject_matches = ['subject1']
       return None

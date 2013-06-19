@@ -189,15 +189,8 @@ def IsAdminUser(email=None):
   Returns:
     True if user is admin, False if not
   """
-  user = None
   if not email:
-    user = users.get_current_user()
-    email = user.email()
-
-  if not user:
-    user = users.get_current_user()
-  if user and user.email() == email and users.is_current_user_admin():
-    return True
+    email = users.get_current_user().email()
 
   return IsGroupMember(email=email, group_name='admins')
 

@@ -15,4 +15,4 @@
 # limitations under the License.
 # #
 
-VERSION = 'simian-2.2'
+VERSION = 'simian-2.2.1'

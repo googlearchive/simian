@@ -1205,14 +1205,14 @@ class ApplePlist(object):
     """Returns a unicode representation of the plist XML."""
     return self.GetXml()
 
-  def get(self, k, default=None):  # pylint: disable-msg=C6409
+  def get(self, k, default=None):  # pylint: disable=g-bad-name
     """Standard python dict get method."""
     if k in self:
       return self[k]
     else:
       return default
 
-  def set(self, k, v):  # pylint: disable-msg=C6409
+  def set(self, k, v):  # pylint: disable=g-bad-name
     """Standard python dict set method."""
     self[k] = v
 
@@ -1282,6 +1282,8 @@ class MunkiPackageInfoPlist(MunkiPlist):
       raise PlistNotParsedError
 
     if 'installs' in self._plist:
+      if not isinstance(self._plist['installs'], list):
+        raise InvalidPlistError('installs must be an array.')
       for install in self._plist['installs']:
         if install.get('type') == 'file':
           if install.get('path'):

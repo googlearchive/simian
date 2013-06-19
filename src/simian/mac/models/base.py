@@ -180,7 +180,7 @@ class BaseModel(db.Model):
       else:
         try:
           output = db.model_from_protobuf(cached)
-        except Exception, e:  # pylint: disable-msg=W0703
+        except Exception, e:  # pylint: disable=broad-except
           # NOTE(user): I copied this exception trap style from
           # google.appengine.datastore.datatstore_query.  The notes indicate
           # that trapping this exception by the class itself is problematic
@@ -639,6 +639,7 @@ class InstallLog(ClientLogBase):
   duration_seconds = db.IntegerProperty()
   success = db.BooleanProperty()
   server_datetime = db.DateTimeProperty(auto_now_add=True)
+  unattended = db.BooleanProperty()
 
   def IsSuccess(self):
     """Returns True if the install was a success, False otherwise."""
@@ -985,6 +986,7 @@ class AppleSUSProduct(BaseModel):
   name = db.StringProperty()
   version = db.StringProperty()
   description = db.TextProperty()
+  restart_required = db.BooleanProperty()
   force_install_after_date = db.DateTimeProperty()
   apple_mtime = db.DateTimeProperty()
   tracks = db.StringListProperty()

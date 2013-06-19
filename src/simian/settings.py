@@ -122,7 +122,7 @@ class BaseSettings(types.ModuleType):
     Args:
       module: module, the module that this class instance is replacing.
     """
-    # pylint: disable-msg=W0233
+    # pylint: disable=non-parent-init-called
     types.ModuleType.__init__(self, module.__name__, *args, **kwargs)
     self._module = module
     if hasattr(module, '__doc__'):
@@ -475,7 +475,7 @@ class ModuleSettings(BaseSettings):
     self._Calculate(k)
 
 
-class TestModuleSettings(ModuleSettings):  # pylint: disable-msg=W0223
+class TestModuleSettings(ModuleSettings):  # pylint: disable=abstract-method
   """Settings that uses the test_settings module for storage."""
 
   def _LoadSettingsModule(self):
@@ -487,9 +487,9 @@ class TestModuleSettings(ModuleSettings):  # pylint: disable-msg=W0223
       ImportError: if the test_settings module could not be loaded.
     """
     try:
-      # pylint: disable-msg=C6202
-      # pylint: disable-msg=C6204
-      # pylint: disable-msg=E0611
+      # pylint: disable=g-importing-member
+      # pylint: disable=g-import-not-at-top
+      # pylint: disable=no-name-in-module
       from tests.simian import test_settings as unused_foo
     except ImportError:
       raise ImportError(
@@ -537,7 +537,7 @@ class DictSettings(BaseSettings):
     return self._settings.keys()
 
 
-class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
+class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
   """Settings stored in a dictionary with calculated values for Simian."""
 
   def _IsCaIdValid(self, k, v):
@@ -572,10 +572,13 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
     # Server specific settings
     self._SetValidation(
         'apple_auto_promote_enabled', self._VALIDATION_REGEX,
-        r'^(0|1)$')
+        r'^(True|False)$')
     self._SetValidation(
         'apple_auto_promote_stable_weekday', self._VALIDATION_REGEX,
         r'^[0-6]$')
+    self._SetValidation(
+        'apple_auto_unattended_enabled', self._VALIDATION_REGEX,
+        r'^(True|False)$')
     self._SetValidation(
         'apple_unstable_grace_period_days', self._VALIDATION_REGEX,
         r'^[0-90]+$')
@@ -588,6 +591,9 @@ class SimianDictSettings(DictSettings):  # pylint: disable-msg=W0223
     self._SetValidation(
         'email_domain', self._VALIDATION_REGEX,
         r'^\w+(\.\w+)*(\.[a-z]{2,4})$')
+    self._SetValidation(
+        'email_on_every_change', self._VALIDATION_REGEX,
+        r'^(True|False)$')
     self._SetValidation(
         'email_sender', self._VALIDATION_REGEX,
         r'^([\w ]+ <%s>|%s)$' % (mail_regex, mail_regex))
@@ -817,7 +823,7 @@ class DatastoreSettings(SimianDictSettings):
     # Populate the global variables into the dictionary backed settings via
     # this specific set_func. Without this specific usage the global settings
     # would be populated back into datastore via _Set() calls.
-    # pylint: disable-msg=W0212
+    # pylint: disable=protected-access
     set_func = lambda k, v: DictSettings._Set(self, k, v)
     DictSettings._PopulateGlobals(self, set_func=set_func, globals_=globals_)
 
@@ -833,7 +839,7 @@ class DatastoreSettings(SimianDictSettings):
     """
     # Try the dictionary of settings first.
     try:
-      v = DictSettings._Get(self, k)  # pylint: disable-msg=W0212
+      v = DictSettings._Get(self, k)  # pylint: disable=protected-access
       return v
     except AttributeError:
       pass  # Not a problem, keep trying.

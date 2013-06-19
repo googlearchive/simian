@@ -37,7 +37,7 @@ from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8']
+OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8', '10.9']
 
 MON, TUE, WED, THU, FRI, SAT, SUN = range(0, 7)
 
@@ -59,6 +59,13 @@ class DistFileDocument(object):
 
   def Reset(self):
     """Reset variables."""
+    self.description = None
+    self.restart_required = None
+    self.server_comment = None
+    self.softwareupdate_name = None
+    self.title = None
+    self.version = None
+
     self._installer_script = {}
 
   def _ParseInstallerScriptString(self, istr):
@@ -132,22 +139,22 @@ class DistFileDocument(object):
     except IndexError:
       raise DocumentFormatError
 
-    # TODO(user): parse out suDisabledGroupID, which is the name that
-    # will show up in the softwareupdate binary.
+    # TODO(user): intead of regex, parse XML.
+    self.restart_required = re.search(
+        r'onConclusion=("|\')RequireRestart("|\')', distfile_xml) is not None
+
+    swupd_name_match = re.search(
+        r'suDisabledGroupID=("|\')([\w\s\.-]*)("|\')', distfile_xml)
+    if swupd_name_match:
+      self.softwareupdate_name = swupd_name_match.group(2)
 
     self._installer_script = self._ParseInstallerScriptString(cdata)
 
-  def GetInstallerScript(self):
-    """Return the installer script values.
-
-    Returns:
-      dict, e.g. = {
-          'SU_VERS': str,
-          'SU_TITLE': str,
-          ...
-      }
-    """
-    return self._installer_script
+    self.description = self._installer_script.get('SU_DESCRIPTION')
+    self.server_comment = self._installer_script.get('SU_SERVERCOMMENT')
+    self.title = self._installer_script.get('SU_TITLE')
+    self.version = (self._installer_script.get('SU_VERS') or
+                    self._installer_script.get('SU_VERSION'))
 
 
 def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
@@ -272,26 +279,6 @@ def GenerateAppleSUSMetadataCatalog():
   models.Catalog.DeleteMemcacheWrap(
       'apple_update_metadata', prop_name='plist_xml')
   return c
-
-
-def ParseDist(dist_str):
-  """Parses an Apple SUS Dist string and returns dict of meta data.
-
-  Args:
-    dist_str: str Apple SUS Dist file.
-
-  Returns:
-    dictionary containing title, version, and description.
-  """
-  dfd = DistFileDocument()
-  dfd.LoadDocument(dist_str)
-  isd = dfd.GetInstallerScript()
-  return {
-      'title': isd.get('SU_TITLE'),
-      'version': isd.get('SU_VERS') or isd.get('SU_VERSION'),
-      'servercomment': isd.get('SU_SERVERCOMMENT'),
-      'description': isd.get('SU_DESCRIPTION'),
-  }
 
 
 def GetAutoPromoteDate(track, applesus_product):
