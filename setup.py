@@ -39,21 +39,21 @@ except ImportError:
 
 REQUIRE_BASE = [
     'setuptools>=0.6c9',     # fix bugs with old version on Leopard
-    'python-dateutil>=1.4,<2',  # because of google_apputils
     'pyasn1==0.1.2',
     'tlslite==0.3.8',
     'pyyaml>=3.10',
-    'unittest2==0.5.1',
     'icalendar==1.2',
     'WebOb==1.1.1',
 ]
 
 REQUIRE_SETUP = REQUIRE_BASE + [
     'google_apputils>=0.2',
+    'python-dateutil>=1.4,<2',  # because of google_apputils
+    'unittest2==0.5.1',
     'M2Crypto==0.21.1',
 ]
 
-REQUIRE_TEST = REQUIRE_BASE + [
+REQUIRE_TEST = REQUIRE_BASE + REQUIRE_SETUP + [
     'mox>=0.5.3',
     'webapp2',
     'django',
