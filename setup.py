@@ -42,15 +42,15 @@ REQUIRE_BASE = [
     'pyasn1==0.1.2',
     'tlslite==0.3.8',
     'pyyaml>=3.10',
-    'icalendar==1.2',
-    'WebOb==1.1.1',
 ]
 
 REQUIRE_SETUP = REQUIRE_BASE + [
     'google_apputils>=0.2',
+    'icalendar==1.2',
     'python-dateutil>=1.4,<2',  # because of google_apputils
     'unittest2==0.5.1',
     'M2Crypto==0.21.1',
+    'WebOb==1.1.1',
 ]
 
 REQUIRE_TEST = REQUIRE_BASE + REQUIRE_SETUP + [
