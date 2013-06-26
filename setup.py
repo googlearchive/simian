@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -46,17 +46,17 @@ REQUIRE_BASE = [
 
 REQUIRE_SETUP = REQUIRE_BASE + [
     'google_apputils>=0.2',
-    'icalendar==1.2',
     'python-dateutil>=1.4,<2',  # because of google_apputils
-    'unittest2==0.5.1',
-    'M2Crypto==0.21.1',
-    'WebOb==1.1.1',
 ]
 
-REQUIRE_TEST = REQUIRE_BASE + REQUIRE_SETUP + [
-    'mox>=0.5.3',
-    'webapp2',
+REQUIRE_TEST = REQUIRE_SETUP + [
     'django',
+    'icalendar==1.2',
+    'mox>=0.5.3',
+    'unittest2==0.5.1',
+    'webapp2',
+    'M2Crypto==0.21.1',
+    'WebOb==1.1.1',
 ]
 
 REQUIRE_INSTALL = REQUIRE_BASE
