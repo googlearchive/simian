@@ -35,6 +35,7 @@ Functions:
 import array
 import base64
 import datetime
+import hashlib
 import re
 import time
 import pyasn1
@@ -707,7 +708,12 @@ class X509Certificate(BaseDataObject):
     pk = other_cert.GetPublicKey()
 
     if self._cert['sig_algorithm'] == OID_SHA256_WITH_RSA_ENC:
-      return pk.hashAndVerify256(sig, fields)
+      # tlslite doesn't support SHA256, so manually construct bytes to verify.
+      fields_digest = hashlib.sha256(fields).digest()
+      hash_bytes = self._StrToArray(fields_digest)
+      prefix_bytes = self._StrToArray([
+          48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32])
+      return pk.verify(sig, prefix_bytes + hash_bytes)
     else:
       return pk.hashAndVerify(sig, fields)
 

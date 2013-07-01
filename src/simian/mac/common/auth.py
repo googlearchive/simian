@@ -53,6 +53,25 @@ class IsAdminMismatch(NotAuthenticated):
   """Test for IsAdmin mismatch."""
 
 
+def _GetGroupMembers(group_name):
+  """Returns a set of email addresses that are members of a given group.
+
+  Args:
+    group_name: str group name to return the members of.
+  Returns:
+    List of email addresses of members, or an empty list for unknown groups.
+  """
+  members = getattr(settings, group_name.upper(), [])
+  try:
+    json_members = models.KeyValueCache.MemcacheWrappedGet(
+        group_name, 'text_value')
+    if json_members:
+      members.extend(util.Deserialize(json_members))
+  except (db.Error, util.DeserializeError):
+    pass
+  return members
+
+
 def DoUserAuth(is_admin=None):
   """Verify user auth has occured.
 
@@ -96,15 +115,8 @@ def DoOAuthAuth(is_admin=None, require_level=None):
   if is_admin is not None and not IsAdminUser(email):
     raise IsAdminMismatch
 
-  if email in settings.OAUTH_USERS:
+  if email in _GetGroupMembers('oauth_users'):
     return user
-
-  oauth_users = models.KeyValueCache.MemcacheWrappedGet(
-      'oauth_users', 'text_value')
-  if oauth_users:
-    oauth_users = util.Deserialize(oauth_users)
-    if email in oauth_users:
-      return user
 
   logging.warning('OAuth user unknown: %s', email)
   raise NotAuthenticated
@@ -164,18 +176,8 @@ def IsGroupMember(email=None, group_name=None, remote_group_lookup=False):
     email = users.get_current_user().email()
 
 
-  if email in getattr(settings, group_name.upper(), []):
+  if email in _GetGroupMembers(group_name):
     return True
-
-  try:
-    group_members = models.KeyValueCache.MemcacheWrappedGet(
-        group_name, 'text_value')
-    if group_members:
-      group_members = util.Deserialize(group_members)
-      if email in group_members:
-        return True
-  except (db.Error, util.DeserializeError):
-    pass
 
   return False
 
@@ -192,7 +194,18 @@ def IsAdminUser(email=None):
   if not email:
     email = users.get_current_user().email()
 
-  return IsGroupMember(email=email, group_name='admins')
+  admin_users = _GetGroupMembers('admins')
+  if email in admin_users:
+    return True
+
+  # If there are no defined admins in settings or KeyValueCache, provide GAE
+  # Developers/etc. admin access for bootstrapping purposes.
+  if not admin_users:
+    logging.warning(
+        'No admins defined! Configure admins in Admin Tools -> ACL Groups.')
+    return users.is_current_user_admin()
+
+  return False
 
 
 def IsSupportUser(email=None):

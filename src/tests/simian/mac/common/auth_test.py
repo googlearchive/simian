@@ -70,11 +70,15 @@ class AuthModuleTest(mox.MoxTestBase):
   def testDoOAuthAuthSuccessSettings(self):
     """Test DoOAuthAuth() with success, where user is in settings file."""
     self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
 
     mock_user = self.mox.CreateMockAnything()
     mock_oauth_users = self.mox.CreateMockAnything()
     email = 'foouser@example.com'
     auth.settings.OAUTH_USERS = [email]
+
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        'oauth_users', 'text_value').AndReturn(None)
 
     auth.oauth.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
@@ -188,14 +192,23 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
-  def testIsAdminUser(self):
-    """Test IsAdminUser() with a passed email address."""
-    self.mox.StubOutWithMock(auth, 'users')
-    self.mox.StubOutWithMock(auth, 'IsGroupMember')
+  def testIsAdminUserTrue(self):
+    """Test IsAdminUser() with a passed email address that is an admin."""
+    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
 
     admin_email = 'admin4@example.com'
+    auth._GetGroupMembers('admins').AndReturn([admin_email])
 
-    auth.IsGroupMember(email=admin_email, group_name='admins').AndReturn(False)
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser(admin_email))
+    self.mox.VerifyAll()
+
+  def testIsAdminUserFalse(self):
+    """Test IsAdminUser() with a passed email address that is not an admin."""
+    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
+
+    admin_email = 'admin4@example.com'
+    auth._GetGroupMembers('admins').AndReturn(['foo@example.com'])
 
     self.mox.ReplayAll()
     self.assertFalse(auth.IsAdminUser(admin_email))
@@ -203,18 +216,48 @@ class AuthModuleTest(mox.MoxTestBase):
 
   def testIsAdminUserWithNoPassedEmail(self):
     """Test IsAdminUser() with no passed email address."""
-    self.mox.StubOutWithMock(auth, 'users')
-    self.mox.StubOutWithMock(auth, 'IsGroupMember')
+    self.mox.StubOutWithMock(auth.users, 'get_current_user')
+    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
 
     admin_email = 'admin5@example.com'
 
     mock_user = self.mox.CreateMockAnything()
     auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(admin_email)
-    auth.IsGroupMember(email=admin_email, group_name='admins').AndReturn(False)
+    auth._GetGroupMembers('admins').AndReturn(['foo@example.com'])
 
     self.mox.ReplayAll()
     self.assertFalse(auth.IsAdminUser())
+    self.mox.VerifyAll()
+
+  def testIsAdminUserBootstrap(self):
+    """Test IsAdminUser() where no admins are defined."""
+    self.mox.StubOutWithMock(auth.users, 'is_current_user_admin')
+    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
+
+    admin_email = 'admin4@example.com'
+    auth._GetGroupMembers('admins').AndReturn([])
+
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.is_current_user_admin().AndReturn(True)
+
+    self.mox.ReplayAll()
+    self.assertTrue(auth.IsAdminUser(admin_email))
+    self.mox.VerifyAll()
+
+  def testIsAdminUserBootstrapFalse(self):
+    """Test IsAdminUser() where no admins are defined, but user not admin."""
+    self.mox.StubOutWithMock(auth.users, 'is_current_user_admin')
+    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
+
+    admin_email = 'admin4@example.com'
+    auth._GetGroupMembers('admins').AndReturn([])
+
+    self.mox.StubOutWithMock(auth, 'users')
+    auth.users.is_current_user_admin().AndReturn(False)
+
+    self.mox.ReplayAll()
+    self.assertFalse(auth.IsAdminUser(admin_email))
     self.mox.VerifyAll()
 
   def testIsGroupMemberWhenSettings(self):
@@ -222,6 +265,10 @@ class AuthModuleTest(mox.MoxTestBase):
     group_members = ['support1@example.com', 'support2@example.com']
     group_name = 'foo_group'
     setattr(auth.settings, group_name.upper(), group_members)
+
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        group_name, 'text_value').AndReturn('[]')
 
     self.mox.ReplayAll()
     self.assertTrue(auth.IsGroupMember(group_members[0], group_name=group_name))
@@ -232,11 +279,15 @@ class AuthModuleTest(mox.MoxTestBase):
     email = 'foouser@example.com'
     group_members = [email, 'support2@example.com']
     mock_user = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(auth, 'users')
+    self.mox.StubOutWithMock(auth.users, 'get_current_user')
     auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     group_name = 'foo_group_two'
     setattr(auth.settings, group_name.upper(), group_members)
+
+    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    auth.models.KeyValueCache.MemcacheWrappedGet(
+        group_name, 'text_value').AndReturn('[]')
 
     self.mox.ReplayAll()
     self.assertTrue(auth.IsGroupMember(group_name=group_name))
@@ -248,7 +299,6 @@ class AuthModuleTest(mox.MoxTestBase):
     group_members = ['support1@example.com', 'support2@example.com']
     group_name = 'foo_group'
 
-    self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
     self.mox.StubOutWithMock(auth.util, 'Deserialize')
     auth.models.KeyValueCache.MemcacheWrappedGet(
@@ -265,7 +315,6 @@ class AuthModuleTest(mox.MoxTestBase):
     group_members = ['support1@example.com', 'support2@example.com']
     group_name = 'support_users'
 
-    self.mox.StubOutWithMock(auth, 'users')
     self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
     self.mox.StubOutWithMock(auth.util, 'Deserialize')
     auth.models.KeyValueCache.MemcacheWrappedGet(
