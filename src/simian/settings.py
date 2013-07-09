@@ -581,10 +581,10 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
         r'^(True|False)$')
     self._SetValidation(
         'apple_unstable_grace_period_days', self._VALIDATION_REGEX,
-        r'^[0-90]+$')
+        r'^[0-9]+$')
     self._SetValidation(
         'apple_testing_grace_period_days', self._VALIDATION_REGEX,
-        r'^\[0-90]$')
+        r'^[0-9]+$')
     self._SetValidation(
         'email_admin_list', self._VALIDATION_REGEX,
         r'^%s' % mail_regex)
