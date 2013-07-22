@@ -818,8 +818,8 @@ def GetMunkiName(item_dict):
 
 def GetMunkiNameAndVersion(item_dict):
   """Returns the "(display_name|name)-version" Munki name."""
-  name = GetMunkiName(item_dict)
-  munki_name = '%s-%s' % (name, item_dict.get('version_to_install', ''))
+  name = GetMunkiName(item_dict).decode('utf-8')
+  munki_name = u'%s-%s' % (name, item_dict.get('version_to_install', ''))
   return munki_name.encode('utf-8')
 
 
@@ -830,8 +830,8 @@ def GetRemainingPackagesToInstall():
     return []
 
   install_results = install_report.get('InstallResults', [])
-  just_installed = [i['name'] for i in install_results
-                    if hasattr(i, 'keys')]
+  just_installed = set(
+      [GetMunkiName(d) for d in install_results if hasattr(d, 'keys')])
 
   pkgs_to_install_dicts = install_report.get('ItemsToInstall', [])
   pkgs_to_install = [GetMunkiNameAndVersion(d) for d in pkgs_to_install_dicts
