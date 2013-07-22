@@ -885,8 +885,7 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
     # TODO(user): if we moved all of this code to simianauth, we could just use
     #      JSON instead of doing all this DictToStr nonsense just to pass it
     #      over the commandline.
-    install_string = DictToStr(installs[i])
-    installs[i] = install_string.encode('utf-8')
+    installs[i] = DictToStr(installs[i])
 
   if installs or removals or problem_installs:
     data = {
