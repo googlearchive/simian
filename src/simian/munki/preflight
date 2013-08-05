@@ -113,6 +113,7 @@ def LoginToServer(config, client_id, user_settings, client_exit=None):
     logging.error('Exec(%s) error: %s', cmd, e)
     return_code = -1
     stdout = ''
+    stderr = ''
 
   token = stdout.strip()
 
