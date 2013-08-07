@@ -319,8 +319,8 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     """Test SetCertRequireSubjects()."""
     subjects = ['hello', 'there']
     self.mbc.SetCertValidSubjects(subjects)
-    self.mbc.SetCertRequireSubjects(subjects)
-    self.assertEqual(self.mbc._cert_require_subjects, subjects)
+    self.mbc.SetCertRequireSubjects([subjects])
+    self.assertEqual(self.mbc._cert_require_subjects, [subjects])
 
   def testSetCertRequireSubjectsWhenMalformed(self):
     """Test SetCertRequireSubjects()."""
@@ -456,14 +456,15 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
     def __connect(address):  # pylint: disable=g-bad-name
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
-      self.mbc._cert_valid_subject_matches = ['subject1']
+      self.mbc._cert_valid_subject_matches = ['subject1', 'subject3']
       return None
 
     client.SSL.Connection(context).AndReturn(conn)
     conn.connect = __connect
 
-    self.mbc.SetCertValidSubjects(['subject1', 'subject2'])
-    self.mbc.SetCertRequireSubjects(['subject1'])
+    self.mbc.SetCertValidSubjects(
+        ['foo', 'bar', 'subject1', 'subject2', 'subject3'])
+    self.mbc.SetCertRequireSubjects([('subject1', 'subject3'), ('foo', 'bar')])
 
     self.mox.ReplayAll()
     self.mbc.connect()
@@ -534,7 +535,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     conn.connect = __connect
 
     self.mbc.SetCertValidSubjects(['subject1', 'subjectR'])
-    self.mbc.SetCertRequireSubjects(['subjectR'])
+    self.mbc.SetCertRequireSubjects([('subjectR',)])
 
     self.mox.ReplayAll()
     self.assertRaises(client.SimianClientError, self.mbc.connect)
@@ -630,7 +631,17 @@ class HttpsClientTest(mox.MoxTestBase):
     self.assertTrue(type(self.client.hostname) is str)
     self.assertEqual(self.client.hostname, 'unicodehost')
     self.assertTrue(type(self.client.proxy_hostname) is str)
-    self.assertEqual(self.client.proxy_hostname, 'http://evilproxy')
+    self.assertEqual(self.client.proxy_hostname, 'evilproxy')
+    self.assertEqual(self.client.proxy_port, 9)
+    self.assertFalse(self.client.proxy_use_https)
+
+    self.client._LoadHost(u'http://unicodehost', proxy=u'https://evilprxssl:8')
+    self.assertTrue(type(self.client.hostname) is str)
+    self.assertEqual(self.client.hostname, 'unicodehost')
+    self.assertTrue(type(self.client.proxy_hostname) is str)
+    self.assertEqual(self.client.proxy_hostname, 'evilprxssl')
+    self.assertEqual(self.client.proxy_port, 8)
+    self.assertTrue(self.client.proxy_use_https)
 
     self.mox.VerifyAll()
 
@@ -646,10 +657,17 @@ class HttpsClientTest(mox.MoxTestBase):
     # it's an oldschool Python class.
     test_client._ca_cert_chain = 'cert chain'
     test_client._cert_valid_subjects = 'valid subjects'
-    self.stubs.Set(client, 'HTTPSMultiBodyConnection', m)
+    use_https = (
+        (not test_client.proxy_hostname and test_client.use_https) or
+        (test_client.proxy_hostname and test_client.proxy_use_https))
+    if use_https:
+      self.stubs.Set(client, 'HTTPSMultiBodyConnection', m)
+    else:
+      self.stubs.Set(client, 'HTTPMultiBodyConnection', m)
     m(hostname, port).AndReturn(m)
-    m.SetCACertChain('cert chain').AndReturn(None)
-    m.SetCertValidSubjects('valid subjects').AndReturn(None)
+    if use_https:
+      m.SetCACertChain('cert chain').AndReturn(None)
+      m.SetCertValidSubjects('valid subjects').AndReturn(None)
     m.connect().AndReturn(None)
     self.mox.ReplayAll()
     test_client._Connect()
@@ -743,6 +761,7 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = None
     response = self.mox.CreateMockAnything()
     response.status = 200
+    proxy_use_https = test_client.proxy_use_https
 
     self.mox.StubOutWithMock(test_client, '_Connect')
     self.mox.StubOutWithMock(test_client, '_Request')
@@ -770,8 +789,33 @@ class HttpsClientTest(mox.MoxTestBase):
   def testDoRequestResponse(self):
     self._TestDoRequestResponse(self.client, '/url', '/url')
 
-  def testDoRequestResponseWithProxy(self):
-    test_client = client.HttpsClient(self.hostname, proxy='proxyhost:123')
+  def testDoHttpRequestResponseWithHttpProxy(self):
+    """Test a https request via a http proxy."""
+    test_client = client.HttpsClient(
+        'http://%s' % self.hostname, proxy='proxyhost:123')
+    req_url = 'http://' + self.hostname + '/url'
+    self._TestDoRequestResponse(test_client, '/url', req_url)
+
+  def testDoHttpsRequestResponseWithHttpProxy(self):
+    """Test a https request via a http proxy."""
+    # default is https
+    test_client = client.HttpsClient(
+        self.hostname, proxy='http://proxyhost:124')
+    req_url = 'https://' + self.hostname + '/url'
+    self._TestDoRequestResponse(test_client, '/url', req_url)
+
+  def testDoHttpRequestResponseWithHttpsProxy(self):
+    """Test a https request via a http proxy."""
+    test_client = client.HttpsClient(
+        'http://%s' % self.hostname, proxy='https://proxyhost:125')
+    req_url = 'http://' + self.hostname + '/url'
+    self._TestDoRequestResponse(test_client, '/url', req_url)
+
+  def testDoHttpsRequestResponseWithHttpsProxy(self):
+    """Test a https request via a http proxy."""
+    # default is https
+    test_client = client.HttpsClient(
+        self.hostname, proxy='https://proxyhost:126')
     req_url = 'https://' + self.hostname + '/url'
     self._TestDoRequestResponse(test_client, '/url', req_url)
 

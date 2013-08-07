@@ -104,6 +104,8 @@ else:
 SERVER_CERT_VALID_SUBJECTS = [
     '/C=US/O=Equifax/OU=Equifax Secure Certificate Authority',
     '/C=US/O=Google Inc/CN=Google Internet Authority',
+    '/C=US/O=Google Inc/CN=Google Internet Authority G2',
+    '/C=US/O=GeoTrust Inc./CN=GeoTrust Global CA',
     '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN,
 ]
 
@@ -118,8 +120,10 @@ SERVER_CERT_VALID_SUBJECTS = [
 # which will take down the connection.
 
 SERVER_CERT_REQUIRE_SUBJECTS = [
-    '/C=US/O=Google Inc/CN=Google Internet Authority',
-    '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN,
+    ('/C=US/O=Google Inc/CN=Google Internet Authority',
+     '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN),
+    ('/C=US/O=Google Inc/CN=Google Internet Authority G2',
+     '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN),
 ]
 
 
@@ -417,11 +421,12 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     """
     if type(require_subjects) is not list:
       raise ValueError('require_subjects must be a list')
-    for x in require_subjects:
-      if type(x) is not str:
-        raise ValueError('all members of require_subjects must be str')
-      if x not in self._cert_valid_subjects:
-        raise ValueError('subject %s not in valid subjects' % x)
+    for subject_set in require_subjects:
+      for subject in subject_set:
+        if type(subject) is not str:
+          raise ValueError('all members of require_subjects must be str')
+        if subject not in self._cert_valid_subjects:
+          raise ValueError('subject %s not in valid subjects' % subject)
     logging.debug('SetCertRequireSubjects(%s)', require_subjects)
     self._cert_require_subjects = require_subjects
 
@@ -453,9 +458,11 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
 
     if valid:
       self._cert_valid_subject_matches.append(subject)
-
-    logging.debug(
-        '_IsValidCert(): subject=%s, VALID=%s', subject, valid)
+      logging.debug(
+          '_IsValidCert(): subject=%s, VALID=%s', subject, valid)
+    else:
+      logging.warning(
+          '_IsValidCert(): subject=%s, VALID=%s', subject, valid)
 
     return valid * 1
 
@@ -525,10 +532,20 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
       if not self._cert_valid_subject_matches:
         raise SimianClientError('No certificate subjects were validated')
 
-      for subject in self._cert_require_subjects:
-        if subject not in self._cert_valid_subject_matches:
-          raise SimianClientError(
-              'Certificate subject %s was not validated' % subject)
+      all_required_present = False
+      for subject_set in self._cert_require_subjects:
+        for subject in subject_set:
+          if subject not in self._cert_valid_subject_matches:
+            logging.warning(
+                'Certificate subject %s was not validated', subject)
+            all_required_present = False
+            break
+          all_required_present = True
+        if all_required_present:
+          break
+
+      if not all_required_present:
+        raise SimianClientError('Not all required cert subjects are present.')
 
     logging.debug('SSL connected %s', server_address)
     self.sock = sock
@@ -617,7 +634,13 @@ class HttpsClient(object):
     hostname = str(hostname)
     if proxy is not None:
       proxy = str(proxy)
+    elif proxy is None:
+      if os.environ.get('HTTPS_PROXY'):
+        proxy = str(os.environ['HTTPS_PROXY'])
+      elif os.environ.get('http_proxy'):
+        proxy = str(os.environ['http_proxy'])
 
+    # note: defaulting to https when no scheme is given.
     if not hostname.startswith('http'):
       hostname = 'https://%s' % hostname
 
@@ -656,8 +679,14 @@ class HttpsClient(object):
 
     self.proxy_hostname = None
     self.proxy_port = None
+    self.proxy_use_https = False
     if proxy:
-      (self.proxy_hostname, self.proxy_port) = urllib.splitport(proxy)
+      u = urlparse.urlparse(proxy)
+      if u.scheme in ['https', 'http']:
+        self.proxy_use_https = u.scheme == 'https'
+        (self.proxy_hostname, self.proxy_port) = urllib.splitport(u.netloc)
+      else:
+        (self.proxy_hostname, self.proxy_port) = urllib.splitport(proxy)
       if not self.proxy_port:
         raise Error('proxy does not specify port: %s', proxy)
       self.proxy_port = int(self.proxy_port)
@@ -682,7 +711,10 @@ class HttpsClient(object):
     conn_args = (self.hostname, self.port)
     if self.proxy_hostname:
       conn_args = (self.proxy_hostname, self.proxy_port)
-    if self.use_https:
+      use_https = self.proxy_use_https
+    else:
+      use_https = self.use_https
+    if use_https:
       conn = HTTPSMultiBodyConnection(*conn_args)
     else:
       conn = HTTPMultiBodyConnection(*conn_args)
@@ -694,7 +726,7 @@ class HttpsClient(object):
     if self._progress_callback is not None:
       conn.SetProgressCallback(self._progress_callback)
 
-    if self.use_https:
+    if use_https:
       if self._ca_cert_chain is not None:
         conn.SetCACertChain(self._ca_cert_chain)
       if self._cert_valid_subjects is not None:
@@ -777,6 +809,7 @@ class HttpsClient(object):
       logging.debug('Connecting to http%s://%s:%s',
                     suffix, self.hostname, self.port)
       conn = self._Connect()
+      # if proxy is in use, request the full URL including host.
       if self.proxy_hostname:
         url = 'http%s://%s%s' % (self.use_https * 's', self.netloc, url)
       logging.debug('Requesting %s %s', method, url)
