@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -317,8 +317,7 @@ class MultiBodyConnection:  # pylint: disable=g-old-style-class,no-init
     # the connection is ready for it after this request() completes.
     # note python >=2.7 httplib now offers this functionality for us,
     # but we are continuing to do it ourselves.
-    httplib.HTTPConnection.request(
-        self, method, url, body=None, headers=headers)
+    httplib.HTTPConnection.request(self, method, url, headers=headers)
 
     bytes_sent = 0
     self._ProgressCallback(bytes_sent, content_length)

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -122,7 +122,7 @@ class MultiBodyConnectionTest(mox.MoxTestBase):
 
     mock_request(
         self.mbc,
-        method, url, body=None, headers=headers).AndReturn(None)
+        method, url, headers=headers).AndReturn(None)
     self.mbc._ProgressCallback(0, content_length)
     self.mbc.send(body[0]).AndReturn(None)
     self.mbc._ProgressCallback(len(body[0]), content_length).AndReturn(None)
@@ -236,7 +236,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
     client.httplib.HTTPConnection.request(
         self.mbc,
-        method, url, body=None, headers=headers).AndReturn(None)
+        method, url, headers=headers).AndReturn(None)
     client.httplib.HTTPConnection.send(body).AndReturn(None)
     self.mox.ReplayAll()
     self.mbc.request(method, url, body=body)
@@ -255,7 +255,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
     client.httplib.HTTPConnection.request(
         self.mbc,
-        method, url, body=None, headers=headers).AndReturn(None)
+        method, url, headers=headers).AndReturn(None)
     for s in body:
       client.httplib.HTTPConnection.send(s).AndReturn(None)
     self.mox.ReplayAll()
@@ -285,7 +285,7 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
     client.httplib.HTTPConnection.request(
         self.mbc,
-        method, url, body=None, headers=headers).AndReturn(None)
+        method, url, headers=headers).AndReturn(None)
     client.httplib.HTTPConnection.send(body[0]).AndReturn(None)
     f.read(8192).AndReturn(f_body)
     client.httplib.HTTPConnection.send(f_body).AndReturn(None)
