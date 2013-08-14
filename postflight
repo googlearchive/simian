@@ -197,6 +197,10 @@ if [[ ! -z "$z" ]]; then
   done
 fi
 
+### install roots.pem
+
+cp ${RESOURCES}/roots.pem ${INSTALL_DIR}/${VE_DIR}/
+
 ### update munki configuration
 
 echo Begin section: Harmless "configuration not found" messages may follow

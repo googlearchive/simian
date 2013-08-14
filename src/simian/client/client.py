@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-#
+# 
 # Copyright 2010 Google Inc. All Rights Reserved.
-#
+# 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -1089,9 +1089,10 @@ class HttpsAuthClient(HttpsClient):
       str, all x509 root ca certs, or '' if none can be found
     """
     try:
-      contents = settings.ROOT_CA_CERT_CHAIN_PEM
-    except AttributeError:
-      contents = None  # ROOT_CA_CERT_CHAIN is optional
+      f = open(settings.ROOT_CA_CERT_CHAIN_PEM_PATH, 'r')
+      contents = f.read()
+    except (AttributeError, OSError):
+      contents = None  # root CA cert chain is optional
     if contents:
       logging.debug('Got Root CA Cert Chain: %s', contents)
       return contents

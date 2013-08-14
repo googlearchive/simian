@@ -175,7 +175,8 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R pytz-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
-	-s postflight
+	-s postflight \
+	-s roots.pem
 
 ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	rm -rf tmppkgs/$@
@@ -199,7 +200,8 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R pytz-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
-	-s postflight
+	-s postflight \
+	-s roots.pem
 
 ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz vep
 	rm -rf tmppkgs/$@
@@ -223,7 +225,8 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R pytz-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
-	-s postflight
+	-s postflight \
+	-s roots.pem
 
 ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkicontents contents.tar.gz vep
 	rm -f $@
@@ -245,7 +248,8 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R pytz-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
-	-s postflight
+	-s postflight \
+	-s roots.pem
 
 simian-pkg: ${SIMIAN}.pkg
 
