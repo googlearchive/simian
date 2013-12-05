@@ -208,6 +208,10 @@ server=`${VE_PYTHON} -c "from simian import settings ; print '%s.%s' % (settings
 defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${server}"
 echo End section
 
+### fix google_apputils permissions
+find ${INSTALL_DIR}/simian/lib/python*/site-packages/google_apputils-*.egg -type f -print0 | xargs -0 chmod 644
+find ${INSTALL_DIR}/simian/lib/python*/site-packages/google_apputils-*.egg -type d -print0 | xargs -0 chmod 755
+
 ### end
 echo postflight END
 rm -f "${LOGFILE}"
