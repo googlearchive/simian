@@ -121,8 +121,11 @@ class AdminHandler(webapp2.RequestHandler):
       exception: exception that was thrown
       debug_mode: True if the application is running in debug mode
     """
-    # TODO(user): this could notify us...
-    super(AdminHandler, self).handle_exception(*args, **kwargs)
+    if issubclass(exception.__class__, auth.NotAuthenticated):
+      self.error(403)
+      return
+    else:
+      super(AdminHandler, self).handle_exception(exception, debug_mode)
 
   def IsAdminUser(self):
     """Returns True if the current user is an admin, False otherwise."""

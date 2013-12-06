@@ -41,30 +41,95 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testDoUserAuth(self):
+  def testDoUserAuthWithNoUser(self):
     self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    auth.users.get_current_user().AndReturn(None)
 
+    self.mox.ReplayAll()
+    self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
+    self.mox.VerifyAll()
+
+  def testDoUserAuthAnyDomainUserSuccess(self):
+    self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', True)
+    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
     mock_user = self.mox.CreateMockAnything()
     email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(None)  # 1
-    auth.users.get_current_user().AndReturn(mock_user) # 2
-    auth.users.get_current_user().AndReturn(mock_user) # 3
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+
+    self.mox.ReplayAll()
+    self.assertEqual(mock_user, auth.DoUserAuth())
+    self.mox.VerifyAll()
+
+  def testDoUserAuthWithIsAdminTrueSuccess(self):
+    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     auth.IsAdminUser(email).AndReturn(True)
-    auth.users.get_current_user().AndReturn(mock_user)  # 4
+    auth.IsAdminUser(email).AndReturn(True)
+
+    self.mox.ReplayAll()
+    self.assertEqual(mock_user, auth.DoUserAuth(is_admin=True))
+    self.mox.VerifyAll()
+
+  def testDoUserAuthWithIsAdminTrueFailure(self):
+    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.users.get_current_user().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     auth.IsAdminUser(email).AndReturn(False)
 
     self.mox.ReplayAll()
-    # 1
-    self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
-    # 2
-    self.assertEqual(mock_user, auth.DoUserAuth())
-    # 3
-    auth.DoUserAuth(is_admin=True)
-    # 4
     self.assertRaises(auth.IsAdminMismatch, auth.DoUserAuth, is_admin=True)
+    self.mox.VerifyAll()
+
+  def testDoUserAuthWithAllDomainUsersOff(self):
+    self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
+    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(auth, 'IsSupportUser')
+    self.mox.StubOutWithMock(auth, 'IsSecurityUser')
+    self.mox.StubOutWithMock(auth, 'IsPhysicalSecurityUser')
+
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+
+    auth.IsAdminUser(email).AndReturn(False)
+    auth.IsSupportUser(email).AndReturn(False)
+    auth.IsSecurityUser(email).AndReturn(False)
+    auth.IsPhysicalSecurityUser(email).AndReturn(True)
+
+    self.mox.ReplayAll()
+    self.assertEqual(mock_user, auth.DoUserAuth())
+    self.mox.VerifyAll()
+
+  def testDoUserAuthWithAllDomainUsersOffFailure(self):
+    self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
+    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(auth, 'IsSupportUser')
+    self.mox.StubOutWithMock(auth, 'IsSecurityUser')
+    self.mox.StubOutWithMock(auth, 'IsPhysicalSecurityUser')
+
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+    auth.users.get_current_user().AndReturn(mock_user)
+    mock_user.email().AndReturn(email)
+
+    auth.IsAdminUser(email).AndReturn(False)
+    auth.IsSupportUser(email).AndReturn(False)
+    auth.IsSecurityUser(email).AndReturn(False)
+    auth.IsPhysicalSecurityUser(email).AndReturn(False)
+
+    self.mox.ReplayAll()
+    self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
     self.mox.VerifyAll()
 
   def testDoOAuthAuthSuccessSettings(self):

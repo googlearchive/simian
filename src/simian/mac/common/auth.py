@@ -41,6 +41,7 @@ ACL_GROUPS = {
     'physical_security_users': 'Physical Security Users',
 }
 
+
 class Error(Exception):
   """Base"""
 
@@ -86,9 +87,24 @@ def DoUserAuth(is_admin=None):
   user = users.get_current_user()
   if not user:
     raise NotAuthenticated
-  if is_admin is not None and not IsAdminUser(user.email()):
+  email = user.email()
+
+  if is_admin is not None and not IsAdminUser(email):
     raise IsAdminMismatch
-  return user
+
+  if settings.ALLOW_ALL_DOMAIN_USERS_READ_ACCESS:
+    return user
+
+  if IsAdminUser(email):
+    return user
+  elif IsSupportUser(email):
+    return user
+  elif IsSecurityUser(email):
+    return user
+  elif IsPhysicalSecurityUser(email):
+    return user
+  else:
+    raise NotAuthenticated
 
 
 def DoOAuthAuth(is_admin=None, require_level=None):
