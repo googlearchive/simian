@@ -18,20 +18,12 @@
 """Plist module.
 
 Utility classes to handle Apple .plist files, which are either
-
   XML docs per
   DTD http://www.apple.com/DTDs/PropertyList-1.0.dtd
-
 OR
-
   Binary structure per:
   http://www.opensource.apple.com/source/CF/CF-476.10/CFBinaryPList.c
   http://www.opensource.apple.com/source/CF/CF-550/ForFoundationOnly.h
-
-Contents:
-
-  class ApplePlist:  class to parse Apple .plists
-  class MunkiPlist:  derived class to parse Munki files in Apple plist format
 """
 
 
@@ -178,11 +170,12 @@ class ApplePlist(object):
     if plist is not None:
       self.LoadPlist(plist)
 
-  def copy(self):
+  def copy(self):  # pylint: disable=invalid-name
     """Return a new instance of this plist with the same values."""
     if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
+    # pylint: disable=protected-access
     new_plist = self.__class__()
     new_plist._validation_hooks = self._validation_hooks
     new_plist._plist = self._plist.copy()
@@ -191,6 +184,7 @@ class ApplePlist(object):
     new_plist._plist_bin = self._plist_bin
     new_plist._plist_version = self._plist_version
     new_plist._changed = self._changed
+    # pylint: enable=protected-access
     return new_plist
 
   def LoadPlist(self, plist):
@@ -242,7 +236,7 @@ class ApplePlist(object):
     # _plist == None, empty <plist> node contents
     # _plist == other, plist contents
     if hasattr(self, '_plist'):
-      del(self._plist)
+      del self._plist
 
     self._plist_version = None
     self._current_mode = []
@@ -557,7 +551,7 @@ class ApplePlist(object):
 
     try:
       (magic, v) = struct.unpack('6s2s', header)
-    except struct.error, e:
+    except struct.error as e:
       raise BinaryPlistHeaderError('Header: %s' % str(e))
 
     if magic != self.BPLIST_MAGIC:
@@ -573,7 +567,7 @@ class ApplePlist(object):
     fmt = '>5xBBBQQQ'
     try:
       a = struct.unpack(fmt, self._plist_bin[-1 * struct.calcsize(fmt):])
-    except struct.error, e:
+    except struct.error as e:
       raise MalformedPlistError('Footer: %s' % str(e))
     self.__bin['sortVersion'] = a[0]
     self.__bin['offsetIntSize'] = a[1]
@@ -886,7 +880,7 @@ class ApplePlist(object):
       self.__bin[pos] = x
     except KeyError:
       raise MalformedPlistError('Unknown binary objtype %d' % objtype)
-    except (ValueError, TypeError), e:
+    except (ValueError, TypeError) as e:
       raise MalformedPlistError(
           'Binary struct problem offset %d: %s' % (pos, str(e)))
     return x
@@ -913,7 +907,7 @@ class ApplePlist(object):
     for offset_no in xrange(0, self.__bin['numObjects']):
       try:
         oft = struct.unpack(fmt, self._plist_bin[ofs:ofs+int_size])[0]
-      except struct.error, e:
+      except struct.error as e:
         raise MalformedPlistError('Offset table: %s' % str(e))
       self._object_offset[offset_no] = oft
       ofs += int_size
@@ -929,8 +923,12 @@ class ApplePlist(object):
       parser = self._GetParser()
       try:
         parser.Parse(self._plist_xml)
-      except xml.parsers.expat.ExpatError, e:
+      except xml.parsers.expat.ExpatError as e:
         raise MalformedPlistError('%s\n\n%s' % (self._plist_xml, str(e)))
+
+    if not hasattr(self, '_plist'):
+      raise MalformedPlistError('Plist not parsed; invalid XML?')
+
     self.Validate()
     self.EncodeXml()
 
@@ -1131,6 +1129,8 @@ class ApplePlist(object):
       ignore_keys: optional, sequence, str keys to ignore.
     Returns:
       Boolean. True if the plist is the same, False otherwise.
+    Raises:
+      PlistNotParsedError: the plist was not parsed.
     """
     if not hasattr(self, '_plist'):
       raise PlistNotParsedError
@@ -1176,7 +1176,7 @@ class ApplePlist(object):
     if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
-    del(self._plist[k])
+    del self._plist[k]
     self._changed = True
 
   def __iter__(self):
@@ -1257,19 +1257,37 @@ class MunkiPackageInfoPlist(MunkiPlist):
 
   def __init__(self, *args, **kwargs):
     super(MunkiPackageInfoPlist, self).__init__(*args, **kwargs)
-    self.AddValidationHook(self._ValidateName)
+    self.AddValidationHook(self._ValidateForceInstallAfterDate)
+    self.AddValidationHook(self._ValidateInstallerItemLocation)
     self.AddValidationHook(self._ValidateInstallsFilePath)
+    self.AddValidationHook(self._ValidateName)
 
-  def _ValidateName(self):
-    """Validate a pkginfo <key>name</key> value."""
+  def _ValidateForceInstallAfterDate(self):
+    """Validate the force_install_after_date field, ensuring it's a date.
+
+    Raises:
+      InvalidPlistError: the plist is not valid.
+      PlistNotParsedError: the plist was not parsed.
+    """
     if not hasattr(self, '_plist'):
       raise PlistNotParsedError
 
-    # verify the pkginfo "name" field does not contain any dashes, as they
-    # conflict with Munki's manifest <pkginfo_name>-<version> selection feature.
-    if self._plist.get('name', '').find('-') != -1:
+    if 'force_install_after_date' in self._plist:
+      if not isinstance(
+          self._plist['force_install_after_date'], datetime.datetime):
+        raise InvalidPlistError(
+            'force_install_after_date must be a date, received a %r' % (
+                type(self._plist['force_install_after_date'])))
+
+  def _ValidateInstallerItemLocation(self):
+    """Validate a pkginfo <key>installer_item_location</key> value."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    if self._plist.get('installer_item_location', '').find('/') != -1:
       raise InvalidPlistError(
-          '<key>name</key> cannot contain a dash: %s' % self._plist['name'])
+          '<key>installer_item_location</key> cannot contain paths: %s' % (
+              self._plist['installer_item_location']))
 
   def _ValidateInstallsFilePath(self):
     """Validate the path strings of installs node of type=file.
@@ -1293,6 +1311,17 @@ class MunkiPackageInfoPlist(MunkiPlist):
           else:
             raise InvalidPlistError(
                 'Missing path value for installs type file')
+
+  def _ValidateName(self):
+    """Validate a pkginfo <key>name</key> value."""
+    if not hasattr(self, '_plist'):
+      raise PlistNotParsedError
+
+    # verify the pkginfo "name" field does not contain any dashes, as they
+    # conflict with Munki's manifest <pkginfo_name>-<version> selection feature.
+    if self._plist.get('name', '').find('-') != -1:
+      raise InvalidPlistError(
+          '<key>name</key> cannot contain a dash: %s' % self._plist['name'])
 
   def GetPackageName(self):
     """Returns the name of the package in the pkginfo plist.
@@ -1380,11 +1409,11 @@ class MunkiPackageInfoPlist(MunkiPlist):
       self._changed = True
     else:
       if 'unattended_install' in self._plist:
-        del(self._plist['unattended_install'])
+        del self._plist['unattended_install']
         self._changed = True
       # TODO(user): remove backwards compatibility at some point...
       if 'forced_install' in self._plist:
-        del(self._plist['forced_install'])
+        del self._plist['forced_install']
         self._changed = True
 
   def SetUnattendedUninstall(self, unattended_uninstall):
@@ -1405,11 +1434,11 @@ class MunkiPackageInfoPlist(MunkiPlist):
       self._changed = True
     else:
       if 'unattended_uninstall' in self._plist:
-        del(self._plist['unattended_uninstall'])
+        del self._plist['unattended_uninstall']
         self._changed = True
       # TODO(user): remove backwards compatibility at some point...
       if 'forced_uninstall' in self._plist:
-        del(self._plist['forced_uninstall'])
+        del self._plist['forced_uninstall']
         self._changed = True
 
   def SetCatalogs(self, catalogs):
@@ -1429,7 +1458,7 @@ class MunkiPackageInfoPlist(MunkiPlist):
   def RemoveDisplayName(self):
     """Removes the display_name key from the plist."""
     if 'display_name' in self._plist:
-      del(self._plist['display_name'])
+      del self._plist['display_name']
 
   def EqualIgnoringManifestsAndCatalogs(self, pkginfo):
     """Returns True if the pkginfo is equal except the manifests."""

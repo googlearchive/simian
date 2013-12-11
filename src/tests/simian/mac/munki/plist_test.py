@@ -103,6 +103,13 @@ class ApplePlistTest(mox.MoxTestBase):
         )
     self.assertEquals(self.apl.GetContents(), plist_dict, failure_str)
 
+  def testParseInvalidPlist(self):
+    """Test Parse() where the given plist is not even XML."""
+    self.apl._plist_xml = 'asdf'
+    self.mox.ReplayAll()
+    self.assertRaises(plist.MalformedPlistError, self.apl.Parse)
+    self.mox.VerifyAll()
+
   def testParseDate(self):
     """Test _ParseDate()."""
     mock_dt = 'dt'
@@ -1020,15 +1027,28 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.assertRaises(
         plist.InvalidPlistError, self.munki.Parse)
 
-  def testValidateName(self):
-    """Tests _ValidateName() with a valid name."""
-    self.munki._plist = {'name': 'fooname'}
-    self.munki._ValidateName()
+  def testValidateForceInstallAfterDate(self):
+    """Tests _ValidateForceInstallAfterDate() with a valid date."""
+    self.munki._plist = {'force_install_after_date': datetime.datetime.utcnow()}
+    self.munki._ValidateForceInstallAfterDate()
 
-  def testValidateNameWithDash(self):
-    """Tests _ValidateName() with a dash in the name."""
-    self.munki._plist = {'name': 'fooname-zomg'}
-    self.assertRaises(plist.InvalidPlistError, self.munki._ValidateName)
+  def testValidateForceInstallAfterDateWithInvalidDate(self):
+    """Tests _ValidateForceInstallAfterDate() with a dash in the name."""
+    # force_install_after_date here is a <string> not a <date>
+    self.munki._plist = {'force_install_after_date': '2013-07-10T13:00:00Z'}
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki._ValidateForceInstallAfterDate)
+
+  def testInstallerItemLocation(self):
+    """Tests _ValidateInstallerItemLocation()."""
+    self.munki._plist = {'installer_item_location': 'file.dmg'}
+    self.munki._ValidateInstallerItemLocation()
+
+  def testInstallerItemLocationWithPath(self):
+    """Tests _ValidateInstallerItemLocation()."""
+    self.munki._plist = {'installer_item_location': 'path/to/file.dmg'}
+    self.assertRaises(
+        plist.InvalidPlistError, self.munki._ValidateInstallerItemLocation)
 
   def testValidateInstallsFilePath(self):
     """Tests _ValidateInstallsFilePath() with valid file path."""
@@ -1079,6 +1099,16 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
     self.munki._plist = {'installs': 'this is not a list!'}
     self.assertRaises(
         plist.InvalidPlistError, self.munki._ValidateInstallsFilePath)
+
+  def testValidateName(self):
+    """Tests _ValidateName() with a valid name."""
+    self.munki._plist = {'name': 'fooname'}
+    self.munki._ValidateName()
+
+  def testValidateNameWithDash(self):
+    """Tests _ValidateName() with a dash in the name."""
+    self.munki._plist = {'name': 'fooname-zomg'}
+    self.assertRaises(plist.InvalidPlistError, self.munki._ValidateName)
 
   def testGetPackageName(self):
     """Tests the _GetPackageName()."""
