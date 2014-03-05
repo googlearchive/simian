@@ -114,7 +114,7 @@ class AdminHandler(webapp2.RequestHandler):
 
   XSRF_PROTECT = False
 
-  def handle_exception(self, *args, **kwargs):
+  def handle_exception(self, exception, debug_mode):
     """Handle an exception.
 
     Args:
