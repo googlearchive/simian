@@ -150,6 +150,7 @@ install_name_tool:
 
 m2crypto:
 	for egg in \
+	M2Crypto-0.22.3-py2.6-macosx-10.7-intel.egg \
 	M2Crypto-0.22.3-py2.6-macosx-10.8-x86_64.egg \
 	M2Crypto-0.22.3-py2.6-macosx-10.9-x86_64.egg ; do \
 	[[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "https://storage.googleapis.com/m2crypto_eggs/$${egg}" ; \
