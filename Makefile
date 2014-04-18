@@ -166,7 +166,10 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -189,7 +192,10 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -212,7 +218,10 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -233,7 +242,10 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*.egg \
+	-R simian_M2Crypto-*-10.6-*.egg \
+	-R simian_M2Crypto-*-10.7-*.egg \
+	-R simian_M2Crypto-*-10.8-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
