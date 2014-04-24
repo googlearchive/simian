@@ -618,7 +618,7 @@ def GetAppleSUSCatalog():
     sus_catalog['CatalogURL'] = urlparse.urljoin(
         'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
     fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
-  except fetch.MunkiDownloadError:
+  except (fetch.MunkiDownloadError, fpl.NSPropertyListSerializationException):
     logging.exception('MunkiDownloadError getting Apple SUS catalog.')
 
 
