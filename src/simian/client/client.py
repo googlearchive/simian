@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,6 +38,7 @@ import urlparse
 import warnings
 
 from M2Crypto import SSL
+from M2Crypto.SSL import Checker
 try:
   import google.appengine.tools.appengine_rpc
 except ImportError:
@@ -79,52 +80,6 @@ DEBUG = False
 if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
 URL_UPLOADPKG = '/uploadpkg'
-
-# SERVER_CERT_VALID_SUBJECTS
-#
-# The following list of subjects is validated against each cert subject in
-# the chain during a Simian client SSL connection startup and certificate
-# validation.
-#
-# If any connection cert subject does not match one of the following, an
-# error WILL be raised.
-#
-# If any subject listed below is not present in any of the connection cert
-# subjects, an error WILL NOT be raised.  This is a matching list, not a
-# requirement list.
-#
-# However, if NO cert subject listed below is matched during the connection,
-# an error WILL be raised.
-
-if settings.DOMAIN == 'appspot.com':
-  CERT_DOMAIN = '*.appspot.com'
-else:
-  CERT_DOMAIN = 'sandbox.google.com'
-
-SERVER_CERT_VALID_SUBJECTS = [
-    '/C=US/O=Equifax/OU=Equifax Secure Certificate Authority',
-    '/C=US/O=Google Inc/CN=Google Internet Authority',
-    '/C=US/O=Google Inc/CN=Google Internet Authority G2',
-    '/C=US/O=GeoTrust Inc./CN=GeoTrust Global CA',
-    '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN,
-]
-
-# SERVER_CERT_REQUIRE_SUBJECTS
-#
-# The following list of subjects is validated against the list of all
-# matched cert subjects after the SSL connection has started.  Each of the
-# following subjects must also appear in SERVER_CERT_VALID_SUBJECTS for them
-# to have been initially matched.
-#
-# If one of the following subjects was not matched, an error WILL be raised
-# which will take down the connection.
-
-SERVER_CERT_REQUIRE_SUBJECTS = [
-    ('/C=US/O=Google Inc/CN=Google Internet Authority',
-     '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN),
-    ('/C=US/O=Google Inc/CN=Google Internet Authority G2',
-     '/C=US/ST=California/L=Mountain View/O=Google Inc/CN=%s' % CERT_DOMAIN),
-]
 
 
 class Error(Exception):
@@ -354,9 +309,6 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     #Note: MultiBodyConnection has no __init__. Change this if it ever does.
     #MultiBodyConnection.__init__(*args, **kwargs)
     httplib.HTTPSConnection.__init__(self, *args, **kwargs)
-    self._cert_valid_subject_matches = []
-    self._cert_valid_subjects = []
-    self._cert_require_subjects = []
 
   @classmethod
   def SetCACertChain(cls, certs):
@@ -372,63 +324,6 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     """
     cls._ca_cert_chain = certs
 
-  def SetCertValidSubjects(self, valid_subjects):
-    """Set a list of certificate subjects which are the only valid ones.
-
-    For example, to lock down a client to only accept one known signing
-    authority and the final subject for the destination https server:
-
-        SetCertValidSubjects(['O=SigningAuthority'],['CN=www.example.com'])
-
-    If this method is not called, normal cert validity rules apply
-    by validating the x509 cert chain inside M2Crypto.
-
-    Args:
-      valid_subjects: list of str, valid subjects
-    Raises:
-      ValueError: if strict value supplied is not a list of str
-    """
-    if type(valid_subjects) is not list:
-      raise ValueError('valid_subjects must be a list')
-    for x in valid_subjects:
-      if type(x) is not str:
-        raise ValueError('all members of valid_subjects must be str')
-    logging.debug('SetCertValidSubjects(%s)', valid_subjects)
-    self._cert_valid_subjects = valid_subjects
-
-  def SetCertRequireSubjects(self, require_subjects):
-    """Set a list of certificate subjects which are required to appear.
-
-    For example, to require a client see a specific subject:
-
-        SetCertRequireSubjects(['CN=www.example.com'])
-
-    If this method is not called, normal cert validity rules apply
-    by validating the x509 cert chain inside M2Crypto.
-
-    Each of the subjects in require_subjects must have already been defined
-    as a valid subject by using SetCertValidSubjects().  If a subject
-    supplied in require_subjects is not in valid subjects, an exception will
-    be raised.  (This is a defense since the subject would not have been put
-    into _cert_valid_subject_matches without being in _cert_valid_subjects
-    to begin with.)
-
-    Args:
-      require_subjects: list of str, require subjects
-    Raises:
-      ValueError: if strict value supplied is not a list of str
-    """
-    if type(require_subjects) is not list:
-      raise ValueError('require_subjects must be a list')
-    for subject_set in require_subjects:
-      for subject in subject_set:
-        if type(subject) is not str:
-          raise ValueError('all members of require_subjects must be str')
-        if subject not in self._cert_valid_subjects:
-          raise ValueError('subject %s not in valid subjects' % subject)
-    logging.debug('SetCertRequireSubjects(%s)', require_subjects)
-    self._cert_require_subjects = require_subjects
-
   def _IsValidCert(self, ok, store):
     """Determine whether a cert is valid.
 
@@ -442,28 +337,13 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     Returns:
       1 if valid, 0 if not
     """
-    # no valid subjects list, so don't perform any additional checks.
-    if not self._cert_valid_subjects:
-      return 1
-
-    subject = str(store.get_current_cert().get_subject())
-
     # if openssl has verified this cert ok==1, otherwise 0.
     if ok != 1:
+      subject = str(store.get_current_cert().get_subject())
       logging.debug(
           'IsValidCert() ok=%s cert=%s, returning 0', str(ok), subject)
 
-    valid = (ok == 1) and subject in self._cert_valid_subjects
-
-    if valid:
-      self._cert_valid_subject_matches.append(subject)
-      logging.debug(
-          '_IsValidCert(): subject=%s, VALID=%s', subject, valid)
-    else:
-      logging.warning(
-          '_IsValidCert(): subject=%s, VALID=%s', subject, valid)
-
-    return valid * 1
+    return (ok == 1) * 1
 
   def _LoadCACertChain(self, ctx):
     """Load a CA certificate chain into a SSL context.
@@ -489,8 +369,6 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     if ctx.load_verify_locations(cafile=tf.name) != 1:
       tf.close()
       raise SimianClientError('Could not load CA certificate chain')
-
-    self._cert_valid_subject_matches = []
 
     ctx.set_verify(
         SSL.verify_peer | SSL.verify_fail_if_no_peer_cert,
@@ -519,32 +397,8 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
       sock.connect(server_address)
     except SSL.SSLError, e:
       raise SimianClientError('SSL error: %s' % str(e))
-
-    # If this client is validating cert subjects, make sure that some
-    # certs were validated.  This is done to prove our callback
-    # was invoked.
-    #
-    # Additionally, make sure that any cert subjects which were
-    # required to appear did so.
-    if self._cert_valid_subjects:
-
-      if not self._cert_valid_subject_matches:
-        raise SimianClientError('No certificate subjects were validated')
-
-      all_required_present = False
-      for subject_set in self._cert_require_subjects:
-        for subject in subject_set:
-          if subject not in self._cert_valid_subject_matches:
-            logging.warning(
-                'Certificate subject %s was not validated', subject)
-            all_required_present = False
-            break
-          all_required_present = True
-        if all_required_present:
-          break
-
-      if not all_required_present:
-        raise SimianClientError('Not all required cert subjects are present.')
+    except Checker.SSLVerificationError, e:
+      raise SimianClientError('SSLVerificationError: %s' % str(e))
 
     logging.debug('SSL connected %s', server_address)
     self.sock = sock
@@ -600,8 +454,6 @@ class HttpsClient(object):
     self._LoadHost(hostname, port, proxy)
     self._progress_callback = None
     self._ca_cert_chain = None
-    self._cert_valid_subjects = None
-    self._cert_require_subjects = None
 
   def SetProgressCallback(self, fn):
     self._progress_callback = fn
@@ -728,10 +580,6 @@ class HttpsClient(object):
     if use_https:
       if self._ca_cert_chain is not None:
         conn.SetCACertChain(self._ca_cert_chain)
-      if self._cert_valid_subjects is not None:
-        conn.SetCertValidSubjects(self._cert_valid_subjects)
-      if self._cert_require_subjects is not None:
-        conn.SetCertRequireSubjects(self._cert_require_subjects)
 
     try:
       conn.connect()
@@ -1051,7 +899,6 @@ class HttpsAuthClient(HttpsClient):
     self._auth1 = None
     self._cookie_token = None
     self._LoadRootCertChain()
-    self._LoadCertSubjectLists()
     self._PlatformSetup()
     self._LoadCaParameters()
 
@@ -1060,12 +907,6 @@ class HttpsAuthClient(HttpsClient):
     logging.debug('_LoadRootCertChain()')
     certs = self.GetSystemRootCACertChain()
     self.SetCACertChain(certs)
-
-  def _LoadCertSubjectLists(self):
-    """Load a predefined lists of cert subjects."""
-    logging.debug('_LoadCertSubjectLists()')
-    self._cert_valid_subjects = SERVER_CERT_VALID_SUBJECTS
-    self._cert_require_subjects = SERVER_CERT_REQUIRE_SUBJECTS
 
   def _PlatformSetup(self):
     """Platform specific instance setup."""

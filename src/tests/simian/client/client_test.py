@@ -53,8 +53,7 @@ class ClientModuleTest(mox.MoxTestBase):
     for a in [
         'SERVER_HOSTNAME', 'SERVER_PORT', 'AUTH_DOMAIN',
         'CLIENT_SSL_PATH', 'SEEK_SET', 'SEEK_CUR', 'SEEK_END',
-        'DEBUG', 'URL_UPLOADPKG', 'CERT_DOMAIN', 'SERVER_CERT_VALID_SUBJECTS',
-        'SERVER_CERT_REQUIRE_SUBJECTS']:
+        'DEBUG', 'URL_UPLOADPKG']:
       self.assertTrue(hasattr(client, a))
 
 
@@ -144,6 +143,7 @@ class MultiBodyConnectionTest(mox.MoxTestBase):
 
 
 class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
+
   def setUp(self):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
@@ -153,12 +153,6 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  def testInit(self):
-    """Test __init__()."""
-    self.assertEqual(self.mbc._cert_valid_subject_matches, [])
-    self.assertEqual(self.mbc._cert_valid_subjects, [])
-    self.assertEqual(self.mbc._cert_require_subjects, [])
 
   def testParentClassRequestAssumption(self):
     """Test assumptions of parent class request()."""
@@ -300,73 +294,9 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mbc.SetCACertChain('foo')
     self.assertEqual(self.mbc._ca_cert_chain, 'foo')
 
-  def testSetCertValidSubjects(self):
-    """Test SetCertValidSubjects()."""
-    self.mbc.SetCertValidSubjects(['hello', 'there'])
-    self.assertEqual(self.mbc._cert_valid_subjects, ['hello', 'there'])
-
-  def testSetCertValidSubjectsWhenMalformed(self):
-    """Test SetCertValidSubjects()."""
-    self.assertRaises(
-        ValueError,
-        self.mbc.SetCertValidSubjects, 'what')
-    self.assertRaises(
-        ValueError,
-        self.mbc.SetCertValidSubjects, ['hello', 1])
-    self.assertEqual(self.mbc._cert_valid_subjects, [])
-
-  def testSetCertRequireSubjects(self):
-    """Test SetCertRequireSubjects()."""
-    subjects = ['hello', 'there']
-    self.mbc.SetCertValidSubjects(subjects)
-    self.mbc.SetCertRequireSubjects([subjects])
-    self.assertEqual(self.mbc._cert_require_subjects, [subjects])
-
-  def testSetCertRequireSubjectsWhenMalformed(self):
-    """Test SetCertRequireSubjects()."""
-    self.assertRaises(
-        ValueError,
-        self.mbc.SetCertRequireSubjects, 'what')
-    self.assertRaises(
-        ValueError,
-        self.mbc.SetCertRequireSubjects, ['hello', 1])
-    self.assertRaises(
-        ValueError,
-        self.mbc.SetCertRequireSubjects, ['OK but not in valid subjects'])
-    self.assertEqual(self.mbc._cert_require_subjects, [])
-
   def testIsValidCert(self):
     """Test _IsValidCert()."""
-    self.mbc.SetCertValidSubjects(['valid'])
-
     store = self.mox.CreateMockAnything()
-    store.get_current_cert().AndReturn(store)
-    store.get_subject().AndReturn(store)
-    store.__str__().AndReturn('valid')
-
-    self.mox.ReplayAll()
-    self.assertEqual(1, self.mbc._IsValidCert(1, store))
-    self.assertEqual(self.mbc._cert_valid_subject_matches, ['valid'])
-    self.mox.VerifyAll()
-
-  def testIsValidCertWhenNotValid(self):
-    """Test _IsValidCert()."""
-    self.mbc.SetCertValidSubjects(['valid'])
-
-    store = self.mox.CreateMockAnything()
-    store.get_current_cert().AndReturn(store)
-    store.get_subject().AndReturn(store)
-    store.__str__().AndReturn('notvalid')
-
-    self.mox.ReplayAll()
-    self.assertEqual(0, self.mbc._IsValidCert(1, store))
-    self.assertEqual(self.mbc._cert_valid_subject_matches, [])
-    self.mox.VerifyAll()
-
-  def testIsValidCertWhenNotDefined(self):
-    """Test _IsValidCert()."""
-    self.mbc.SetCertValidSubjects([])
-    store = 'x509 cert'
 
     self.mox.ReplayAll()
     self.assertEqual(1, self.mbc._IsValidCert(1, store))
@@ -374,8 +304,6 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
   def testIsValidCertOkZero(self):
     """Test _IsValidCert()."""
-    self.mbc.SetCertValidSubjects(['valid'])
-
     store = self.mox.CreateMockAnything()
     store.get_current_cert().AndReturn(store)
     store.get_subject().AndReturn(store)
@@ -456,15 +384,10 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
     def __connect(address):  # pylint: disable=g-bad-name
       self.assertEqual(address, (self.mbc.host, self.mbc.port))
-      self.mbc._cert_valid_subject_matches = ['subject1', 'subject3']
       return None
 
     client.SSL.Connection(context).AndReturn(conn)
     conn.connect = __connect
-
-    self.mbc.SetCertValidSubjects(
-        ['foo', 'bar', 'subject1', 'subject2', 'subject3'])
-    self.mbc.SetCertRequireSubjects([('subject1', 'subject3'), ('foo', 'bar')])
 
     self.mox.ReplayAll()
     self.mbc.connect()
@@ -481,65 +404,6 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertRaises(client.SimianClientError, self.mbc.connect)
-    self.mox.VerifyAll()
-
-  def testConnectWhenNoSubjectMatches(self):
-    """Test connect()."""
-    context = self.mox.CreateMockAnything()
-    conn = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(client, 'SSL')
-    self.mox.StubOutWithMock(client.SSL, 'Context')
-    self.mox.StubOutWithMock(client.SSL, 'Connection')
-    self.mox.StubOutWithMock(self.mbc, '_LoadCACertChain')
-
-    self.mbc._ca_cert_chain = 'cert chain foo'
-    client.SSL.Context().AndReturn(context)
-    self.mbc._LoadCACertChain(context).AndReturn(None)
-
-    def __connect(address):  # pylint: disable=g-bad-name
-      self.assertEqual(address, (self.mbc.host, self.mbc.port))
-      self.mbc._cert_valid_subject_matches = []
-      return None
-
-    client.SSL.Connection(context).AndReturn(conn)
-    conn.connect = __connect
-
-    self.mbc.SetCertValidSubjects(['subject1'])
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, self.mbc.connect)
-    self.assertEqual(self.mbc.sock, None)
-    self.mox.VerifyAll()
-
-  def testConnectWhenNoRequiredSubjectMatches(self):
-    """Test connect()."""
-    context = self.mox.CreateMockAnything()
-    conn = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(client, 'SSL')
-    self.mox.StubOutWithMock(client.SSL, 'Context')
-    self.mox.StubOutWithMock(client.SSL, 'Connection')
-    self.mox.StubOutWithMock(self.mbc, '_LoadCACertChain')
-
-    self.mbc._ca_cert_chain = 'cert chain foo'
-    client.SSL.Context().AndReturn(context)
-    self.mbc._LoadCACertChain(context).AndReturn(None)
-
-    def __connect(address):  # pylint: disable=g-bad-name
-      self.assertEqual(address, (self.mbc.host, self.mbc.port))
-      self.mbc._cert_valid_subject_matches = ['subject1']
-      return None
-
-    client.SSL.Connection(context).AndReturn(conn)
-    conn.connect = __connect
-
-    self.mbc.SetCertValidSubjects(['subject1', 'subjectR'])
-    self.mbc.SetCertRequireSubjects([('subjectR',)])
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, self.mbc.connect)
-    self.assertEqual(self.mbc.sock, None)
     self.mox.VerifyAll()
 
 
@@ -567,8 +431,6 @@ class HttpsClientTest(mox.MoxTestBase):
     i = client.HttpsClient(self.hostname)
     self.assertEqual(i._progress_callback, None)
     self.assertEqual(i._ca_cert_chain, None)
-    self.assertEqual(i._cert_valid_subjects, None)
-    self.assertEqual(i._cert_require_subjects, None)
     self.mox.VerifyAll()
 
   def testLoadHost(self):
@@ -656,7 +518,6 @@ class HttpsClientTest(mox.MoxTestBase):
     # we stub this out weirdly because the parent class isn't an object,
     # it's an oldschool Python class.
     test_client._ca_cert_chain = 'cert chain'
-    test_client._cert_valid_subjects = 'valid subjects'
     use_https = (
         (not test_client.proxy_hostname and test_client.use_https) or
         (test_client.proxy_hostname and test_client.proxy_use_https))
@@ -667,7 +528,6 @@ class HttpsClientTest(mox.MoxTestBase):
     m(hostname, port).AndReturn(m)
     if use_https:
       m.SetCACertChain('cert chain').AndReturn(None)
-      m.SetCertValidSubjects('valid subjects').AndReturn(None)
     m.connect().AndReturn(None)
     self.mox.ReplayAll()
     test_client._Connect()
@@ -970,9 +830,7 @@ class HttpsAuthClientTest(mox.MoxTestBase):
   def testInit(self):
     """Test __init__()."""
     self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadRootCertChain')
-    self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadCertSubjectLists')
     client.HttpsAuthClient._LoadRootCertChain().AndReturn(None)
-    client.HttpsAuthClient._LoadCertSubjectLists().AndReturn(None)
     self.mox.ReplayAll()
     c = client.HttpsAuthClient(self.hostname)
     self.assertEqual(c._auth1, None)
