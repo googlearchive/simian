@@ -4,13 +4,13 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.2.2
+SIMIAN_VERSION=2.3
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
-MUNKI_VERSION=1.0.0.1867.0
+MUNKI_VERSION=2.0.0.2245
 MUNKI=munkitools-${MUNKI_VERSION}
-MUNKIFILE=${MUNKI}.dmg
+MUNKIFILE=${MUNKI}.pkg
 PYTHON_VERSION=2.6
 PYTHON=$(shell type -p python${PYTHON_VERSION})
 TS=$(shell date '+%s')
@@ -20,6 +20,7 @@ SWIG_URL=http://downloads.sourceforge.net/project/swig/swig/swig-${SWIG_VERSION}
 SVN_VERSION=$(shell svnversion | tr '[:upper:]' '[:lower:]')
 SVN_REGEX=^[0-9]+[a-z]*$
 BUILD_VERSION=$(shell if [[ '${SVN_VERSION}' =~ ${SVN_REGEX} ]]; then echo ${SVN_VERSION}; else echo ${SIMIAN_VERSION} | tr '.' '-'; fi)
+
 
 os_check:
 	@if [ -z "${OSX_VERSION}" ]; then echo Must run on OS X ; exit 1 ; fi
@@ -114,17 +115,13 @@ client_config: settings_check
 
 ${MUNKIFILE}:
 	curl -o $@ https://munkibuilds.org/${MUNKI_VERSION}/$@
-	hdiutil verify "$@" || (rm -f "$@" ; exit 1)
+	@xar -t -f "$@" > /dev/null || ( rm -f "$@" ; exit 1)
 
 add_munkicontents: os_check ${MUNKIFILE}
-	mkdir -p tmpcontents/
-	# Munki moved to a mpkg, scrape out all the contents of each
-	# mpkg in this shell multiliner.
-	mnt=`hdiutil attach ${MUNKIFILE} | tail -1 | awk '{print $$3};'` ; \
-	cd tmpcontents && \
-	for pkg in $$mnt/${MUNKI}.mpkg/Contents/Packages/*.pkg; do \
-	gzip -dc "$$pkg/Contents/Archive.pax.gz" | pax -r ; done ; \
-	hdiutil detach "$$mnt"
+	pkgutil --expand ${MUNKIFILE} tmpcontents/
+	cd tmpcontents/ && \
+	for pkg in *.pkg; do \
+	gzip -dc "$$pkg/Payload" | pax -r ; done
 
 contents.tar.gz: client_config
 	mkdir -p tmpcontents/etc/simian/ssl/certs

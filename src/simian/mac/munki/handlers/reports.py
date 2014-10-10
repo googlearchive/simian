@@ -179,7 +179,7 @@ class Reports(handlers.AuthenticationHandler):
         # support for new 'name=pkg|version=foo|...' style strings.
         d = common.KeyValueStringToDict(install)
 
-      name = d.get('name', '')
+      name = d.get('display_name', '') or d.get('name', '')
       version = d.get('version', '')
       status = str(d.get('status', ''))
       applesus = common.GetBoolValueFromString(d.get('applesus', '0'))
