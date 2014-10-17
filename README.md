@@ -2,7 +2,7 @@
 
 **Note 2: Simian now supports the recently released Munki2 client!**
 
-Simian is an enterprise-class Mac OS X software deployment solution hosted on Google App Engine (why [App Engine](../../wiki/AppEngineAtAGlance)?). It scales to any enterprise fleet size automatically, and offers a future proof client extended from the active [Munki open-source project](http://code.google.com/p/munki).
+Simian is an enterprise-class Mac OS X software deployment solution hosted on Google App Engine (why [App Engine](../../wiki/AppEngineAtAGlance)?). It scales to any enterprise fleet size automatically, and offers a future proof client extended from the active [Munki open-source project](https://github.com/munki/munki).
 
 Because the Simian server is live code, not a static file server, it offers unique benefits over a typical Munki+Apache deployment:
   * Simian can generate software manifests dynamically, on the fly, based on client properties.
@@ -18,7 +18,7 @@ In summary, Simian's feature set allows it to:
   * Dynamically target clients based on user, hostname, os version, group (tag), and more.
   * Obtain reports on all of this and the fleet overall.
 
-Much of this and more is due to the outstanding work of Greg Neagle and the Munki community.  To read more about the other features Munki offers please visit the [Munki code.google.com project page](http://code.google.com/p/munki).
+Much of this and more is due to the outstanding work of Greg Neagle and the Munki community.  To read more about the other features Munki offers please visit the [Munki on GitHub](https://github.com/munki/munki).
 
 ### Getting Started
 
