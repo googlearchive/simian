@@ -38,10 +38,11 @@ We will simultaneously be present on [freenode](http://freenode.net/) in:
 
 > ` #google-corpeng `
 
-### Upcoming Features
+### Recent Features
 
   * Advanced Apple Software Update support, including unattended and forced updates.
-    * Munki still prompts for installation of all Apple Software Update updates. We'd like to give admins more control over how and when these updates are installed.
+
+### Upcoming Features
 
   * Four-eyes approval for package changes.
     * Would you like two different admins to approve a push before it goes live? We plan on making that possible soon.
