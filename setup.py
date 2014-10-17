@@ -45,7 +45,7 @@ REQUIRE_BASE = [
 ]
 
 REQUIRE_SETUP = REQUIRE_BASE + [
-    'google_apputils>=0.2',
+    'google_apputils==0.4',
     'python-dateutil>=1.4,<2',  # because of google_apputils
 ]
 
@@ -70,7 +70,7 @@ SIMIAN_ENTRY_POINTS = ['%s = simian.stubs:%s' % s for s in SIMIAN_STUBS]
 setup(
   name = 'simian',
   version = '2.3',
-  url = 'http://code.google.com/p/simian',
+  url = 'https://github.com/google/simian',
   license = 'Apache 2.0',
   description = 'An App Engine-based client & server component for Munki',
   author = 'Google',
