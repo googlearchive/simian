@@ -1,8 +1,6 @@
 ### Overview
 
-**Note: our Simian 2.x release is now available! This release offers a more comprehensive, usable web UI and easier setup.**
-
-**Note 2: Simian does not yet support the recently released Munki2 client.  We aim to add support in October.**
+**Note 2: Simian now supports the recently released Munki2 client!**
 
 Simian is an enterprise-class Mac OS X software deployment solution hosted on Google App Engine (why [App Engine](../../wiki/AppEngineAtAGlance)?). It scales to any enterprise fleet size automatically, and offers a future proof client extended from the active [Munki open-source project](http://code.google.com/p/munki).
 
@@ -32,7 +30,7 @@ For screenshots and an overview of Simian features, please see the [SimianAtAGla
 
 The Simian engineering team will host office hours every other Monday from 11am to 1pm Eastern Time. Office hours are available as a video conference via Google+ Hangout, or on the irc network [freenode](http://freenode.net). Feel free to use or not use a webcam for the hangout.
 
-Next office hours are, **Mon Oct 13**, 1100-1300 US/Eastern.
+Next office hours are, **Mon Nov 3**, 1100-1300 US/Eastern.
 
 Join the Google+ Hangout here (new URL for each session):  ...
 
