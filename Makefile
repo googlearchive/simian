@@ -17,9 +17,7 @@ TS=$(shell date '+%s')
 # This is the version that opensource.apple.com offers
 SWIG_VERSION=1.3.40
 SWIG_URL=http://downloads.sourceforge.net/project/swig/swig/swig-${SWIG_VERSION}/swig-${SWIG_VERSION}.tar.gz?r=&ts=${TS}
-SVN_VERSION=$(shell svnversion | tr '[:upper:]' '[:lower:]')
-SVN_REGEX=^[0-9]+[a-z]*$
-BUILD_VERSION=$(shell if [[ '${SVN_VERSION}' =~ ${SVN_REGEX} ]]; then echo ${SVN_VERSION}; else echo ${SIMIAN_VERSION} | tr '.' '-'; fi)
+BUILD_VERSION=$(shell (git rev-parse HEAD 2>/dev/null || echo ${SIMIAN_VERSION} | tr '.' '-') | cut -c1-12)
 
 
 os_check:
@@ -263,5 +261,5 @@ pkg: ${SIMIAN}-and-${MUNKI}.pkg
 dmg: ${SIMIAN}-and-${MUNKI}.dmg
 
 release: server_config
-	appcfg.py --version=${BUILD_VERSION} update gae_bundle/ 
-	appcfg.py --version=${BUILD_VERSION} set_default_version gae_bundle/ 
+	appcfg.py --version=${BUILD_VERSION} update gae_bundle/
+	appcfg.py --version=${BUILD_VERSION} set_default_version gae_bundle/
