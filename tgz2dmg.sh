@@ -45,6 +45,7 @@ ID="com.google.code.simian"
 VERSION="1"
 PKGONLY=""
 PKGMAKER=$(find_packagemaker)
+PKGBUILD='/usr/bin/pkgbuild'
 
 if [[ "$#" -lt 2 ]]; then
   echo usage: $0 tgz_input_file dmg\|pkg_output_file [options...]
@@ -68,21 +69,26 @@ fi
 shift ; shift
 
 if [[ -z "$PKGMAKER" ]]; then
-  echo cannot find executable Apple packagemaker tool.
-  exit 1
+  PKGBUILD=$(which pkgbuild)
+  echo "cannot find executable Apple packagemaker tool, looking for pkgbuild."
+  if [[ -z "$PKGBUILD" ]]; then
+      echo "cannot find executable Apple pkgbuild tool, exit."
+      exit 1
+  fi
 fi
 
 TMPDIR=$(mktemp -d tgz2dmgXXXXXX)
-mkdir -p "$TMPDIR/contents"
-mkdir -p "$TMPDIR/pkg"
-mkdir -p "$TMPDIR/resources"
-mkdir -p "$TMPDIR/resources/vep"
-mkdir -p "$TMPDIR/scripts"
+echo "TMPDIR is ${TMPDIR}"
+mkdir -p "${TMPDIR}/contents"
+mkdir -p "${TMPDIR}/pkg"
+mkdir -p "${TMPDIR}/resources"
+mkdir -p "${TMPDIR}/resources/vep"
+mkdir -p "${TMPDIR}/scripts"
 
-trap "rm -rf \"$TMPDIR\"" EXIT
+trap "rm -rf \"${TMPDIR}\"" EXIT
 
 if [[ "$TGZ" != "" ]]; then
-  tar -zpxf "$TGZ" -C "$TMPDIR/contents"
+  tar -zpxf "$TGZ" -C "${TMPDIR}/contents"
 fi
 
 # parse argv
@@ -111,12 +117,17 @@ while [[ "$#" -gt 0 ]]; do
     fi
   else
     if [[ "$next" = "script" ]]; then
-      cp "$1" "$TMPDIR/scripts"
+      if [[ $PKGBUILD == "" ]]; then
+        cp "$1" "${TMPDIR}/scripts"
+      else
+        cp postinstall "${TMPDIR}/scripts"
+        cp roots.pem "${TMPDIR}/scripts"
+      fi
     elif [[ "$next" = "rsrc" ]]; then
-      cp "$1" "$TMPDIR/resources"
+      cp "$1" "${TMPDIR}/resources"
     elif [[ "$next" = "rsrcdir" ]]; then
-      [[ -f "$1" ]] && cp "$1" "$TMPDIR/resources"
-      [[ -d "$1" ]] && cp -R "$1" "$TMPDIR/resources"
+      [[ -f "$1" ]] && cp "$1" "${TMPDIR}/resources"
+      [[ -d "$1" ]] && cp -R "$1" "${TMPDIR}/resources"
     elif [[ "$next" = "id" ]]; then
       ID="$1"
     elif [[ "$next" = "version" ]]; then
@@ -125,18 +136,19 @@ while [[ "$#" -gt 0 ]]; do
       src="$1"
       shift
       dst="$1"
-      cp "$src" "$TMPDIR/contents/$dst"
+      cp "$src" "${TMPDIR}/contents/$dst"
     elif [[ "$next" = "pyver" ]]; then
-      echo "$1" > "$TMPDIR/resources/python_version"
+      echo "$1" > "${TMPDIR}/resources/python_version"
     elif [[ "$next" = "vep" ]]; then
-      cp "$1" "$TMPDIR/resources/vep"
+      cp "$1" "${TMPDIR}/resources/vep"
     fi
     next=""
   fi
   shift
 done
 
-cd "$TMPDIR/contents"
+cd "${TMPDIR}/contents"
+rm Distribution
 
 # At this stage we can edit the pkg contents
 # and write a preflight to handle other python deps.
@@ -144,22 +156,33 @@ cd "$TMPDIR/contents"
 cd "$ORIGPWD"
 
 if [[ -z "$PKGONLY" ]]; then
-  pkgout="$TMPDIR/pkg/simian.pkg"
+  pkgout="${TMPDIR}/pkg/simian.pkg"
 else
   pkgout="$OUT"
 fi
 
-${PKGMAKER} \
---root "$TMPDIR/contents" \
---id "$ID" \
---out "$pkgout" \
---resources "$TMPDIR/resources" \
---scripts "$TMPDIR/scripts" \
---version "$VERSION"
-
-if [[ -z "$PKGONLY" ]]; then
-  hdiutil create -srcfolder "$TMPDIR/pkg" -layout NONE -volname Simian "$OUT"
+if [[ ${PKGMAKER} != "" ]]; then
+    echo "Using packagemaker"
+    ${PKGMAKER} \
+    --root "${TMPDIR}/contents" \
+    --id "$ID" \
+    --out "$pkgout" \
+    --resources "${TMPDIR}/resources" \
+    --scripts "${TMPDIR}/scripts" \
+    --version "$VERSION"
+else
+    echo "Using pkgbuild"
+    cp -R "${TMPDIR}/resources" "${TMPDIR}/scripts/Resources"
+    ${PKGBUILD} --root "${TMPDIR}/contents" \
+        --identifier "$ID" \
+        --scripts "${TMPDIR}/scripts" \
+        --version "${VERSION}" \
+        "${pkgout}"
 fi
 
-rm -rf "$TMPDIR"
+if [[ -z "$PKGONLY" ]]; then
+  hdiutil create -srcfolder "${TMPDIR}/pkg" -layout NONE -volname Simian "$OUT"
+fi
+
+rm -rf "${TMPDIR}"
 echo output at "$OUT"
