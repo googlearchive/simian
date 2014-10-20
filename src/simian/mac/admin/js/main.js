@@ -11,6 +11,7 @@ goog.provide('simian');
 
 goog.require('goog.array');
 goog.require('goog.dom');
+goog.require('goog.dom.classes');
 goog.require('goog.positioning.AnchoredPosition');
 goog.require('goog.ui.HoverCard');
 goog.require('goog.ui.KeyboardShortcutHandler');

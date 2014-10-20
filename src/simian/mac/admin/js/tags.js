@@ -7,6 +7,7 @@
 
 
 goog.require('goog.dom');
+goog.require('goog.dom.classes');
 goog.require('goog.ui.Component.EventType');
 goog.require('goog.ui.Css3MenuButtonRenderer');
 goog.require('goog.ui.FilteredMenu');

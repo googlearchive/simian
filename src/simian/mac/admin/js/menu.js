@@ -10,6 +10,7 @@
 goog.provide('simian.menu');
 
 goog.require('goog.dom');
+goog.require('goog.dom.classes');
 goog.require('goog.net.Cookies');
 
 
