@@ -94,8 +94,10 @@ def FindPemAndValidate(settings):
   def _GrabTopSslDir(arg, dirname, fnames):
     d = arg[0]
     if dirname == ssl_path:
-      fnames.remove('certs')
-      fnames.remove('private_keys')
+      if 'certs' in fnames: 
+        fnames.remove('certs')
+      if 'private_keys' in fnames: 
+        fnames.remove('private_keys')
       d['dirname'] = dirname
       d['fnames'] = fnames
 
