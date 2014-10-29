@@ -45,7 +45,6 @@ ID="com.google.code.simian"
 VERSION="1"
 PKGONLY=""
 PKGMAKER=$(find_packagemaker)
-PKGBUILD='/usr/bin/pkgbuild'
 
 if [[ "$#" -lt 2 ]]; then
   echo usage: $0 tgz_input_file dmg\|pkg_output_file [options...]
@@ -69,8 +68,8 @@ fi
 shift ; shift
 
 if [[ -z "$PKGMAKER" ]]; then
-  PKGBUILD=$(which pkgbuild)
   echo "cannot find executable Apple packagemaker tool, looking for pkgbuild."
+  PKGBUILD=$(which pkgbuild)
   if [[ -z "$PKGBUILD" ]]; then
       echo "cannot find executable Apple pkgbuild tool, exit."
       exit 1
