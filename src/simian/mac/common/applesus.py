@@ -37,7 +37,7 @@ from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8', '10.9']
+OS_VERSIONS = ['10.5', '10.6', '10.7', '10.8', '10.9', '10.10']
 
 MON, TUE, WED, THU, FRI, SAT, SUN = range(0, 7)
 
