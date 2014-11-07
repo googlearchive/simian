@@ -50,7 +50,7 @@ working correctly.  Run:
   make test
 
 For more information about testing, see:
-  https://code.google.com/p/simian/wiki/Testing
+  https://github.com/google/simian/wiki/Testing
 
 
 INSTALLATION
@@ -62,10 +62,10 @@ Installation can be broken up into five tasks:
   * Rolling a .DMG to install on clients, based on your configuration
 
 For information on configuration, see:
-  https://code.google.com/p/simian/wiki/Configuration
+  https://github.com/google/simian/wiki/Configuration
 
 For information on pushing your server code to your AppEngine instance, see:
-  https://code.google.com/p/simian/wiki/AdminSetup
+  https://github.com/google/simian/wiki/AdminSetup
 
 Briefly, to roll your own .DMG after configuring, run:
   make dmg
@@ -74,7 +74,7 @@ Briefly, to roll your own .DMG after configuring, run:
 DEVELOPMENT
 
 To join in on the development with others, see:
-  http://code.google.com/p/simian
+  https://github.com/google/simian
 
 To make patches yourself, it's advised to edit the code in this directory
 under src/, and run "make test" to run unit tests before releasing.
