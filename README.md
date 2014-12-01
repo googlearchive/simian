@@ -30,7 +30,7 @@ For screenshots and an overview of Simian features, please see the [SimianAtAGla
 
 The Simian engineering team will host office hours every other Monday from 11am to 1pm Eastern Time. Office hours are available as a video conference via Google+ Hangout, or on the irc network [freenode](http://freenode.net). Feel free to use or not use a webcam for the hangout.
 
-Next office hours are, **Mon Nov 3**, 1100-1300 US/Eastern.
+Next office hours are, **Mon Dec 15**, 1100-1300 US/Eastern.
 
 Join the Google+ Hangout here (new URL for each session):  ...
 
