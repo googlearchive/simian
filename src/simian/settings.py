@@ -561,7 +561,7 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
     """Initialize."""
     # We do this to initialize underlying DictSettings, nothing more:
     super(SimianDictSettings, self)._Initialize()
-    mail_regex = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b')
+    mail_regex = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b', re.I)
     # Common settings
     self._SetValidation(
         'ca_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
