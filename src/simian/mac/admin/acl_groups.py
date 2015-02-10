@@ -27,8 +27,7 @@ from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.common import util
 
-MAIL_REGEX = (
-  '^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,4})$')
+MAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}\b'
 
 class ACLGroups(admin.AdminHandler):
 
