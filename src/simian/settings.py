@@ -113,12 +113,12 @@ class BaseSettings(types.ModuleType):
 
   # These constant values should match the method names that perform
   # the validation.
-  _VALIDATION_REGEX = '_CheckValueRegex'
+  _CheckValueRegex = '_CheckValueRegex'
   _VALIDATION_FUNC = '_CheckValueFunc'
   _VALIDATION_PEM_X509_CERT = 'CheckValuePemX509Cert'
   _VALIDATION_PEM_RSA_PRIVATE_KEY = 'CheckValuePemRsaPrivateKey'
   _VALIDATION_TYPES = [
-      _VALIDATION_REGEX, _VALIDATION_FUNC,
+      _CheckValueRegex, _VALIDATION_FUNC,
       _VALIDATION_PEM_X509_CERT, _VALIDATION_PEM_RSA_PRIVATE_KEY]
 
   def __init__(self, module, *args, **kwargs):
@@ -364,7 +364,7 @@ class BaseSettings(types.ModuleType):
     if not k in self._validation:
       return None
 
-    return self._validation[k].get(self._VALIDATION_REGEX, [None])[0]
+    return self._validation[k].get(self._CheckValueRegex, [None])[0]
 
   def CheckValidation(self, k=None):
     """Check validation for setting k, or default all.
@@ -561,9 +561,7 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
     """Initialize."""
     # We do this to initialize underlying DictSettings, nothing more:
     super(SimianDictSettings, self)._Initialize()
-    mail_regex = (
-        r'[_a-z0-9-]+(\.[_a-z0-9-]+)*@'
-         '[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,4})')
+    mail_regex = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b')
     # Common settings
     self._SetValidation(
         'ca_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
