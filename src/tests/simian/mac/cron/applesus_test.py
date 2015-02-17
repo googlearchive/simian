@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 #!/usr/bin/python2.4
 #
 
@@ -217,12 +217,10 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
 
   def testDeprecateOrphanedProducts(self):
     """Tests _DeprecateOrphanedProducts() with deprecated & active products."""
-    # Stub in some modified catalogs/tracks variables.
-    catalogs = applesus.CATALOGS.copy()
-    catalogs['nonexistent'] = 'uselessurl'
-    tracks = applesus.common.TRACKS + ['parseerror']
-    self.stubs.Set(applesus, 'CATALOGS', catalogs)
-    self.stubs.Set(applesus.common, 'TRACKS', tracks)
+    self.stubs.Set(
+        applesus.applesus, 'OS_VERSIONS', frozenset(['10.9', '10.10', None]))
+    self.stubs.Set(
+        applesus.common, 'TRACKS', applesus.common.TRACKS + ['parseerror'])
 
     self.mox.StubOutWithMock(applesus.plist, 'ApplePlist')
     self.mox.StubOutWithMock(applesus.models, 'AppleSUSProduct')
@@ -259,10 +257,10 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
       mock_product.product_id = p
       deprecated_products.append(mock_product)
 
-    for catalog in applesus.CATALOGS:
+    for os_version in applesus.applesus.OS_VERSIONS:
       for track in applesus.common.TRACKS + ['untouched']:
-        key = '%s_%s' % (catalog, track)
-        if catalog == 'nonexistent':
+        key = '%s_%s' % (os_version, track)
+        if not os_version:
           applesus.models.AppleSUSCatalog.get_by_key_name(key).AndReturn(None)
           continue
         mock_p = self.mox.CreateMockAnything()
@@ -282,8 +280,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     applesus.models.AppleSUSProduct.all().AndReturn(mock_query)
     mock_query.filter('deprecated =', False).AndReturn(deprecated_products)
     for deprecated_product in deprecated_products:
-      # product<#> should not be removed/deprecated as they exist in catalogs.
-      if deprecated_product.product_id in ['deprecateme', 'andme']:
+      if deprecated_product.product_id in ['product2', 'deprecateme', 'andme']:
         deprecated_product.put().AndReturn(None)
         expected_deprecated_out.append(deprecated_product)
 

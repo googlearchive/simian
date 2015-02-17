@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -216,10 +216,10 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       List of AppleSUSProduct objects that were marked deprecated.
     """
     # Loop over all catalogs, generating a dict of all unique product ids.
-    catalog_products = {}
-    for catalog in CATALOGS:
+    catalog_products = set()
+    for os_version in applesus.OS_VERSIONS:
       for track in common.TRACKS + ['untouched']:
-        key = '%s_%s' % (catalog, track)
+        key = '%s_%s' % (os_version, track)
         catalog_obj = models.AppleSUSCatalog.get_by_key_name(key)
         if not catalog_obj:
           logging.error('Catalog does not exist: %s', key)
@@ -231,10 +231,10 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
           logging.exception('Error parsing Apple Updates catalog: %s', key)
           continue
         for product in catalog_plist.get('Products', []):
-          catalog_products[product] = 1
+          catalog_products.add(product)
 
     deprecated = []
-    # Loop over Datastore products, deprecating any that aren't in any catalogs.
+    # Loop over Datastore products, deprecating all that aren't in any catalogs.
     for p in models.AppleSUSProduct.all().filter('deprecated =', False):
       if p.product_id not in catalog_products:
         p.deprecated = True
@@ -273,15 +273,16 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
 
   def get(self):
     """Handle GET."""
-    for os_version, url in CATALOGS.iteritems():
+    for os_version in applesus.OS_VERSIONS:
+      url = CATALOGS.get(os_version, 'UNKNOWN_OS_VERSION')
       untouched_key = '%s_untouched' % os_version
       untouched_catalog = models.AppleSUSCatalog.get_or_insert(untouched_key)
-      #logging.debug('Downloading %s catalog...', untouched_key)
-      if self._UpdateCatalogIfChanged(untouched_catalog, url):
-        self._ProcessCatalogAndNotifyAdmins(untouched_catalog, os_version)
-      else:
-        #logging.info('%s SUS catalog has NOT changed.', os_version)
-        pass
+      try:
+        if self._UpdateCatalogIfChanged(untouched_catalog, url):
+          self._ProcessCatalogAndNotifyAdmins(untouched_catalog, os_version)
+      except (urlfetch.DownloadError, urlfetch.InvalidURLError):
+        logging.exception(
+            'Unable to download Software Update catalog for %s', os_version)
 
 
 class AppleSUSAutoPromote(webapp2.RequestHandler):
