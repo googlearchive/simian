@@ -25,27 +25,3 @@ Much of this and more is due to the outstanding work of Greg Neagle and the Munk
 Please refer to the [Wiki documentation](../../wiki/AdminSetup) for instructions on how to download, configure, build, and deploy Simian.
 
 For screenshots and an overview of Simian features, please see the [SimianAtAGlance wiki](../../wiki/SimianAtAGlance).
-
-### Office Hours
-
-The Simian engineering team will host office hours every other Monday from 11am to 1pm Eastern Time. Office hours are available as a video conference via Google+ Hangout, or on the irc network [freenode](http://freenode.net). Feel free to use or not use a webcam for the hangout.
-
-Next office hours are, **Mon Dec 15**, 1100-1300 US/Eastern.
-
-Join the Google+ Hangout here (new URL for each session):  ...
-
-We will simultaneously be present on [freenode](http://freenode.net/) in:
-
-> ` #google-corpeng `
-
-### Recent Features
-
-  * Advanced Apple Software Update support, including unattended and forced updates.
-
-### Upcoming Features
-
-  * Four-eyes approval for package changes.
-    * Would you like two different admins to approve a push before it goes live? We plan on making that possible soon.
-
-  * Digital package signatures.
-    * One step beyond package hash verification.
