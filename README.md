@@ -25,3 +25,11 @@ Much of this and more is due to the outstanding work of Greg Neagle and the Munk
 Please refer to the [Wiki documentation](../../wiki/AdminSetup) for instructions on how to download, configure, build, and deploy Simian.
 
 For screenshots and an overview of Simian features, please see the [SimianAtAGlance wiki](../../wiki/SimianAtAGlance).
+
+### Contact
+
+If you have an issue or question which isn't covered in the Wiki documentation, we recommend you search and then post to the [simian-discuss@googlegroups.com Google Group](https://groups.google.com/forum/#!forum/simian-discuss).
+
+If your question is sensitive in nature, feel free to reach direct to the engineering team at simian-eng@googlegroups.com.
+
+Finally, if you'd like to stay aware of future Simian news, please subscribe to [simian-announce@googlegroups.com Google Group](https://groups.google.com/forum/#!forum/simian-announce)
