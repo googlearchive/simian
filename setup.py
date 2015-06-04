@@ -55,7 +55,7 @@ REQUIRE_TEST = REQUIRE_SETUP + [
     'mox>=0.5.3',
     'unittest2==0.5.1',
     'webapp2',
-    'M2Crypto==0.21.1',
+    'M2Crypto==0.22.3',
     'WebOb==1.1.1',
 ]
 
