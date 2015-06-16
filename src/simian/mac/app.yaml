@@ -33,10 +33,10 @@ handlers:
 
 ### Dev Admin Console
 
-- url: /ahadmin/.*
-  script: $PYTHON_LIB/google/appengine/ext/admin
-  login: admin
-  secure: always
+#- url: /ahadmin/.*
+#  script: $PYTHON_LIB/google/appengine/ext/admin
+# login: admin
+#  secure: always
 
 ### URLs commonly requested by Munki clients
 
@@ -90,12 +90,6 @@ handlers:
   script: simian.mac.urls.app
   login: required
   secure: always
-
-- url: /loginz
-  script: simian.mac.urls.app
-  secure: always
-  # intentionally omit "login: required" for arriving loginz requests
-
 
 - url: /api/.*
   script: simian.mac.api.urls.app

@@ -17,7 +17,7 @@ cron:
 
 - description: Apple SUS Catalog Auto-Promote
   url: /cron/applesus/autopromote
-  schedule: every 12 hours
+  schedule: every 3 hours
 
 - description: Apple SUS Catalog Sync
   url: /cron/applesus/catalogsync

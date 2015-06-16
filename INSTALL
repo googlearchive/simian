@@ -18,7 +18,8 @@ Portions of the App Engine SDK are supplied in zips for importing where
 necessary.
 
 src/tests/simian/auth/gae_server.zip supplies the App Engine SDK so that all
-unit tests may run without requiring the SDK.
+unit tests may run without requiring the SDK. To update this zip, download and
+zip the "google" folder within the latest Linux App Engine SDK.
 
 src/simian/client/gae_client.zip supplies a small portion of the App Engine
 SDK so that client functions may run without needing the full SDK on each
@@ -28,7 +29,7 @@ However, you will need the full App Engine SDK so that you can upload the
 Simian site to your App Engine instance.
 
 For information on downloading and installing the SDK, see:
-  http://code.google.com/appengine/downloads.html
+  https://cloud.google.com/appengine/downloads
 
 
 Other packages

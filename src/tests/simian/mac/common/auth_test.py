@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """auth module tests."""
 
@@ -23,10 +24,12 @@ import logging
 logging.basicConfig(filename='/dev/null')
 
 import tests.appenginesdk
-from google.apputils import app
-from google.apputils import basetest
+
 import mox
 import stubout
+
+from google.apputils import app
+from google.apputils import basetest
 from simian import settings
 from simian.mac.common import auth
 
@@ -62,7 +65,6 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
   def testDoUserAuthWithIsAdminTrueSuccess(self):
-    self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
     self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
     self.mox.StubOutWithMock(auth, 'IsAdminUser')
     mock_user = self.mox.CreateMockAnything()
@@ -252,11 +254,10 @@ class AuthModuleTest(mox.MoxTestBase):
         is_admin=is_admin, require_level=require_level), 'token')
 
     self.assertRaises(
-        auth.NotAuthenticated,
+        auth.base.NotAuthenticated,
         auth.DoAnyAuth, is_admin=is_admin, require_level=require_level)
 
     self.mox.VerifyAll()
-
 
   def testIsAdminUserTrue(self):
     """Test IsAdminUser() with a passed email address that is an admin."""
@@ -391,6 +392,156 @@ class AuthModuleTest(mox.MoxTestBase):
     self.assertFalse(auth.IsGroupMember(email, group_name=group_name))
     self.mox.VerifyAll()
 
+
+  def testIsAllowedTo(self):
+    """Test PermissionResolver.IsAllowedTo."""
+    test_resolver = auth.PermissionResolver('task')
+
+    self.mox.StubOutWithMock(auth, 'DoUserAuth')
+    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
+
+    auth.DoUserAuth().AndReturn(True)
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
+    auth.DoUserAuth().AndReturn(True)
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
+    auth.DoUserAuth().AndRaise(auth.NotAuthenticated(''))
+    auth.DoUserAuth().AndReturn(True)
+
+    self.mox.ReplayAll()
+    test_resolver.email = 'user1@example.com'
+    test_resolver.task = 'Propose'
+    self.assertTrue(test_resolver.IsAllowedTo())
+    self.assertFalse(test_resolver.IsAllowedTo())
+    self.assertFalse(test_resolver.IsAllowedTo())
+    test_resolver.task = 'FakeTask'
+    self.assertFalse(test_resolver.IsAllowedTo())
+    self.mox.VerifyAll()
+
+  def testIsAllowedToPropose(self):
+    """Test PermissionResolver._IsAllowedToPropose()."""
+    test_resolver = auth.PermissionResolver('task')
+    email_one = 'user1@example.com'
+    email_two = 'user2@example.com'
+    email_three = 'user3@example.com'
+
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(auth, 'IsGroupMember')
+    auth.IsAdminUser(email_one).AndReturn(True)
+    auth.IsAdminUser(email_two).AndReturn(False)
+    auth.IsGroupMember(
+        email_two, 'proposals_group',
+        remote_group_lookup=True).AndReturn(True)
+    auth.IsAdminUser(email_three).AndReturn(False)
+    auth.IsGroupMember(
+        email_three, 'proposals_group',
+        remote_group_lookup=True).AndReturn(False)
+
+    self.mox.ReplayAll()
+    test_resolver.email = email_one
+    self.assertTrue(test_resolver._IsAllowedToPropose())
+    test_resolver.email = email_two
+    self.assertTrue(test_resolver._IsAllowedToPropose())
+    test_resolver.email = email_three
+    self.assertFalse(test_resolver._IsAllowedToPropose())
+    self.mox.VerifyAll()
+
+  def testIsAllowedToUploadProposalsOff(self):
+    """Test PermissionResolver._IsAllowedToUpload() with proposals."""
+    test_resolver = auth.PermissionResolver('task')
+    email_one = 'user1@example.com'
+    email_two = 'user2@example.com'
+
+    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', False)
+    setattr(auth.settings, 'PROPOSALS_GROUP', '')
+
+    self.mox.StubOutWithMock(auth, 'DoUserAuth')
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    auth.IsAdminUser(email_one).AndReturn(True)
+    auth.IsAdminUser(email_two).AndReturn(False)
+
+    self.mox.ReplayAll()
+    test_resolver.email = email_one
+    self.assertTrue(test_resolver._IsAllowedToUpload())
+    test_resolver.email = email_two
+    self.assertFalse(test_resolver._IsAllowedToUpload())
+    self.mox.VerifyAll()
+
+  def testIsAllowedToUploadProposalsOn(self):
+    """Test PermissionResolver._IsAllowedToUpload() without proposals."""
+    test_resolver = auth.PermissionResolver('task')
+    email_one = 'user1@example.com'
+    email_two = 'user2@example.com'
+
+    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
+    setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
+
+    self.mox.StubOutWithMock(auth, 'DoUserAuth')
+    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
+
+    self.mox.ReplayAll()
+    test_resolver.email = email_one
+    self.assertTrue(test_resolver._IsAllowedToUpload())
+    test_resolver.email = email_two
+    self.assertFalse(test_resolver._IsAllowedToUpload())
+    self.mox.VerifyAll()
+
+  def testIsAllowedToViewPacakgesProposalsOn(self):
+    """Test PermissionResolver._IsAllowedToViewPackages() with proposals."""
+    test_resolver = auth.PermissionResolver('task')
+    email_one = 'user1@example.com'
+    email_two = 'user2@example.com'
+    email_three = 'user3@example.com'
+
+    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
+    setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
+
+    self.mox.StubOutWithMock(auth, 'DoUserAuth')
+    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
+    self.mox.StubOutWithMock(auth, 'IsSupportUser')
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
+    auth.IsSupportUser(email_two).AndReturn(True)
+    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
+    auth.IsSupportUser(email_three).AndReturn(False)
+
+    self.mox.ReplayAll()
+    test_resolver.email = email_one
+    self.assertTrue(test_resolver._IsAllowedToViewPackages())
+    test_resolver.email = email_two
+    self.assertTrue(test_resolver._IsAllowedToViewPackages())
+    test_resolver.email = email_three
+    self.assertFalse(test_resolver._IsAllowedToViewPackages())
+    self.mox.VerifyAll()
+
+  def testIsAllowedToViewPacakgesProposalsOff(self):
+    """Test PermissionResolver._IsAllowedToViewPackages() without proposals."""
+    test_resolver = auth.PermissionResolver('task')
+    email_one = 'user1@example.com'
+    email_two = 'user2@example.com'
+    email_three = 'user3@example.com'
+
+    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', False)
+    setattr(auth.settings, 'PROPOSALS_GROUP', '')
+
+    self.mox.StubOutWithMock(auth, 'DoUserAuth')
+    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(auth, 'IsSupportUser')
+    auth.IsAdminUser(email_one).AndReturn(True)
+    auth.IsAdminUser(email_two).AndReturn(False)
+    auth.IsSupportUser(email_two).AndReturn(True)
+    auth.IsAdminUser(email_three).AndReturn(False)
+    auth.IsSupportUser(email_three).AndReturn(False)
+
+    self.mox.ReplayAll()
+    test_resolver.email = email_one
+    self.assertTrue(test_resolver._IsAllowedToViewPackages())
+    test_resolver.email = email_two
+    self.assertTrue(test_resolver._IsAllowedToViewPackages())
+    test_resolver.email = email_three
+    self.assertFalse(test_resolver._IsAllowedToViewPackages())
+    self.mox.VerifyAll()
 
 
 def main(unused_argv):

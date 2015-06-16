@@ -1,28 +1,31 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """util module tests."""
 
 
 
-from google.apputils import app
-from google.apputils import basetest
+
 import mox
 import stubout
+
+from google.apputils import app
+from google.apputils import basetest
 from simian.mac.common import util
 
 
@@ -87,40 +90,6 @@ class UtilModuleTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testSerializePickle(self):
-    """Test Serialize()."""
-    self.mox.StubOutWithMock(util.pickle, 'dumps')
-
-    util.pickle.dumps('object1').AndReturn('serial1')
-    util.pickle.dumps('object2').AndRaise(util.pickle.PicklingError)
-
-    self.mox.ReplayAll()
-    self.assertEqual('serial1', util.Serialize(
-        'object1', _use_json=False, _use_pickle=True))
-    self.assertRaises(
-        util.SerializeError,
-        util.Serialize,
-        'object2', _use_json=False, _use_pickle=True)
-    self.mox.VerifyAll()
-
-  def testDeserializePickle(self):
-    """Test Deserialize()."""
-    self.mox.StubOutWithMock(util.pickle, 'loads')
-
-    util.pickle.loads('serial1').AndReturn('object1')
-    util.pickle.loads('serial2').AndRaise(util.pickle.UnpicklingError)
-
-    self.mox.ReplayAll()
-    self.assertEqual('object1', util.Deserialize(
-        'serial1', _use_json=False, _use_pickle=True,
-        _pickle_re=util.re.compile('.')))
-    self.assertRaises(
-        util.DeserializeError,
-        util.Deserialize,
-        'serial2', _use_json=False, _use_pickle=True,
-        _pickle_re=util.re.compile('.'))
-    self.mox.VerifyAll()
-
   def testSerializeJson(self):
     """Test Serialize()."""
     self.mox.StubOutWithMock(util.json, 'dumps')
@@ -129,12 +98,8 @@ class UtilModuleTest(mox.MoxTestBase):
     util.json.dumps('object2').AndRaise(TypeError)
 
     self.mox.ReplayAll()
-    self.assertEqual('serial1', util.Serialize(
-        'object1', _use_json=True, _use_pickle=False))
-    self.assertRaises(
-        util.SerializeError,
-        util.Serialize,
-        'object2', _use_json=True, _use_pickle=False)
+    self.assertEqual('serial1', util.Serialize('object1'))
+    self.assertRaises(util.SerializeError, util.Serialize, 'object2')
     self.mox.VerifyAll()
 
   def testDeserializeJson(self):
@@ -145,45 +110,15 @@ class UtilModuleTest(mox.MoxTestBase):
     util.json.loads('serial2', parse_float=float).AndRaise(ValueError)
 
     self.mox.ReplayAll()
-    self.assertEqual('object1', util.Deserialize(
-        'serial1', _use_json=True, _use_pickle=False))
-    self.assertRaises(
-        util.DeserializeError,
-        util.Deserialize,
-        'serial2', _use_json=True, _use_pickle=False)
-    self.mox.VerifyAll()
-
-  def testSerializeNoMethods(self):
-    """Test Serialize()."""
-    self.mox.ReplayAll()
-    self.assertRaises(
-        util.SerializeError,
-        util.Serialize,
-        'object', _use_json=False, _use_pickle=False)
-    self.mox.VerifyAll()
-
-  def testDeserializeUnknownFormat(self):
-    """Test Deserialize()."""
-    self.mox.ReplayAll()
-    self.assertRaises(
-        util.DeserializeError,
-        util.Deserialize,
-        'serial', _use_json=False, _use_pickle=False)
+    self.assertEqual('object1', util.Deserialize('serial1'))
+    self.assertRaises(util.DeserializeError, util.Deserialize, 'serial2')
     self.mox.VerifyAll()
 
   def testDeserializeWhenNone(self):
     """Test Deserialize()."""
     self.mox.ReplayAll()
-    self.assertRaises(
-        util.DeserializeError,
-        util.Deserialize,
-        None, _use_json=True, _use_pickle=True)
+    self.assertRaises(util.DeserializeError, util.Deserialize, None)
     self.mox.VerifyAll()
-
-  def testPickleDisabled(self):
-    """Test that pickle is disabled, per b/3387382."""
-    self.assertTrue(util.USE_JSON)
-    self.assertFalse(util.USE_PICKLE)
 
   def testUrlUnquote(self):
     """Test UrlUnquote()."""

@@ -36,7 +36,7 @@ TARGET_PATH="$3"
 RESOURCES="$(pwd)/Resources"
 BASETMPDIR="${TARGET_PATH}/tmp/"
 OSX=$(sw_vers -productVersion | cut -d. -f1-2)
-VERSION="2.3"
+VERSION="2.4"
 PYTHON_VERSION=$(egrep '[0-9].[0-9]' "${RESOURCES}/python_version")
 PYTHON="python${PYTHON_VERSION}"
 INSTALL_DIR=/usr/local/munki/
@@ -158,13 +158,6 @@ cd "${TMPDIR}/simian-${VERSION}"
 mkdir -p src/tests  # fake out google test
 ${VE_PYTHON} setup.py install 2>&1
 cd "${ORIGPWD}"
-
-### link simianauth and simianadmin into /usr/local/bin for easier access
-
-for f in simianauth simianadmin ; do
-  rm -f /usr/local/bin/${f}
-  ln -s ${INSTALL_DIR}/${VE_DIR}/bin/${f} /usr/local/bin/
-done
 
 ### fix sh-bang line for simianfacter
 

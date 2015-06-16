@@ -68,3 +68,16 @@ li {
   color: #666;
   font-size: 0.9em;
 }
+
+table a.anchor {
+  color: #777;
+  text-decoration: none;
+  font-size: 13px;
+  visibility: hidden;
+}
+table a.anchor:hover {
+  background-color: #AAA;
+}
+table tr:hover .anchor {
+  visibility: visible;
+}

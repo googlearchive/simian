@@ -1,56 +1,66 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Reports URL handlers."""
 
 
 
 import datetime
+import json
 import logging
 import os
 import re
-import time
 import urllib
 
-from google.appengine.runtime import apiproxy_errors
-
 from simian.auth import gaeserver
-from simian.mac import models
 from simian.mac import common as main_common
+from simian.mac import models
+from simian.mac.common import gae_util
+from simian.mac.common import util
 from simian.mac.munki import common
 from simian.mac.munki import handlers
-from simian.mac.common import util
-from simian.mac.common import gae_util
+
 
 
 
 # int number of days after which postflight_datetime is considered stale.
 FORCE_CONTINUE_POSTFLIGHT_DAYS = 5
 
-# int number of days after which a client is considered broken.
-REPAIR_CLIENT_PRE_POST_DIFF_DAYS = 7
+# int number of failed Munki executions before instructing the client to repair.
+REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT = 5
 
 INSTALL_RESULT_FAILED = 'FAILED with return code'
 INSTALL_RESULT_SUCCESSFUL = 'SUCCESSFUL'
 
-# InstallResults legacy string matching regex.
+JSON_PREFIX = ')]}\',\n'
+
 LEGACY_INSTALL_RESULTS_STRING_REGEX = re.compile(
     r'^Install of (.*)-(\d+.*): (%s|%s: (\-?\d+))$' % (
         INSTALL_RESULT_SUCCESSFUL, INSTALL_RESULT_FAILED))
+
+# Example: 'iLife 11: Download failed (Error -1001: The request timed out.)'
+DOWNLOAD_FAILED_STRING_REGEX = re.compile(
+    r'([\s\w\.\-]+): Download failed \((.*)\)')
+
+# For legacy clients that do not support multiple feedback commands via JSON,
+# this list is used to determine which single command to send, if any, in
+# increasing importance order.
+LEGACY_FEEDBACK_LIST = ['EXIT', 'FORCE_CONTINUE', 'REPAIR', 'UPLOAD_LOGS']
 
 
 def IsExitFeedbackIpAddress(ip_address):
@@ -61,7 +71,8 @@ def IsExitFeedbackIpAddress(ip_address):
   Returns:
     True if this IP address should result in exit feedback
   """
-  return (ip_address and
+  return (
+      ip_address and
       models.KeyValueCache.IpInList('client_exit_ip_blocks', ip_address))
 
 
@@ -74,16 +85,15 @@ class Reports(handlers.AuthenticationHandler):
     Args:
       uuid: str, computer uuid
       report_type: str, report type
-      kwargs: dict, additional report parameters, e.g:
-
-      on_corp: str, optional, '1' or '0', on_corp status
-      message: str, optional, message from client
-      details: str, optional, details from client
-      ip_address: str, optional, IP address of client
+      **kwargs: dict, additional report parameters, e.g:
+          on_corp: str, optional, '1' or '0', on_corp status
+          message: str, optional, message from client
+          details: str, optional, details from client
+          ip_address: str, optional, IP address of client
     Returns:
       common.ReportFeedback.* constant
     """
-    report = common.ReportFeedback.OK
+    feedback = {}
     if 'computer' in kwargs:
       c = kwargs['computer']
     else:
@@ -91,13 +101,11 @@ class Reports(handlers.AuthenticationHandler):
     ip_address = kwargs.get('ip_address', None)
     client_exit = kwargs.get('client_exit', None)
 
-    # TODO(user): if common.BusinessLogicMethod ...
     if client_exit and report_type == 'preflight':
-      report = common.ReportFeedback.EXIT
       # client has requested an exit, but let's ensure we should allow it.
       if c is None or c.postflight_datetime is None:
         # client has never fully executed Munki.
-        report = common.ReportFeedback.FORCE_CONTINUE
+        feedback['force_continue'] = True
       else:
         # check if the postflight_datetime warrants a FORCE_CONTINUE
         now = datetime.datetime.utcnow()
@@ -105,32 +113,31 @@ class Reports(handlers.AuthenticationHandler):
             days=FORCE_CONTINUE_POSTFLIGHT_DAYS)
         if c.postflight_datetime < postflight_stale_datetime:
           # client hasn't executed Munki in FORCE_CONTINUE_POSTFLIGHT_DAYS.
-          report = common.ReportFeedback.FORCE_CONTINUE
+          feedback['force_continue'] = True
+        else:
+          feedback['exit'] = True
     elif report_type == 'preflight':
       if IsExitFeedbackIpAddress(ip_address):
-        report = common.ReportFeedback.EXIT
+        feedback['exit'] = True
       elif common.IsPanicModeNoPackages():
-        report = common.ReportFeedback.EXIT
+        feedback['exit'] = True
       elif not c or c.preflight_datetime is None:
         # this is the first preflight post from this client.
-        report = common.ReportFeedback.FORCE_CONTINUE
+        feedback['force_continue'] = True
       elif getattr(c, 'upload_logs_and_notify', None) is not None:
-        report = common.ReportFeedback.UPLOAD_LOGS
-      elif c.postflight_datetime is None:
-        # client has posted preflight before, but not postflight
-        report = common.ReportFeedback.REPAIR
+        feedback['logging_level'] = 3
+        feedback['upload_logs'] = True
       else:
-        # check if postflight_datetime warrants a repair.
-        pre_post_timedelta = c.preflight_datetime - c.postflight_datetime
-        if pre_post_timedelta > datetime.timedelta(
-            days=REPAIR_CLIENT_PRE_POST_DIFF_DAYS):
-          report = common.ReportFeedback.REPAIR
+        # check if preflight_count_since_postflight warrants a repair.
+        if (c.preflight_count_since_postflight >=
+            REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT):
+          feedback['pkill_installd'] = True
+          feedback['repair'] = True
+          feedback['logging_level'] = 3
+          feedback['upload_logs'] = True
 
-    if report not in [common.ReportFeedback.OK,
-                      common.ReportFeedback.FORCE_CONTINUE]:
-      logging.info('Feedback to %s: %s', uuid, report)
 
-    return report
+    return feedback
 
   def _LogInstalls(self, installs, computer):
     """Logs a batch of installs for a given computer.
@@ -199,13 +206,13 @@ class Reports(handlers.AuthenticationHandler):
 
       try:
         install_datetime = util.Datetime.utcfromtimestamp(d.get('time', None))
-      except ValueError, e:
-        logging.warning('Ignoring invalid install_datetime; %s', str(e))
+      except ValueError as e:
+        logging.info('Ignoring invalid install_datetime: %s', str(e))
         install_datetime = datetime.datetime.utcnow()
-      except util.EpochExtremeFutureValueError, e:
-        logging.warning('Ignoring future install_datetime; %s', str(e))
+      except util.EpochExtremeFutureValueError as e:
+        logging.info('Ignoring extreme future install_datetime: %s', str(e))
         install_datetime = datetime.datetime.utcnow()
-      except util.EpochValueError, e:
+      except util.EpochFutureValueError:
         install_datetime = datetime.datetime.utcnow()
 
       pkg = '%s-%s' % (name, version)
@@ -228,7 +235,7 @@ class Reports(handlers.AuthenticationHandler):
     session = gaeserver.DoMunkiAuth()
     uuid = main_common.SanitizeUUID(session.uuid)
     report_type = self.request.get('_report_type')
-    feedback_requested = self.request.get('_feedback')
+    report_feedback = {}
     message = None
     details = None
     client_id = None
@@ -254,30 +261,31 @@ class Reports(handlers.AuthenticationHandler):
 
       computer = models.Computer.get_by_key_name(uuid)
       ip_address = os.environ.get('REMOTE_ADDR', '')
-      report_feedback = None
       if report_type == 'preflight':
-        # if the UUID is known to be lost/stolen, log this connection.
-        if models.ComputerLostStolen.IsLostStolen(uuid):
-          logging.warning('Connection from lost/stolen machine: %s', uuid)
-          models.ComputerLostStolen.LogLostStolenConnection(
-              computer=computer, ip_address=ip_address)
-
         # we want to get feedback now, before preflight_datetime changes.
-        if feedback_requested:
-          client_exit = self.request.get('client_exit', None)
-          report_feedback = self.GetReportFeedback(
-              uuid, report_type, computer=computer, ip_address=ip_address,
-              client_exit=client_exit)
-          self.response.out.write(report_feedback)
+        client_exit = self.request.get('client_exit', None)
+        report_feedback = self.GetReportFeedback(
+            uuid, report_type, computer=computer, ip_address=ip_address,
+            client_exit=client_exit)
 
-          # if report feedback calls for a client exit, log it.
-          if report_feedback == common.ReportFeedback.EXIT:
-            if not client_exit:
-              # client didn't ask for an exit, which means server decided.
-              client_exit = 'Connection from defined exit IP address'
-            common.WriteClientLog(
-                models.PreflightExitLog, uuid, computer=computer,
-                exit_reason=client_exit)
+        if self.request.get('json') == '1':
+          self.response.out.write(JSON_PREFIX + json.dumps(report_feedback))
+        else:
+          # For legacy clients that accept a single string, not JSON.
+          feedback_to_send = 'OK'
+          for feedback in LEGACY_FEEDBACK_LIST:
+            if report_feedback.get(feedback.lower()):
+              feedback_to_send = feedback
+          self.response.out.write(feedback_to_send)
+
+        # if report feedback calls for a client exit, log it.
+        if report_feedback.get('exit'):
+          if not client_exit:
+            # client didn't ask for an exit, which means server decided.
+            client_exit = 'Connection from defined exit IP address'
+          common.WriteClientLog(
+              models.PreflightExitLog, uuid, computer=computer,
+              exit_reason=client_exit)
 
       common.LogClientConnection(
           report_type, client_id, user_settings, pkgs_to_install,
@@ -299,11 +307,6 @@ class Reports(handlers.AuthenticationHandler):
         common.WriteClientLog(
             models.ClientLog, uuid, computer=computer,
             action='install_problem', details=problem)
-    elif report_type == 'preflight_exit':
-      # NOTE(user): only remains for older clients.
-      message = self.request.get('message')
-      computer = common.WriteClientLog(
-          models.PreflightExitLog, uuid, exit_reason=message)
     elif report_type == 'broken_client':
       # Default reason of "objc" to support legacy clients, existing when objc
       # was the only broken state ever reported.
@@ -323,13 +326,3 @@ class Reports(handlers.AuthenticationHandler):
         params.append('%s=%s' % (param, self.request.get_all(param)))
       common.WriteClientLog(
           models.ClientLog, uuid, action='unknown', details=str(params))
-
-    # If the client asked for feedback, get feedback and respond.
-    # Skip this if the report_type is preflight, as report feedback was
-    # retrieved before LogComputerConnection changed preflight_datetime.
-    if feedback_requested and report_type != 'preflight':
-      self.response.out.write(
-          self.GetReportFeedback(
-              uuid, report_type,
-              message=message, details=details, computer=computer,
-          ))

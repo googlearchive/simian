@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Apple Software Update Service Catalog URL handlers."""
@@ -68,40 +69,3 @@ class AppleSUS(handlers.AuthenticationHandler):
       self.response.out.write(catalog.plist)
     else:
       self.response.set_status(304)
-
-  def put(self, name):
-    """AppleSUS put handler.
-
-    Args:
-      name: str, catalog name to put.
-    """
-    gaeserver.DoMunkiAuth(require_level=gaeserver.LEVEL_UPLOADPKG)
-
-    # try loading for validation's sake
-    c = plist.AppleSoftwareCatalogPlist(self.request.body)
-    try:
-      c.Parse()
-    except plist.PlistError, e:
-      logging.exception('Invalid Apple SUS catalog format: %s', str(e))
-      self.response.set_status(400)
-      self.response.out.write(str(e))
-      return
-    del(c)
-
-    lock = 'applesus_%s' % name
-    if not gae_util.ObtainLock(lock, timeout=5.0):
-      self.response.set_status(403)
-      self.response.out.write('Could not lock applesus')
-      return
-
-    try:
-      asucatalog = models.AppleSUSCatalog.get_or_insert(name)
-      asucatalog.plist = self.request.body  # retain original appearance
-      asucatalog.put()
-    except (plist.PlistError, models.db.Error), e:
-      logging.exception('applesus: %s', str(e))
-      self.response.set_status(500)
-      self.response.out.write(str(e))
-      pass
-
-    gae_util.ReleaseLock(lock)

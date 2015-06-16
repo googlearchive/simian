@@ -1,35 +1,37 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
-"""auth module"""
+"""auth module."""
 
 
 
 
 import logging
 
-from google.appengine.api import users
-from google.appengine.api import oauth
 from google.appengine.api import memcache
+from google.appengine.api import oauth
+from google.appengine.api import users
 from google.appengine.ext import db
 
+
 from simian import settings
-from simian.auth import gaeserver
 from simian.auth import base
+from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import util
 
@@ -41,9 +43,14 @@ ACL_GROUPS = {
     'physical_security_users': 'Physical Security Users',
 }
 
+# Permissions that can be verified by PermissionReslover()
+PROPOSE = 'Propose'
+UPLOAD = 'Upload'
+VIEW_PACKAGES = 'ViewPackages'
+
 
 class Error(Exception):
-  """Base"""
+  """Base."""
 
 
 class NotAuthenticated(base.NotAuthenticated, Error):
@@ -52,6 +59,54 @@ class NotAuthenticated(base.NotAuthenticated, Error):
 
 class IsAdminMismatch(NotAuthenticated):
   """Test for IsAdmin mismatch."""
+
+
+class PermissionResolver(object):
+  """Resolves user permissions using rules defined as helper functions."""
+
+  def __init__(self, task, email=None):
+    """Initializes object to resolve permissions for a given user."""
+    self.task = task
+    self.email = email
+
+  def IsAllowedTo(self):
+    """Returns true if user is allowed to complete task."""
+    try:
+      user = DoUserAuth()
+    except NotAuthenticated:
+      return False
+    if not self.email:
+      self.email = user.email()
+    try:
+      rule = getattr(self, '_IsAllowedTo%s' % self.task)
+    except AttributeError:
+      print 'error'
+      return False
+    return rule()
+
+  def _IsAllowedToPropose(self):
+    """Returns true if email is allowed to propose packages."""
+    return IsAdminUser(self.email) or IsGroupMember(
+        self.email, 'proposals_group', remote_group_lookup=True)
+
+  def _IsAllowedToUpload(self):
+    """Returns true if email is allowed to upload packages."""
+    if settings.ENABLE_PROPOSALS_GROUP and settings.PROPOSALS_GROUP:
+      return self._IsAllowedToPropose()
+    else:
+      return IsAdminUser(self.email)
+
+  def _IsAllowedToViewPackages(self):
+    """Returns true if email is allowed to view package details."""
+    if settings.ENABLE_PROPOSALS_GROUP and settings.PROPOSALS_GROUP:
+      return self._IsAllowedToPropose() or IsSupportUser(self.email)
+    else:
+      return IsAdminUser(self.email) or IsSupportUser(self.email)
+
+
+def HasPermission(task, email=None):
+  resolver = PermissionResolver(task, email)
+  return resolver.IsAllowedTo()
 
 
 def _GetGroupMembers(group_name):
@@ -86,7 +141,7 @@ def DoUserAuth(is_admin=None):
   """
   user = users.get_current_user()
   if not user:
-    raise NotAuthenticated
+    raise NotAuthenticated('DoUserAuthFalsy')
   email = user.email()
 
   if is_admin is not None and not IsAdminUser(email):
@@ -104,7 +159,7 @@ def DoUserAuth(is_admin=None):
   elif IsPhysicalSecurityUser(email):
     return user
   else:
-    raise NotAuthenticated
+    raise NotAuthenticated('DoUserAuthUnknownUser')
 
 
 def DoOAuthAuth(is_admin=None, require_level=None):
@@ -123,8 +178,9 @@ def DoOAuthAuth(is_admin=None, require_level=None):
   # TODO(user): make use of require_level.
   try:
     user = oauth.get_current_user()
-  except oauth.OAuthRequestError, e:
-    raise NotAuthenticated
+  except oauth.OAuthRequestError as e:
+    logging.warning('OAuthRequestError: %s', e)
+    raise NotAuthenticated('OAuthRequestError')
 
   email = user.email()
 
@@ -135,7 +191,7 @@ def DoOAuthAuth(is_admin=None, require_level=None):
     return user
 
   logging.warning('OAuth user unknown: %s', email)
-  raise NotAuthenticated
+  raise NotAuthenticated('DoOAuthAuthUnknownUser')
 
 
 def DoAnyAuth(is_admin=None, require_level=None):
@@ -154,11 +210,13 @@ def DoAnyAuth(is_admin=None, require_level=None):
   Raises:
     NotAuthenticated: there is no authentication user for this request.
     IsAdminMismatch: the current user is not an administrator.
+    gaeserver.NotAuthenticated: there is no authentication user for this
+        request.
   """
-  #TODO(user): The unexpected return of two different return classes
-  #here can be hard to code around.  We should fix this someday if we
-  #start using the return value more frequently, rather than just
-  #calling this as a procedure to cause auth to occur.
+  # TODO(user): The unexpected return of two different return classes
+  # here can be hard to code around.  We should fix this someday if we
+  # start using the return value more frequently, rather than just
+  # calling this as a procedure to cause auth to occur.
   try:
     return DoUserAuth(is_admin=is_admin)
   except IsAdminMismatch:
@@ -166,14 +224,8 @@ def DoAnyAuth(is_admin=None, require_level=None):
   except NotAuthenticated:
     pass
 
-  try:
-    return gaeserver.DoMunkiAuth(require_level=require_level)
-  except gaeserver.NotAuthenticated:
-    pass
-
-  raise NotAuthenticated
-
-
+  # gaeserver.NotAuthenticated will be raised in the case of failure.
+  return gaeserver.DoMunkiAuth(require_level=require_level)
 
 
 def IsGroupMember(email=None, group_name=None, remote_group_lookup=False):

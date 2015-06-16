@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Apple SUS shared functions."""
@@ -33,11 +34,15 @@ from google.appengine.ext import deferred
 from simian import settings
 from simian.mac import common
 from simian.mac import models
+from simian.mac.common import gae_util
 from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = frozenset(['10.5', '10.6', '10.7', '10.8', '10.9', '10.10'])
+OS_VERSIONS = frozenset(
+    ['10.7', '10.8', '10.9', '10.10', '10.11'])
+
+CATALOG_REGENERATION_LOCK_NAME = 'applesus_catalog_regeneration_%s'
 
 MON, TUE, WED, THU, FRI, SAT, SUN = range(0, 7)
 
@@ -182,7 +187,8 @@ def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
         deferred_name = re.sub(r'[^\w-]', '', deferred_name)
         try:
           deferred.defer(
-              GenerateAppleSUSCatalog, os_version, track, _name=deferred_name)
+              GenerateAppleSUSCatalog, os_version, track,
+              _countdown=delay, _name=deferred_name)
         except taskqueue.TaskAlreadyExistsError:
           logging.info('Skipping duplicate Apple SUS Catalog generation task.')
       else:
@@ -213,18 +219,27 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
     track: str track name to generate the catalog for.
     _datetime: datetime module; only used for stub during testing.
   Returns:
-    tuple, new models.AppleSUSCatalog object and plist.ApplePlist object.
+    tuple, new models.AppleSUSCatalog object and plist.ApplePlist object. Or,
+    if there is no "untouched" catalog for the os_version, then (None, None) is
+    returned.
   """
   logging.info('Generating catalog: %s_%s', os_version, track)
-  approved_product_ids = {}
-  products_query = models.AppleSUSProduct.all().filter('tracks =', track)
-  for product in products_query:
-    approved_product_ids[product.product_id] = True
 
-  untouched_catalog_obj = models.AppleSUSCatalog.get_by_key_name(
-      '%s_untouched' % os_version)
+  # clear any locks on this track, potentially set by admin product changes.
+  gae_util.ReleaseLock(CATALOG_REGENERATION_LOCK_NAME % track)
+
+  catalog_key = '%s_untouched' % os_version
+  untouched_catalog_obj = models.AppleSUSCatalog.get_by_key_name(catalog_key)
+  if not untouched_catalog_obj:
+    logging.warning('Apple Update catalog does not exist: %s', catalog_key)
+    return None, None
   untouched_catalog_plist = plist.ApplePlist(untouched_catalog_obj.plist)
   untouched_catalog_plist.Parse()
+
+  approved_product_ids = set()
+  products_query = models.AppleSUSProduct.AllActive().filter('tracks =', track)
+  for product in products_query:
+    approved_product_ids.add(product.product_id)
 
   product_ids = untouched_catalog_plist.get('Products', {}).keys()
   new_plist = untouched_catalog_plist
@@ -352,3 +367,4 @@ def _GetNextWeekdayDate(weekday, min_date=None):
     next_date += datetime.timedelta(weekday - min_date.weekday())
 
   return next_date
+

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Munki applesus module tests."""
 
@@ -142,115 +143,6 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
 
     self.mox.ReplayAll()
     self.c.get(client_id_str)
-    self.mox.VerifyAll()
-
-  def testPut(self):
-    """Test put()."""
-    xml = 'xml'
-    name = 'foo'
-    lock = 'applesus_%s' % name
-
-    mock_plist = self.mox.CreateMockAnything()
-
-    self.request.body = xml
-
-    self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
-    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
-
-    self.MockDoMunkiAuth(
-      fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
-    applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(True)
-
-    model = self.MockModelStatic('AppleSUSCatalog', 'get_or_insert', name)
-    model.put().AndReturn(None)
-
-    applesus.gae_util.ReleaseLock(lock).AndReturn(None)
-
-    self.mox.ReplayAll()
-    self.c.put(name)
-    self.assertEqual(model.plist, xml)
-    self.mox.VerifyAll()
-
-  def testPutWhenPlistError(self):
-    """Test put()."""
-    xml = 'xml'
-    name = 'foo'
-    lock = 'applesus_%s' % name
-
-    mock_plist = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-
-    self.request.body = xml
-
-    self.MockDoMunkiAuth(
-      fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
-    applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndRaise(applesus.plist.PlistError)
-    self.response.set_status(400)
-    self.response.out.write('')
-
-    self.mox.ReplayAll()
-    self.c.put(name)
-    self.mox.VerifyAll()
-
-  def testPutWhenLockFail(self):
-    """Test put()."""
-    xml = 'xml'
-    name = 'foo'
-    lock = 'applesus_%s' % name
-
-    mock_plist = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
-
-    self.request.body = xml
-
-    self.MockDoMunkiAuth(
-      fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
-    applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(False)
-    self.response.set_status(403)
-    self.response.out.write('Could not lock applesus')
-
-    self.mox.ReplayAll()
-    self.c.put(name)
-    self.mox.VerifyAll()
-
-  def testPutWhenDbError(self):
-    """Test put()."""
-    xml = 'xml'
-    name = 'foo'
-    lock = 'applesus_%s' % name
-
-    mock_plist = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(applesus.plist, 'AppleSoftwareCatalogPlist')
-    self.mox.StubOutWithMock(applesus.gae_util, 'ObtainLock')
-    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
-
-    self.request.body = xml
-
-    self.MockDoMunkiAuth(
-      fail=False, require_level=applesus.gaeserver.LEVEL_UPLOADPKG)
-    applesus.plist.AppleSoftwareCatalogPlist(xml).AndReturn(mock_plist)
-    mock_plist.Parse().AndReturn(None)
-    applesus.gae_util.ObtainLock(lock, timeout=5.0).AndReturn(True)
-
-    model = self.MockModelStatic('AppleSUSCatalog', 'get_or_insert', name)
-    model.put().AndRaise(applesus.models.db.Error)
-
-    self.response.set_status(500)
-    self.response.out.write('')
-    applesus.gae_util.ReleaseLock(lock).AndReturn(None)
-
-    self.mox.ReplayAll()
-    self.c.put(name)
     self.mox.VerifyAll()
 
 

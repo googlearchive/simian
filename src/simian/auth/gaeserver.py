@@ -1,22 +1,22 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
-"""AppEngine server module.  Contains classes to handle authentication and
-authorization on the Simian Server.
+"""App Engine server module, including classes to handle auth.
 
 Classes:
 
@@ -38,16 +38,17 @@ import os
 import time
 
 from google.appengine import runtime
-from google.appengine.api import memcache
 from google.appengine.api import datastore
-from google.appengine.ext import deferred
+from google.appengine.api import memcache
 from google.appengine.ext import db
+from google.appengine.ext import deferred
 from google.appengine.runtime import apiproxy_errors
 
 from simian import auth
 from simian.auth import base
 from simian.auth import util
 from simian.mac import models
+from simian.mac.common import gae_util
 
 
 # Level values supplied to DoMunkiAuth() and used in session data
@@ -160,16 +161,8 @@ class Auth1ServerDatastoreSession(base.Auth1ServerSession):
     else:
       q = self.model.all()
 
-    cursor = None
-    while True:
-      if cursor:
-        q.with_cursor(cursor)
-      sessions = q.fetch(500)
-      if not sessions:
-        raise StopIteration  # or should we just break?
-      for s in sessions:
-        yield s
-      cursor = q.cursor()
+    for session in gae_util.QueryIterator(q, step=100):
+      yield session
 
 
 class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
@@ -185,8 +178,10 @@ class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
 
     Args:
       method_name: str, like '_Put'
-      args: optional, args to method
-      kwargs: optional, kwargs to pass to deferred.
+      *args: optional, args to method
+      **kwargs: optional, kwargs to pass to deferred.
+    Returns:
+      Return from method_name(*args).
     """
     cls = super(Auth1ServerDatastoreMemcacheSession, self)
     method = getattr(cls, method_name)
@@ -197,8 +192,8 @@ class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
 
     defer_id = '%.0f' % (time.time() * 1000)
     deferred_name = 'a1sdms-%s-%s' % (
-        defer_id, method_name.replace('_',''))
-    #logging.debug('Deferring %s %s %s', method_name, args, defer_id)
+        defer_id, method_name.replace('_', ''))
+    # logging.debug('Deferring %s %s %s', method_name, args, defer_id)
     deferred.defer(method, _name=deferred_name, *args, **kwargs)
 
   def _Get(self, sid):
@@ -269,9 +264,9 @@ class AuthSessionSimianServer(Auth1ServerDatastoreMemcacheSession):
     ek = session.key().name()
     age = None
     if ek.startswith(self.SESSION_TYPE_PREFIX_TOKEN):
-      age = datetime.timedelta(seconds = base.AGE_TOKEN_SECONDS)
+      age = datetime.timedelta(seconds=base.AGE_TOKEN_SECONDS)
     elif ek.startswith(self.SESSION_TYPE_PREFIX_CN):
-      age = datetime.timedelta(seconds = base.AGE_CN_SECONDS)
+      age = datetime.timedelta(seconds=base.AGE_CN_SECONDS)
     return super(AuthSessionSimianServer, self).ExpireOne(session, age, now)
 
 
@@ -279,7 +274,7 @@ class AuthSimianServer(base.Auth1):
   """Auth1 server which uses AuthSessionSimian for session storage."""
 
   def __init__(self):
-    """TODO(user): remove once certain/done"""
+    """TODO(user): remove once certain/done."""
     super(AuthSimianServer, self).__init__()
 
   def LoadCaParameters(self, settings, ca_id=None):
@@ -321,33 +316,32 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
     NotAuthenticated: if Auth1 auth has not been supplied
   """
   if fake_noauth:
-    #logging.debug('fake_noauth is True; raising NotAuthenticated.')
-    raise NotAuthenticated
+    raise NotAuthenticated('FakeNoAuth')
 
   if require_level is None:
     require_level = LEVEL_BASE
 
   cookie_str = os.environ.get('HTTP_COOKIE', None)
   if not cookie_str:
-    logging.warning('HTTP_COOKIE is empty or nonexistent.')
-    raise NotAuthenticated
+    logging.info('HTTP_COOKIE is empty or nonexistent.')
+    raise NotAuthenticated('NoCookie')
 
   c = Cookie.SimpleCookie()
   try:
     c.load(cookie_str)
   except TypeError, e:
-    logging.warning('Cookie could not be loaded, %s: %s', str(e), cookie_str)
+    logging.info('Cookie could not be loaded, %s: %s', str(e), cookie_str)
     raise NotAuthenticated
   except Cookie.CookieError, e:
-    logging.warning(
+    logging.info(
         'Cookie could not be loaded, %s: %s', str(e), cookie_str)
-    raise NotAuthenticated
+    raise NotAuthenticated('CookieError')
 
   if (auth.AUTH_TOKEN_COOKIE not in c
-    or not c[auth.AUTH_TOKEN_COOKIE]):
-    logging.warning('Cookie data is empty or does not contain auth token %s',
-                  auth.AUTH_TOKEN_COOKIE)
-    raise NotAuthenticated
+      or not c[auth.AUTH_TOKEN_COOKIE]):
+    logging.info('Cookie data is empty or does not contain auth token %s',
+                 auth.AUTH_TOKEN_COOKIE)
+    raise NotAuthenticated('EmptyCookie')
 
   a = AuthSimianServer()
   token = c[auth.AUTH_TOKEN_COOKIE].value
@@ -360,9 +354,9 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
     # expired and deleted. Or it could be some bug with saving and accessing
     # sessions.
     logging.warning('DoMunkiAuth: %s', str(e))
-    raise NotAuthenticated
+    raise NotAuthenticated('UnknownAuthToken')
 
-  #logging.debug('Auth client connected: uuid %s', session.uuid)
+  # logging.debug('Auth client connected: uuid %s', session.uuid)
 
   return session
 

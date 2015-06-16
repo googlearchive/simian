@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """client module tests."""
 
@@ -22,10 +23,11 @@
 import logging
 import sys
 
-from google.apputils import app
-from google.apputils import basetest
 import mox
 import stubout
+
+from google.apputils import app
+from google.apputils import basetest
 
 from simian.client import client
 
@@ -143,7 +145,6 @@ class MultiBodyConnectionTest(mox.MoxTestBase):
 
 
 class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
-
   def setUp(self):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
@@ -595,7 +596,7 @@ class HttpsClientTest(mox.MoxTestBase):
     body1 = {'encodeme': 1}
     body1_encoded = 'encodeme:: 1'
     body2 = 'leave this alone'
-    headers = None
+    headers = {'User-Agent': 'gzip'}
 
     conn = self.mox.CreateMockAnything()
 
@@ -845,21 +846,20 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     client.platform.system().AndReturn('other')
 
     self.mox.ReplayAll()
-    self.client.FACTER_CACHE_PATH = 'x'
+    self.client.facter_cache_path = 'x'
     self.client._PlatformSetup()
     self.assertEqual(
-        self.client.FACTER_CACHE_PATH, self.client.FACTER_CACHE_OSX_PATH)
-    self.client.FACTER_CACHE_PATH = 'x'
+        self.client.facter_cache_path, self.client.FACTER_CACHE_OSX_PATH)
+    self.client.facter_cache_path = 'x'
     self.client._PlatformSetup()
     self.assertEqual(
-        self.client.FACTER_CACHE_PATH, self.client.FACTER_CACHE_DEFAULT_PATH)
+        self.client.facter_cache_path, self.client.FACTER_CACHE_DEFAULT_PATH)
     self.mox.VerifyAll()
 
   def testGetFacter(self):
     """Test GetFacter()."""
-    now = client.datetime.datetime.now()
-    past = now - client.datetime.timedelta(seconds=1)
-    self.client.FACTER_CACHE_PATH = '/x'
+    st_dt = client.datetime.datetime.now()
+    self.client.facter_cache_path = '/x'
 
     mock_open = self.mox.CreateMockAnything()
     mock_file = self.mox.CreateMockAnything()
@@ -871,11 +871,10 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.os, 'geteuid')
 
     self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.FACTER_CACHE_PATH).AndReturn(True)
+    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
 
-    mock_dt.now().AndReturn(now)
     stat.st_uid = 0
-    stat.st_mtime = int(past.strftime('%s'))
+    stat.st_mtime = int(st_dt.strftime('%s'))
     facter = {'foo': 'bar', 'one': '1'}
     lines = [
         'foo => bar',
@@ -883,12 +882,12 @@ class HttpsAuthClientTest(mox.MoxTestBase):
         'I_am_invalid',
     ]
 
-    client.os.stat(self.client.FACTER_CACHE_PATH).AndReturn(stat)
+    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
     client.os.geteuid().AndReturn(0)
     client.os.geteuid().AndReturn(0)
-    mock_dt.fromtimestamp(stat.st_mtime).AndReturn(past)
+    mock_dt.fromtimestamp(stat.st_mtime).AndReturn(st_dt)
 
-    mock_open(self.client.FACTER_CACHE_PATH, 'r').AndReturn(mock_file)
+    mock_open(self.client.facter_cache_path, 'r').AndReturn(mock_file)
     for line in lines:
       mock_file.readline().AndReturn(line)
     mock_file.readline().AndReturn(None)
@@ -900,24 +899,21 @@ class HttpsAuthClientTest(mox.MoxTestBase):
 
   def testGetFacterWhenInsecureFileForRoot(self):
     """Test GetFacter()."""
-    now = client.datetime.datetime.now()
-    self.client.FACTER_CACHE_PATH = '/x'
+    self.client.facter_cache_path = '/x'
 
     mock_open = self.mox.CreateMockAnything()
     stat = self.mox.CreateMockAnything()
     mock_dt = self.mox.CreateMockAnything()
 
-    self.stubs.Set(client.datetime, 'datetime', mock_dt)
     self.mox.StubOutWithMock(client.os, 'stat')
     self.mox.StubOutWithMock(client.os, 'geteuid')
 
     self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.FACTER_CACHE_PATH).AndReturn(True)
+    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
 
-    mock_dt.now().AndReturn(now)
     stat.st_uid = 100
 
-    client.os.stat(self.client.FACTER_CACHE_PATH).AndReturn(stat)
+    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
     client.os.geteuid().AndReturn(0)
 
     self.mox.ReplayAll()
@@ -926,8 +922,7 @@ class HttpsAuthClientTest(mox.MoxTestBase):
 
   def testGetFacterWhenInsecureFileForNonRoot(self):
     """Test GetFacter()."""
-    now = client.datetime.datetime.now()
-    self.client.FACTER_CACHE_PATH = '/x'
+    self.client.facter_cache_path = '/x'
 
     mock_open = self.mox.CreateMockAnything()
     stat = self.mox.CreateMockAnything()
@@ -938,12 +933,11 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.os, 'geteuid')
 
     self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.FACTER_CACHE_PATH).AndReturn(True)
+    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
 
-    mock_dt.now().AndReturn(now)
     stat.st_uid = 100
 
-    client.os.stat(self.client.FACTER_CACHE_PATH).AndReturn(stat)
+    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
     client.os.geteuid().AndReturn(200)
     client.os.geteuid().AndReturn(200)
     client.os.geteuid().AndReturn(200)
@@ -954,17 +948,17 @@ class HttpsAuthClientTest(mox.MoxTestBase):
 
   def testGetFacterWhenCacheDoesNotExist(self):
     """Test GetFacter() with a nonexistent cache file."""
-    self.client.FACTER_CACHE_PATH = '/x'
+    self.client.facter_cache_path = '/x'
     self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.FACTER_CACHE_PATH).AndReturn(False)
+    client.os.path.isfile(self.client.facter_cache_path).AndReturn(False)
 
     self.mox.ReplayAll()
     self.assertEqual({}, self.client.GetFacter())
     self.mox.VerifyAll()
 
   def testGetFacterWhenCachePathIsNone(self):
-    """Test GetFacter() with FACTER_CACHE_PATH is None."""
-    self.client.FACTER_CACHE_PATH = None
+    """Test GetFacter() with facter_cache_path is None."""
+    self.client.facter_cache_path = None
 
     self.mox.ReplayAll()
     self.assertEqual({}, self.client.GetFacter())
@@ -1003,11 +997,11 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.assertRaises(client.SimianClientError, self.client.DoUAuth)
     self.mox.VerifyAll()
 
-
   def testDoUserAuth(self):
     """Test DoUserAuth()."""
     self.mox.StubOutWithMock(self.client, 'DoUAuth')
     self.client.DoUAuth().AndReturn(None)
+
     self.mox.ReplayAll()
     self.client.DoUserAuth()
     self.mox.VerifyAll()
@@ -1110,8 +1104,6 @@ class UAuthTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
 
-
-
 class SimianClientTest(mox.MoxTestBase):
   """Test SimianClient class."""
 
@@ -1166,12 +1158,6 @@ class SimianClientTest(mox.MoxTestBase):
     """Test IsDefaultHostClient()."""
     self.client._default_hostname = 'foo'
     self.assertEqual(self.client.IsDefaultHostClient(), 'foo')
-
-  def testGetGlobalUuid(self):
-    """Test GetGlobalUuid()."""
-    self.assertRaises(
-        NotImplementedError,
-        self.client.GetGlobalUuid)
 
   def testSimianRequest(self):
     """Test _SimianRequest()."""

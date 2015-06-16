@@ -36,7 +36,7 @@ TARGET_PATH="$3"
 RESOURCES="${PKG}/Contents/Resources"
 BASETMPDIR="${TARGET_PATH}/tmp/"
 OSX=$(sw_vers -productVersion | cut -d. -f1-2)
-VERSION="2.3"
+VERSION="2.4"
 PYTHON_VERSION=$(egrep '[0-9].[0-9]' "${PKG}/Contents/Resources/python_version")
 PYTHON="python${PYTHON_VERSION}"
 INSTALL_DIR=/usr/local/munki/
@@ -90,7 +90,7 @@ fi
 
 ### install virtualenv
 
-${PYTHON} ${EZ} -U virtualenv==1.10.1
+${PYTHON} ${EZ} -U virtualenv
 
 ### find & test newly installed virtualenv
 
@@ -158,13 +158,6 @@ mkdir -p src/tests  # fake out google test
 ${VE_PYTHON} setup.py install 2>&1
 cd "${ORIGPWD}"
 
-### link simianauth and simianadmin into /usr/local/bin for easier access
-
-for f in simianauth simianadmin ; do
-  rm -f /usr/local/bin/${f}
-  ln -s ${INSTALL_DIR}/${VE_DIR}/bin/${f} /usr/local/bin/
-done
-
 ### fix sh-bang line for simianfacter
 
 sed -i .bak "1c\\
@@ -209,8 +202,8 @@ defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${s
 echo End section
 
 ### fix google_apputils permissions
-find ${INSTALL_DIR}/simian/lib/python*/site-packages/google_apputils-*.egg -type f -print0 | xargs -0 chmod 644
-find ${INSTALL_DIR}/simian/lib/python*/site-packages/google_apputils-*.egg -type d -print0 | xargs -0 chmod 755
+find ${INSTALL_DIR}/${VE_DIR}/lib/python*/site-packages/google_apputils-*.egg -type f -print0 | xargs -0 chmod 644
+find ${INSTALL_DIR}/${VE_DIR}/lib/python*/site-packages/google_apputils-*.egg -type d -print0 | xargs -0 chmod 755
 
 ### end
 echo postflight END

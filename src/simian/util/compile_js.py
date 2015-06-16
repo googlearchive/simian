@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 # Uses Closure Compiler Service API to compile JavaScript file.
 # ./compile_js.py <path_to_input_js_file> ... <path_to_output_js_file>

@@ -105,6 +105,14 @@ input[type="checkbox"].tags:checked + label, .ajaxtags.istrue {
   background-position: -1px 50%;
 }
 
+input[type="checkbox"][proposed].tags + label {
+  background-color: #34FF5F;
+}
+
+input[type="checkbox"][proposed_removal].tags + label {
+  background-color: #FF0000;
+}
+
 button, .button {
   display: inline-block;
   outline: 0;

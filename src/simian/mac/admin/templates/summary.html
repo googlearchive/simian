@@ -35,21 +35,21 @@
           <td>{{ summary.active.1 }}</td>
         </tr>
         <tr>
-          <td>Stable Track</td>
+          <td><a href="/admin?filter-type=track&filter=stable">Stable Clients</a></td>
           <td>{{ summary.tracks.stable.30 }}</td>
           <td>{{ summary.tracks.stable.14 }}</td>
           <td>{{ summary.tracks.stable.7 }}</td>
           <td>{{ summary.tracks.stable.1 }}</td>
         </tr>
         <tr>
-          <td>Testing Track</td>
+          <td><a href="/admin?filter-type=track&filter=testing">Testing Clients</a></td>
           <td>{{ summary.tracks.testing.30 }}</td>
           <td>{{ summary.tracks.testing.14 }}</td>
           <td>{{ summary.tracks.testing.7 }}</td>
           <td>{{ summary.tracks.testing.1 }}</td>
         </tr>
         <tr>
-          <td>Unstable Track</td>
+          <td><a href="/admin?filter-type=track&filter=unstable">Unstable Clients</a></td>
           <td>{{ summary.tracks.unstable.30 }}</td>
           <td>{{ summary.tracks.unstable.14 }}</td>
           <td>{{ summary.tracks.unstable.7 }}</td>
@@ -275,8 +275,8 @@
       <td>{{ c.track }}</td>
       <td>{{ c.os_version }}</td>
       <td>{{ c.client_version }}</td>
-      <td>{{ c.site }}</td>
-      <td>{{ c.office }}</td>
+      <td>{{ c.site|default_if_none:"&nbsp;" }}</td>
+      <td>{{ c.office|default_if_none:"&nbsp;" }}</td>
       <td>{{ c.preflight_datetime|timesince }}</td>
       <td>{{ c.postflight_datetime|timesince }}</td>
     </tr>

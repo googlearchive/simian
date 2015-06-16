@@ -83,26 +83,8 @@ indexes:
 
 - kind: InstallLog
   properties:
-  - name: uuid
-  - name: mtime
-    direction: desc
-
-- kind: InstallLog
-  properties:
   - name: applesus
   - name: uuid
-  - name: mtime
-    direction: desc
-
-- kind: InstallLog
-  properties:
-  - name: package
-  - name: mtime
-    direction: desc
-
-- kind: InstallLog
-  properties:
-  - name: applesus
   - name: mtime
     direction: desc
 
@@ -117,12 +99,6 @@ indexes:
   properties:
   - name: package
   - name: success
-  - name: mtime
-    direction: desc
-
-- kind: InstallLog
-  properties:
-  - name: status
   - name: mtime
     direction: desc
 
@@ -169,6 +145,12 @@ indexes:
     direction: desc
 
 - kind: AdminPackageLog
+  properties:
+  - name: filename
+  - name: mtime
+    direction: desc
+
+- kind: AdminPackageProposalLog
   properties:
   - name: filename
   - name: mtime

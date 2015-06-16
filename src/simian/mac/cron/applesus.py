@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Module containing url handler for all Apple Updates related crons.
 
@@ -50,7 +51,10 @@ CATALOGS = {
     '10.8': 'https://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
     '10.9': 'https://swscan.apple.com/content/catalogs/others/index-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
     '10.10': 'https://swscan.apple.com/content/catalogs/others/index-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
+    '10.11': 'https://swscan.apple.com/content/catalogs/others/index-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
 }
+
+RESTART_REQUIRED_FOOTER = '* denotes restart required'
 
 
 class AppleSUSCatalogSync(webapp2.RequestHandler):
@@ -90,26 +94,31 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       new_products: a list of models.AppleSUSProduct objects.
       deprecated_products: a list of models.AppleSUSProduct objects.
     """
-    new_products = [
-        '%s: %s %s (restart_required: %s)' % (
-            p.product_id, p.name, p.version, p.restart_required)
-        for p in new_products]
-    deprecated_products = ['%s: %s %s' % (p.product_id, p.name, p.version)
-                           for p in deprecated_products]
     if not new_products and not deprecated_products:
       return  # don't notify if the new catalog has no product changes.
+    new_products_strs = [
+        '%s: %s %s %s' % (
+            p.product_id, p.name, p.version, '*' if p.restart_required else '')
+        for p in new_products]
+    deprecated_products_strs = ['%s: %s %s' % (p.product_id, p.name, p.version)
+                                for p in deprecated_products]
     catalog_name = catalog.key().name()
     m = mail.EmailMessage()
     m.to = [settings.EMAIL_ADMIN_LIST]
     m.sender = settings.EMAIL_SENDER
     m.subject = '%s Apple Updates catalog synced to Simian.' % catalog_name
-    new_msg = '\n\nNew Products:\n%s' % '\n'.join(new_products)
-    if deprecated_products:
-      dep_msg = '\n\nDeprecated Products:\n%s' % '\n'.join(deprecated_products)
+    new_msg = '\n\nNew Products:\n%s' % '\n'.join(new_products_strs)
+    if deprecated_products_strs:
+      dep_msg = '\n\nDeprecated Products:\n%s' % '\n'.join(
+          deprecated_products_strs)
     else:
       dep_msg = ''
-    m.body = '%s Apple Updates catalog synced to Simian on %s UTC.%s%s' % (
-        catalog_name, catalog.mtime, new_msg, dep_msg)
+    if any(p.restart_required for p in new_products):
+      restart_note = '\n\n%s' % RESTART_REQUIRED_FOOTER
+    else:
+      restart_note = ''
+    m.body = '%s Apple Updates catalog synced to Simian on %s UTC.%s%s%s' % (
+        catalog_name, catalog.mtime, new_msg, dep_msg, restart_note)
     try:
       m.send()
     except apiproxy_errors.DeadlineExceededError:
@@ -160,10 +169,10 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
     new_products = []
 
     # Create a dict of all previously processed product IDs for fast lookup.
-    existing_products = {}
-    products_query = models.AppleSUSProduct.all()
+    existing_products = set()
+    products_query = models.AppleSUSProduct.all().filter('deprecated =', False)
     for product in products_query:
-      existing_products[product.product_id] = True
+      existing_products.add(product.product_id)
 
     # Loop over all products IDs in the Apple Updates catalog, adding any new
     # products to the models.AppleSUSProduct model.
@@ -173,18 +182,16 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       if key in existing_products:
         continue  # This product has already been processed in the past.
 
-      #logging.debug('Processing new product: %s', key)
-
+      # Download and parse distribution metadata.
       distributions = catalog_plist['Products'][key]['Distributions']
-      url = distributions.get('English', None) or distributions.get('en', None)
-      if not url:
+      dist_url = distributions.get(
+          'English', None) or distributions.get('en', None)
+      if not dist_url:
         logging.error(
             'No english distributions exists for product %s; skipping.', key)
         continue  # No english distribution exists :(
-
-      r = urllib2.urlopen(url)
+      r = urllib2.urlopen(dist_url)
       if r.code != 200:
-        #logging.warning('Skipping dist where HTTP status != 200')
         continue
       dist_str = r.read()
       dist = applesus.DistFileDocument()
@@ -202,10 +209,13 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
         product.unattended = True
       else:
         product.unattended = False
+
+      # Parse package download URLs.
+      for package in catalog_plist['Products'][key]['Packages']:
+        product.package_urls.append(package.get('URL'))
+
       product.put()
       new_products.append(product)
-
-      #logging.debug('Product complete: %s', product.name)
 
     return new_products
 
@@ -280,6 +290,8 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       try:
         if self._UpdateCatalogIfChanged(untouched_catalog, url):
           self._ProcessCatalogAndNotifyAdmins(untouched_catalog, os_version)
+        else:
+          pass
       except (urlfetch.DownloadError, urlfetch.InvalidURLError):
         logging.exception(
             'Unable to download Software Update catalog for %s', os_version)
@@ -299,10 +311,16 @@ class AppleSUSAutoPromote(webapp2.RequestHandler):
     m.sender = settings.EMAIL_SENDER
     m.subject = 'Apple Updates Auto-Promotion'
     msg = []
+    restart_required = False
     for track, updates in promotions.iteritems():
       msg.append('\n%s:' % track)
       for u in updates:
-        msg.append('\t%s: %s %s' % (u.product_id, u.name, u.version))
+        msg.append('\t%s: %s %s %s' % (
+            u.product_id, u.name, u.version, '*' if u.restart_required else ''))
+        if u.restart_required:
+          restart_required = True
+    if restart_required:
+      msg.append('\n\n%s' % RESTART_REQUIRED_FOOTER)
     msg = '\n'.join(msg)
     m.body = 'The following Apple Updates were promoted:\n%s' % msg
     try:
@@ -311,29 +329,34 @@ class AppleSUSAutoPromote(webapp2.RequestHandler):
       #logging.info('Email failed to send; skipping.')
       pass
 
-  def _ReadyToAutoPromote(self, applesus_product, track):
+  def _ReadyToAutoPromote(self, applesus_product, track, now=None):
     """Returns boolean whether AppleSUSProduct should be promoted or not.
 
     Args:
       applesus_product: models.AppleSUSProduct object.
       track: str track like testing or stable.
+      now: datetime.datetime, optional, supply an alternative
+           value for the current date/time.
     Returns:
       Boolean. True if the product is ready to promote, False otherwise.
     """
-    today = datetime.datetime.utcnow().date()
+    now = now or datetime.datetime.utcnow()
+    today = now.date()
+    hour = now.strftime('%H')
     auto_promote_date = applesus.GetAutoPromoteDate(track, applesus_product)
     if auto_promote_date and auto_promote_date <= today:
-      return True
+      if settings.HOUR_START <= int(hour) <= settings.HOUR_STOP:
+        return True
     return False
 
-  def get(self):
+  def get(self, now=None):
     """Auto-promote updates that have been on a previous track for N days."""
     promotions = {}
     for track in [common.TESTING, common.STABLE]:
       for p in models.AppleSUSProduct.all().filter('tracks !=', track):
         if track in p.tracks:
           continue  # Datastore indexes may not be up to date...
-        if not self._ReadyToAutoPromote(p, track):
+        if not self._ReadyToAutoPromote(p, track, now):
           continue
 
         logging.info(

@@ -19,15 +19,25 @@
     </form>
   {% endif %}
 
-  <div class="sectionheader">Apple Catalog Sync</div>
+  <div class="sectionheader">
+    Apple Catalog Generation
+    {% if catalogs_pending.unstable or catalogs_pending.testing or catalogs_pending.unstable %}(* pending){% endif %}
+  </div>
   {% if catalogs %}
     <table class="stats-table">
-      <tr><th>OS Version</th><th>Synced From Apple</th><th>Time Since</th></tr>
+      <tr>
+        <th>OS Version</th><th>Synced From Apple</th>
+        <th>Unstable {% if catalogs_pending.unstable %}*{% endif %}</th>
+        <th>Testing {% if catalogs_pending.testing %}*{% endif %}</th>
+        <th>Stable {% if catalogs_pending.stable %}*{% endif %}</th>
+      </tr>
       {% for catalog in catalogs %}
         <tr>
-          <td>{{ catalog.version }}</td>
-          <td>{{ catalog.download_datetime }}</td>
-          <td>{{ catalog.download_datetime|timesince }}</td>
+          <td>{{ catalog.os_version }}</td>
+          <td>{{ catalog.untouched }} ({{ catalog.untouched|timesince }} ago)</td>
+          <td>{{ catalog.unstable }} ({{ catalog.unstable|timesince }} ago)</td>
+          <td>{{ catalog.testing }} ({{ catalog.testing|timesince }} ago)</td>
+          <td>{{ catalog.stable }} ({{ catalog.stable|timesince }} ago)</td>
         </tr>
       {% endfor %}
     </table>
@@ -55,27 +65,45 @@
     <tr class="multi-header">
        <th>Name</th>
        <th>Product ID</th>
-       <th>Logs</th>
+       <th>Files</th>
        <th>Apple Release</th>
-       <th>Restart Required</th>
+       <th>Logs</th>
+       <th>Success*</th>
+       <th>Failed*</th>
+       <th>Pending</th>
        <th>Force Install After Date<br />YYYY-MM-DD HH:MM</th>
        <th>Unattended</th>
        <th>Auto-Promo<br />Override</th>
        <th>Tracks</th>
     </tr>
     {% for p in products %}
-      <tr>
-        <td>{{ p.name }} {% if p.version %}- {{ p.version }}{% endif %}</td>
+      <tr id="update-{{ p.product_id }}">
+        <td title="{{ p.name }} - {{ p.version }} {{ p.restart_required|yesno:"- Restart Required," }}">
+          {{ p.name }} {% if p.version %}- {{ p.version }}{% endif %}
+          {% if p.restart_required %}<img src="/admin/static/restart.png" style="padding-left: 1em" title="Restart Required" />{% endif %}
+          <a class="anchor" href="#update-{{ p.product_id|urlencode }}" title="Link to this update">&para;</a>
+        </td>
         <td>
           <div style="width: 7em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-            <a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');">{{ p.product_id }}</a>
+            <a href="#" onclick="javascript:window.open('/admin/applesus/product/{{ p.product_id }}', 'applesusdesc', 'height=200,width=400');" title="Pop-up Product Description">{{ p.product_id }}</a>
           </div>
         </td>
+        <td>{% if p.package_urls|length <= 2 %}
+              {% for pkg_url in p.package_urls %}
+               <a href="{{ pkg_url }}" title="{{ pkg_url }}"
+                  class="downloadpkg">{{ pkg_url|slice:"-3:"|upper }}</a>
+              {% endfor %}
+            {% else %}
+              {{ p.package_urls|length }} files
+            {% endif %}
+        </td>
+        <td>{{ p.apple_mtime|date:"Y-m-d" }}</td>
         <td>
           <a href="/admin/applesus/logs?product_id={{ p.product_id }}">logs</a>
         </td>
-        <td>{{ p.apple_mtime|date }}</td>
-        <td>{{ p.restart_required|default_if_none:"Unknown" }}</td>
+        <td><a href="/admin/installs?applesus=1&pkg={{ p.munki_name }}">{{ p.munki_name|install_count:install_counts }}</a></td>
+        <td><a href="/admin/installs?applesus=1&pkg={{ p.munki_name }}&failures=1">{{ p.munki_name|failure_count:install_counts }}</a></td>
+        <td><a href="/admin/installs?pkg=AppleSUS: {{ p.munki_name }}&pending=1" title="{{ p.munki_name }} pending installs">pending</a></td>
         <td>
           {% if is_admin %}
             <input type="text" name="force_install_after_date"
@@ -87,9 +115,13 @@
           {% endif %}
         </td>
         <td>
-          <span class="ajaxtoggle {% if p.unattended %}istrue{% endif %}"
-            {% if is_admin %}onclick="applesus.toggleProductUnattended('{{ p.product_id }}', this);"{% endif %}>
-          </span>
+          {% if p.restart_required %}
+            <span title="Disabled due to restart requirement">N/A</span>
+          {% else %}
+            <span class="ajaxtoggle {% if p.unattended %}istrue{% endif %}"
+              {% if is_admin %}onclick="applesus.toggleProductUnattended('{{ p.product_id }}', this);"{% endif %}>
+            </span>
+          {% endif %}
         </td>
         <td>
           <span class="ajaxtoggle {% if p.manual_override %}istrue{% endif %}"
@@ -116,6 +148,8 @@
       </tr>
     {% endfor %}
   </table>
+
+  <p>* success/failure counts last cached {{ install_counts_mtime|timesince }} ago.</p>
 </div>
 
 {% endblock %}

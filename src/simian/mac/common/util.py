@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Utility functions."""
 
@@ -21,43 +22,12 @@
 
 
 import datetime
-import cPickle as pickle
+import json
 import re
 import time
 import urllib
 
-
-USE_JSON = False
-json = None
-
-# GAE
-try:
-  from django.utils import simplejson as json
-  USE_JSON = True
-except ImportError:
-  pass
-
-# python >2.6
-try:
-  import json
-  USE_JSON = True
-except ImportError:
-  pass
-
-# other
-try:
-  if not json:
-    import simplejson as json
-    USE_JSON = True
-except ImportError:
-  pass
-
-# note: enabling pickle is not recommended, it can be insecure on the
-# deserialize side!
-USE_PICKLE = False
-PICKLE_RE = re.compile(
-    r'^(\(dp[01]|\(lp[01]|S\'|I\d|ccopy_reg|c.*p1).*\.$',
-    re.MULTILINE|re.DOTALL)
+from simian.mac import common
 
 
 class Error(Exception):
@@ -121,7 +91,7 @@ class Datetime(object):
     return dt
 
 
-def Serialize(obj, _use_pickle=USE_PICKLE, _use_json=USE_JSON):
+def Serialize(obj):
   """Return a binary serialized version of object.
 
   Depending on the serialization method, some complex objects or input
@@ -132,28 +102,18 @@ def Serialize(obj, _use_pickle=USE_PICKLE, _use_json=USE_JSON):
 
   Args:
     obj: any object
-    _use_pickle: bool, optional, whether to use pickle
-    _use_json: bool, optional, whether to use json
   Returns:
     str, possibly containing ascii values >127
   Raises:
     SerializeError: if an error occured during serialization
   """
   try:
-    if _use_json:
-      return json.dumps(obj)
-    elif _use_pickle:
-      return pickle.dumps(obj)
-    else:
-      raise SerializeError('No available serialization formats')
-  except (pickle.PicklingError, TypeError), e:
+    return json.dumps(obj)
+  except TypeError as e:
     raise SerializeError(e)
 
 
-def Deserialize(
-    s,
-    parse_float=float,
-    _use_pickle=USE_PICKLE, _use_json=USE_JSON, _pickle_re=PICKLE_RE):
+def Deserialize(s, parse_float=float):
   """Return an object for a binary serialized version.
 
   Depending on the target platform, precision of float values may be lowered
@@ -165,9 +125,6 @@ def Deserialize(
   Args:
     s: str
     parse_floats: callable, optional, to translate floating point values
-    _use_pickle: bool, optional, whether to use pickle
-    _use_json: bool, optional, whether to use json
-    _pickle_re: re.RegexObject, optional, pattern to match pickle strs
   Returns:
     any object that was serialized
   Raises:
@@ -176,16 +133,47 @@ def Deserialize(
   try:
     if s is None:
       raise DeserializeError('Nothing to deserialize: %s' % type(s))
-    elif _use_pickle and _pickle_re.match(s):
-      return pickle.loads(s)
-    elif _use_json:
-      return json.loads(s, parse_float=parse_float)
-    else:
-      raise DeserializeError('Serialization format unknown')
-  except (pickle.UnpicklingError, ValueError), e:
+    return json.loads(s, parse_float=parse_float)
+  except ValueError as e:
     raise DeserializeError(e)
 
 
 def UrlUnquote(s):
   """Return unquoted version of a url string."""
   return urllib.unquote(s)
+
+
+def MakeTrackMatrix(tracks, proposed_tracks=None):
+  """Generates dict of tracks with string values indicating track status.
+
+  Args:
+    tracks: list of tracks the package is currently in.
+    proposed_tracks: list of tracks the package is proposed to be in.
+
+  Returns:
+    A dict of tracks with string values for status, these values are
+    in turn used by CSS to display the tracks color coded by status. Values
+    returned: current, proposed_in, proposed_out, not_in. These correspond
+    to CSS classes .track.current, .track.proposed_in, .track.proposed_out,
+    and .track.not_in.
+  """
+  track_matrix = {}
+  tracks = frozenset(tracks)
+  if proposed_tracks is not None:
+    proposed_tracks = frozenset(proposed_tracks)
+    for track in common.TRACKS:
+      if track in tracks and track in proposed_tracks:
+        track_matrix[track] = 'current'
+      elif track in tracks:
+        track_matrix[track] = 'proposed_out'
+      elif track in proposed_tracks:
+        track_matrix[track] = 'proposed_in'
+      else:
+        track_matrix[track] = 'not_in'
+  else:
+    for track in common.TRACKS:
+      if track in tracks:
+        track_matrix[track] = 'current'
+      else:
+        track_matrix[track] = 'not_in'
+  return track_matrix

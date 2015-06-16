@@ -1,28 +1,30 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """hw module tests."""
 
 
 
-from google.apputils import app
-from google.apputils import basetest
 import mox
 import stubout
+
+from google.apputils import app
+from google.apputils import basetest
 from simian.mac.common import hw
 
 
@@ -131,6 +133,35 @@ class SystemProfileTest(mox.MoxTestBase):
     for func_name in funcs:
       self.mox.StubOutWithMock(self.sp, func_name)
       getattr(self.sp, func_name)().AndReturn(None)
+    self.mox.ReplayAll()
+    self.sp._FindAll()
+    self.mox.VerifyAll()
+
+  def testFindHddSerialWithNoNvme(self):
+    self.mox.StubOutWithMock(self.sp, '_GetSystemProfilerOutput')
+    self.sp._GetSystemProfilerOutput().AndReturn('''
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+  <dict>
+    <key>_SPCommandLineArguments</key>
+    <array>
+      <string>/usr/sbin/system_profiler</string>
+      <string>-nospawn</string>
+      <string>-xml</string>
+      <string>SPNVMeDataType</string>
+      <string>-detailLevel</string>
+      <string>full</string>
+    </array>
+    <key>_SPResponseTime</key>
+    <real>0.2080950140953064</real>
+    <key>_dataType</key>
+    <string>SPNVMeDataType</string>
+  </dict>
+</array>
+</plist>
+'''.strip())
     self.mox.ReplayAll()
     self.sp._FindAll()
     self.mox.VerifyAll()

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Admin handler."""
 
@@ -21,6 +22,7 @@
 
 import datetime
 import logging
+import urllib
 
 from simian.mac import admin
 from simian.mac import models
@@ -71,7 +73,7 @@ class Misc(admin.AdminHandler):
       self._DisplayHostManifest(uuid=uuid)
     elif report == 'installs':
       pending = self.request.get('pending') == '1'
-      pkg = self.request.get('pkg', 'all')
+      pkg = urllib.unquote(self.request.get('pkg', 'all'))
       if pending:
         self._DisplayHostsPendingPkg(pkg)
       else:
@@ -95,8 +97,6 @@ class Misc(admin.AdminHandler):
       self._DisplayMsuLogEvent()
     elif report == 'user_settings':
       self._DisplayUserSettings()
-    elif report == 'loststolen':
-      self._DisplayLostStolen()
     elif report == 'clientlog':
       log_key_name = uuid
       l = models.ClientLogFile.get_by_key_name(log_key_name)
@@ -127,7 +127,6 @@ class Misc(admin.AdminHandler):
     """Displays a list of installs of a particular package."""
     applesus = self.request.get('applesus') == '1'
     failures = self.request.get('failures') == '1'
-    status = self.request.get('status', None)
 
     query = models.InstallLog.all()
 
@@ -140,9 +139,6 @@ class Misc(admin.AdminHandler):
       query.filter('applesus =', applesus)
     else:
       query.filter('package =', pkg)
-
-    if status:
-      query.filter('status =', status)
 
     query.order('-mtime')
 
@@ -286,9 +282,3 @@ class Misc(admin.AdminHandler):
     self.Render('user_settings.html',
         {'computers': computers, 'report_type': 'usersettings_knobs'})
 
-  def _DisplayLostStolen(self):
-    """Displays all models.ComputerLostStolen entities."""
-    query = models.ComputerLostStolen.all().order('-mtime')
-    computers = self.Paginate(query, admin.DEFAULT_COMPUTER_FETCH_LIMIT)
-    self.Render('lost_stolen.html',
-        {'computers': computers, 'report_type': 'loststolen'})

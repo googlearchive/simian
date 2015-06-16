@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Configurable settings module."""
 
@@ -35,8 +36,8 @@ from simian.auth import x509
 
 # If True, all domain users have (readonly) access to web UI. If False, only
 # define admins, support, security, etc. users have access.
-# TODO(user): move setting to Datastore. WARNING: this setting will move.
-ALLOW_ALL_DOMAIN_USERS_READ_ACCESS = True
+# TODO(user): move setting to Datastore.
+ALLOW_ALL_DOMAIN_USERS_READ_ACCESS = False
 
 # Automatic values:
 # True if running in debug mode.
@@ -50,7 +51,8 @@ TESTING = False
 # True if running in unit testing environment and settings_test is under test.
 SETTINGS_TESTING = False
 
-if os.environ.get('SERVER_SOFTWARE', '').startswith('Development'):
+if (os.environ.get('SERVER_SOFTWARE', '').startswith('Development') and
+    'testbed' not in os.environ.get('SERVER_SOFTWARE', '')):
   logging.getLogger().setLevel(logging.DEBUG)
   DEBUG = True
   DEV_APPSERVER = True
@@ -65,6 +67,12 @@ if os.environ.get('____TESTING_SETTINGS_MODULE'):
 # If unit tests are running, set TESTING to True.
 if 'unittest2' in sys.modules or 'unittest' in sys.modules:
   TESTING = True
+
+# To require a second administrator to approve changes set this to True.
+APPROVAL_REQUIRED = False
+
+# To allow a group of non-admin users to make proposals set this to True.
+ENABLE_PROPOSALS_GROUP = False
 
 
 
@@ -561,7 +569,8 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
     """Initialize."""
     # We do this to initialize underlying DictSettings, nothing more:
     super(SimianDictSettings, self)._Initialize()
-    mail_regex = re.compile(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b', re.I)
+    mail_regex = re.compile(
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}\b', re.I)
     # Common settings
     self._SetValidation(
         'ca_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
@@ -603,6 +612,12 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
     self._SetValidation(
         'email_reply_to', self._VALIDATION_REGEX,
         r'^([\w ]+ <%s>|%s)$' % (mail_regex, mail_regex))
+    self._SetValidation(
+        'hour_start', self._VALIDATION_REGEX,
+        r'^[0-9]+$')
+    self._SetValidation(
+        'hour_stop', self._VALIDATION_REGEX,
+        r'^[0-9]+$')
     self._SetValidation(
         'uuid_lookup_url', self._VALIDATION_REGEX,
         r'^https?\:\/\/[a-zA-Z0-9\-\.]+(\.[a-zA-Z]{2,3})?(\/\S*)?$')

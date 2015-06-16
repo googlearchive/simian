@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Utility module including code to obtain settings.
 
@@ -73,7 +74,7 @@ def GetCaId(settings):
   return getattr(settings, 'CA_ID', None)
 
 
-def GetCaParameters(settings, ca_id=0):
+def GetCaParameters(settings, ca_id=0, omit_server_private_key=False):
   """Get ca/cert parameters for CA named ca_id.
 
   Note, subtle: If no ca_id value is supplied, the default value from
@@ -94,6 +95,8 @@ def GetCaParameters(settings, ca_id=0):
   Args:
     settings: object with attribute level access to settings parameters.
     ca_id: str or None (default), identifies the CA/server cert/keys.
+    omit_server_private_key: bool, True to omit the server's private key, for
+        use when calling from clients.  Default False, which includes the key.
   Returns:
     CaParameters instance.
   Raises:
@@ -108,13 +111,14 @@ def GetCaParameters(settings, ca_id=0):
   settings_params = [
       L_CA_PUBLIC_CERT_PEM,
       L_SERVER_PUBLIC_CERT_PEM,
-      L_SERVER_PRIVATE_KEY_PEM,
       L_REQUIRED_ISSUER,
   ]
 
-  optional_params = [
-      L_SERVER_PRIVATE_KEY_PEM,
-  ]
+  optional_params = []
+
+  if not omit_server_private_key:
+    settings_params.append(L_SERVER_PRIVATE_KEY_PEM)
+    optional_params.append(L_SERVER_PRIVATE_KEY_PEM)
 
   ca_params = CaParameters()
 
@@ -142,7 +146,7 @@ def GetCaParameters(settings, ca_id=0):
   return ca_params
 
 
-def GetCaParametersDefault(settings):
+def GetCaParametersDefault(settings, omit_server_private_key=False):
   """Easy to remember function frontend for getting CA default parameters.
 
   Same as calling GetCaParameters(settings, None) currently.
@@ -152,4 +156,5 @@ def GetCaParametersDefault(settings):
   Raises:
     CaIdError: as GetCaParameters() would.
   """
-  return GetCaParameters(settings, None)
+  return GetCaParameters(
+      settings, None, omit_server_private_key=omit_server_private_key)

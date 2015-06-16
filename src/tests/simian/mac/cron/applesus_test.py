@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#!/usr/bin/python2.4
 #
 
 """applesus module tests."""
@@ -26,10 +25,11 @@ import logging
 logging.basicConfig(filename='/dev/null')
 import urlparse
 
-from google.apputils import app
-from tests.simian.mac.common import test
 import mox
 import stubout
+
+from google.apputils import app
+from tests.simian.mac.common import test
 from simian.mac.cron import applesus
 
 
@@ -132,14 +132,18 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     """Tests _UpdateProductDataFromCatalog()."""
     product_one_id = '1productid'
     product_one_url = 'http://example.com/%s.dist' % product_one_id
+    product_one_package_url = 'http://example.com/%s.pkg' % product_one_id
     product_two_id = '2productid'
     product_two_url = 'http://example.com/%s.dist' % product_one_id
+    product_two_package_url1 = 'http://example.com/%s-1.pkg' % product_two_id
+    product_two_package_url2 = 'http://example.com/%s-2.pkg' % product_two_id
     product_two_dist = {
         'version': 'twover', 'title': 'twotitle', 'description': 'twodesc',
         'restart_required': False,
     }
     product_three_id = '3productid'
     product_three_url = 'http://example.com/%s.dist' % product_three_id
+    product_three_package_url = 'http://example.com/%s.pkg' % product_three_id
     product_three_dist = {
         'version': 'threever', 'title': 'threetitle',
         'description': 'threedesc', 'restart_required': True,
@@ -149,14 +153,18 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
             product_one_id: {
                 'Distributions': {'English': product_one_url},
                 'PostDate': 'onedate',
+                'Packages': [{'URL': [product_one_package_url]}],
             },
             product_two_id: {
                 'Distributions': {'English': product_two_url},
                 'PostDate': 'twodate',
+                'Packages': [{'URL': product_two_package_url1},
+                             {'URL': product_two_package_url2}],
             },
             product_three_id: {
                 'Distributions': {'en': product_three_url},
                 'PostDate': 'threedate',
+                'Packages': [{'URL': product_three_package_url}],
             },
         }
     }
@@ -171,8 +179,11 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     # product_one; add to existing_products so it's skipped.
     mock_existing_product = self.mox.CreateMockAnything()
     mock_existing_product.product_id = product_one_id
+    mock_product_query = self.mox.CreateMockAnything()
     existing_products = [mock_existing_product]
-    applesus.models.AppleSUSProduct.all().AndReturn(existing_products)
+    applesus.models.AppleSUSProduct.all().AndReturn(mock_product_query)
+    mock_product_query.filter(
+        'deprecated =', False).AndReturn(existing_products)
 
     # product_two
     applesus.urllib2.urlopen(product_two_url).AndReturn(mock_urllib_return)
@@ -184,6 +195,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
       setattr(mock_dfd_two, k, v)
 
     mock_product_two = self.mox.CreateMockAnything()
+    mock_product_two.package_urls = []
     applesus.models.AppleSUSProduct(key_name=product_two_id).AndReturn(
         mock_product_two)
     mock_product_two.put().AndReturn(None)
@@ -198,6 +210,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
       setattr(mock_dfd_three, k, v)
 
     mock_product_three = self.mox.CreateMockAnything()
+    mock_product_three.package_urls = []
     applesus.models.AppleSUSProduct(key_name=product_three_id).AndReturn(
         mock_product_three)
     mock_product_three.put().AndReturn(None)
@@ -209,10 +222,15 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     self.assertEqual(mock_product_two.apple_mtime, 'twodate')
     self.assertFalse(mock_product_two.restart_required)
     self.assertTrue(mock_product_two.unattended)
+    self.assertEqual(mock_product_two.package_urls,
+                     [product_two_package_url1, product_two_package_url2])
+
     self.assertEqual(mock_product_three.version, 'threever')
     self.assertEqual(mock_product_three.description, 'threedesc')
     self.assertTrue(mock_product_three.restart_required)
     self.assertFalse(mock_product_three.unattended)
+    self.assertEqual(
+        mock_product_three.package_urls, [product_three_package_url])
     self.mox.VerifyAll()
 
   def testDeprecateOrphanedProducts(self):
@@ -250,6 +268,10 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
         '10.10_testing': ['product3', 'product4'],
         '10.10_stable': ['product3'],
         '10.10_untouched': ['product7'],
+        '10.11_unstable': ['product1'],
+        '10.11_testing': ['product3', 'product4'],
+        '10.11_stable': ['product3'],
+        '10.11_untouched': ['product7'],
     }
     deprecated_products = []
     for p in ['product2', 'product3', 'product7', 'deprecateme', 'andme']:
@@ -333,10 +355,75 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return applesus
 
+  def testGetWithWorkingHours(self):
+    """Tests get() outside of working hours."""
+    self.mox.StubOutWithMock(applesus, 'settings')
+    applesus.settings.HOUR_START = 9
+    applesus.settings.HOUR_STOP = 15
+
+    now = datetime.datetime(  # Dec 10, 2014 20:00:00
+        2014, 12, 10, 20, 00, 00, 000000)
+    today = now.date()
+
+    mock_product_promote_testing = self.mox.CreateMockAnything()
+    mock_product_promote_testing.tracks = ['unstable']
+    mock_product_promote_testing.product_id = 'fooid1'
+    mock_product_promote_testing.manual_override = False
+    mock_product_promote_testing.mtime = 'testingpromotetime'
+
+    mock_product_promote_stable = self.mox.CreateMockAnything()
+    mock_product_promote_stable.tracks = ['unstable', applesus.common.TESTING]
+    mock_product_promote_stable.product_id = 'fooid3'
+    mock_product_promote_stable.manual_override = False
+    mock_product_promote_stable.mtime = 'stablepromotetime'
+
+    testing_products = [mock_product_promote_testing]
+    stable_products = [mock_product_promote_stable]
+
+    self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'all')
+    self.mox.StubOutWithMock(applesus.applesus, 'GenerateAppleSUSCatalogs')
+    self.mox.StubOutWithMock(applesus.models.AdminAppleSUSProductLog, 'Log')
+    self.mox.StubOutWithMock(applesus.applesus, 'GetAutoPromoteDate')
+
+    promotions = {}
+    mock_query = self.mox.CreateMockAnything()
+
+    # testing promote
+    applesus.models.AppleSUSProduct.all().AndReturn(mock_query)
+    mock_query.filter('tracks !=', applesus.common.TESTING).AndReturn(
+        testing_products)
+    applesus.applesus.GetAutoPromoteDate(
+        applesus.common.TESTING, mock_product_promote_testing).AndReturn(today)
+    promotions[applesus.common.TESTING] = []
+
+    # stable promote
+    applesus.models.AppleSUSProduct.all().AndReturn(mock_query)
+    mock_query.filter('tracks !=', applesus.common.STABLE).AndReturn(
+        stable_products)
+    applesus.applesus.GetAutoPromoteDate(
+        applesus.common.STABLE, mock_product_promote_stable).AndReturn(today)
+    promotions[applesus.common.STABLE] = []
+
+    self.mox.ReplayAll()
+    self.c.get(now=now)
+
+    self.assertTrue(
+        applesus.common.TESTING not in mock_product_promote_testing.tracks)
+    self.assertTrue(
+        applesus.common.STABLE not in mock_product_promote_stable.tracks)
+
+    self.mox.VerifyAll()
+
   def testGet(self):
-    """Tests get()."""
-    today = datetime.datetime.utcnow().date()
-    mock_product_promote_testing= self.mox.CreateMockAnything()
+    """Tests get() within working hours."""
+    self.mox.StubOutWithMock(applesus, 'settings')
+    applesus.settings.HOUR_START = 9
+    applesus.settings.HOUR_STOP = 17
+    now = datetime.datetime(  # Dec 10, 2014 16:20:00
+        2014, 12, 10, 16, 20, 00, 000000)
+    today = now.date()
+
+    mock_product_promote_testing = self.mox.CreateMockAnything()
     mock_product_promote_testing.tracks = ['unstable']
     mock_product_promote_testing.product_id = 'fooid'
     mock_product_promote_testing.manual_override = False
@@ -363,7 +450,6 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(applesus.applesus, 'GetAutoPromoteDate')
 
     promotions = {}
-
     mock_query = self.mox.CreateMockAnything()
 
     # testing promote
@@ -371,12 +457,11 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
     mock_query.filter('tracks !=', applesus.common.TESTING).AndReturn(
         testing_products)
     applesus.applesus.GetAutoPromoteDate(
-        applesus.common.TESTING, mock_product_promote_testing).AndReturn(
-            today)
+        applesus.common.TESTING, mock_product_promote_testing).AndReturn(today)
     mock_product_promote_testing.put().AndReturn(None)
     promotions[applesus.common.TESTING] = [mock_product_promote_testing]
 
-    # the testing product with too new of a datetime does not get promoted.
+    # testing product with too new of a datetime does not get promoted.
     applesus.applesus.GetAutoPromoteDate(
         applesus.common.TESTING, mock_product_toonew).AndReturn(
             today + datetime.timedelta(days=2))
@@ -389,7 +474,6 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
         applesus.common.STABLE, mock_product_promote_stable).AndReturn(
             today - datetime.timedelta(days=3))
     mock_product_promote_stable.put().AndReturn(None)
-    mock_log = self.mox.CreateMockAnything()
     promotions[applesus.common.STABLE] = [mock_product_promote_stable]
 
     for track in [applesus.common.TESTING, applesus.common.STABLE]:
@@ -401,7 +485,7 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
     self.c._NotifyAdminsOfAutoPromotions(promotions).AndReturn(None)
 
     self.mox.ReplayAll()
-    self.c.get()
+    self.c.get(now=now)
 
     self.assertTrue(
         applesus.common.TESTING in mock_product_promote_testing.tracks)
@@ -415,6 +499,7 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
 
     self.assertTrue(
         applesus.common.STABLE in mock_product_promote_stable.tracks)
+
     self.mox.VerifyAll()
 
 

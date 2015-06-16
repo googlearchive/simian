@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2012 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Admin UI summary generating module."""
 
@@ -22,10 +23,10 @@
 
 
 import datetime
-import logging
 import gc
 import urllib
 
+from  distutils import version as distutils_version
 from google.appengine.ext import db
 
 from simian import settings
@@ -261,8 +262,8 @@ def GetComputerSummary(computers=None, query=None):
   summary['sites_histogram'] = DictToList(
       summary['sites_histogram'], reverse=True, by_value=True)
   #summary['tracks'] = DictToList(tracks, reverse=False)
-  summary['os_versions'] = DictToList(os_versions)
-  summary['client_versions'] = DictToList(client_versions)
+  summary['os_versions'] = DictToList(os_versions, version=True)
+  summary['client_versions'] = DictToList(client_versions, version=True)
 
   # set summary connection counts and percentages.
   summary['conns_on_corp'] = connections_on_corp
@@ -297,7 +298,7 @@ def GetPercentage(number, total):
   return float(number) / total * 100
 
 
-def DictToList(d, sort=True, reverse=True, by_value=False):
+def DictToList(d, sort=True, reverse=True, by_value=False, version=False):
   """Converts a dict to a list of tuples.
 
   Args:
@@ -305,12 +306,15 @@ def DictToList(d, sort=True, reverse=True, by_value=False):
     sort: Boolean default True, to sort based on dict key or not.
     reverse: Boolean default True, to reverse the order or not.
     by_value: Boolean default False, to sort based on dict values.
+    version: Boolean default False, to sort based on version string.
   Returns:
     List of tuples [(dict key, dict value),...]
   """
   l = [(k, v) for k, v in d.iteritems()]
   if sort and by_value:
     l.sort(key=lambda t: t[1])
+  if sort and version:
+    l.sort(key=lambda t: distutils_version.LooseVersion(t[0]))
   elif sort:
     l.sort()
   if reverse:

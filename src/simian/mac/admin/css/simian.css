@@ -34,6 +34,11 @@
 .unstable { background-color: #900; }
 .track.unstable:before { content: 'u'; }
 
+.track.proposed_in { background-color: #090; }
+.track.current { background-color: #444; }
+.track.proposed_out { background-color: #900; }
+.track.not_in { background-color: #DDD; }
+
 .managed_installs { background-color: #090; }
 .managed_updates { background-color: #D90; }
 .managed_uninstalls { background-color: #A55; }

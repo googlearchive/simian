@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """App Engine Models for Simian web application."""
 
@@ -305,7 +306,7 @@ class BaseModel(db.Model):
 
 
 class BasePlistModel(BaseModel):
-  """Base model which can easy store a utf-8 plist."""
+  """Base model which can easily store a utf-8 plist."""
 
   PLIST_LIB_CLASS = plist_lib.ApplePlist
 
@@ -383,7 +384,6 @@ class Computer(db.Model):
   serial = db.StringProperty()  # str serial number of the computer.
   ip_address = db.StringProperty()  # str ip address of last connection
   uuid = db.StringProperty()  # OSX or Puppet UUID; undecided.
-  global_uuid = db.StringProperty()  # global, platform-independent UUID
   runtype = db.StringProperty()  # Munki runtype. i.e. auto, custom, etc.
   preflight_datetime = db.DateTimeProperty()  # last preflight execution.
   postflight_datetime = db.DateTimeProperty()  # last postflight execution.
@@ -497,70 +497,6 @@ class ComputerClientBroken(db.Model):
   fixed = db.BooleanProperty(default=False)
   serial = db.StringProperty()
   ticket_number = db.StringProperty()
-
-
-class ComputerLostStolen(db.Model):
-  """Model to store reports about lost/stolen machines."""
-
-  uuid = db.StringProperty()
-  computer = db.ReferenceProperty(Computer)
-  connections = db.StringListProperty()
-  lost_stolen_datetime = db.DateTimeProperty(auto_now_add=True)
-  mtime = db.DateTimeProperty()
-
-  @classmethod
-  def _GetUuids(cls, force_refresh=False):
-    """Gets the lost/stolen UUID dictionary from memcache or Datastore.
-
-    Args:
-      force_refresh: boolean, when True it repopulates memcache from Datastore.
-    Returns:
-      dictionary like { uuid_str: True }
-    """
-    uuids = memcache.get('loststolen_uuids')
-    if not uuids or force_refresh:
-      uuids = {}
-      for key in cls.all(keys_only=True):
-        uuids[key.name()] = True
-      memcache.set('loststolen_uuids', uuids)
-    return uuids
-
-  @classmethod
-  def IsLostStolen(cls, uuid):
-    """Returns True if the given str UUID is lost/stolen, False otherwise."""
-    return uuid in cls._GetUuids()
-
-  @classmethod
-  def AddUuid(cls, uuid):
-    """Sets a UUID as lost/stolen, and refreshes the UUID cache."""
-    if cls.get_by_key_name(uuid):
-      logging.warning('UUID already set as lost/stolen: %s', uuid)
-      return  # do nothing; the UUID is already set as lost/stolen.
-    computer = Computer.get_by_key_name(uuid)
-    ls = cls(key_name=computer.uuid, computer=computer, uuid=uuid)
-    ls.put()
-    cls._GetUuids(force_refresh=True)
-
-  @classmethod
-  def RemoveUuid(cls, uuid):
-    """Removes a UUID as lost/stolen, and refreshes the UUID cache."""
-    computer = cls.get_by_key_name(uuid)
-    if not computer:
-      logging.warning('UUID is not set as lost/stolen: %s', uuid)
-      return  # do nothing; the UUID is already not set as lost/stolen.
-    computer.delete()
-    cls._GetUuids(force_refresh=True)
-
-  @classmethod
-  def LogLostStolenConnection(cls, computer, ip_address):
-    """Logs a connection from a lost/stolen computer."""
-    ls = cls.get_or_insert(computer.uuid)
-    ls.computer = computer
-    ls.uuid = computer.uuid
-    now = datetime.datetime.utcnow()
-    ls.mtime = now
-    ls.connections.append('%s from %s' % (now, ip_address))
-    ls.put()
 
 
 class ComputerMSULog(db.Model):
@@ -694,7 +630,7 @@ class AdminPackageLog(AdminLogBase, BasePlistModel):
     omitting = False
     for i, line in enumerate(lines):
       if i > 1 and i < len(lines)-2:
-        # A line is "omittable" if it's al least 2 lines away from the start,
+        # A line is "omittable" if it's at least 2 lines away from the start,
         # end or an edited line.
         is_omit = all([l['type'] == 'diff_none' for l in lines[i-2:i+3]])
         if is_omit and not omitting:
@@ -709,6 +645,12 @@ class AdminPackageLog(AdminLogBase, BasePlistModel):
     return lines
 
   plist_diff = property(_GetPlistDiff)
+
+
+class AdminPackageProposalLog(AdminPackageLog):
+  """AdminPackageLog model for all admin pkg interaction."""
+
+  approver = db.StringProperty()
 
 
 class AdminAppleSUSProductLog(AdminLogBase):
@@ -737,6 +679,8 @@ class AdminAppleSUSProductLog(AdminLogBase):
       to_put.append(log)
     # Put all log entities together.
     gae_util.BatchDatastoreOp(db.put, to_put)
+
+
 
 
 class KeyValueCache(BaseModel):
@@ -997,6 +941,8 @@ class AppleSUSProduct(BaseModel):
   unattended = db.BooleanProperty(default=False)
   # If deprecated, then the product is entirely hidden and unused.
   deprecated = db.BooleanProperty(default=False)
+  # Package download URLs.
+  package_urls = db.StringListProperty()
 
   @classmethod
   def AllActive(cls, keys_only=False):
@@ -1028,11 +974,23 @@ class AppleSUSProduct(BaseModel):
 
   def _SetForceInstallAfterDateStr(self, str_dt):
     """Sets the force_install_after_date property from a string."""
-    dt = datetime.datetime.strptime(str_dt, '%Y-%m-%d %H:%M')
+    try:
+      dt = datetime.datetime.strptime(str_dt, '%Y-%m-%d %H:%M')
+    except ValueError:
+      try:
+        dt = datetime.datetime.strptime('%s 13:00' % (str_dt), '%Y-%m-%d %H:%M')
+      except ValueError:
+        raise
     self.force_install_after_date = dt
 
   force_install_after_date_str = property(
       _GetForceInstallAfterDateStr, _SetForceInstallAfterDateStr)
+
+  def _GetMunkiName(self):
+    """Returns a PackageName-Version formatted name of the product."""
+    return '%s-%s' % (self.name, self.version)
+
+  munki_name = property(_GetMunkiName)
 
 
 class Tag(BaseModel):
@@ -1113,13 +1071,15 @@ class BaseManifestModification(BaseModel):
   target = property(_GetTarget, _SetTarget)
 
   @classmethod
-  def GenerateInstance(cls, mod_type, target, munki_pkg_name, **kwargs):
+  def GenerateInstance(cls, mod_type, target,
+                       munki_pkg_name, remove=False, **kwargs):
     """Returns a model instance for the passed mod_type.
 
     Args:
       mod_type: str, modification type like 'site', 'owner', etc.
       target: str, modification target value, like 'foouser', or 'foouuid'.
       munki_pkg_name: str, name of the munki package to inject, like Firefox.
+      remove: if True, will remove package from manifest instead of adding it.
       kwargs: any other properties to set on the model instance.
     Returns:
       A model instance with key_name, value and the model-specific mod key value
@@ -1134,6 +1094,8 @@ class BaseManifestModification(BaseModel):
     m = model(key_name=key_name)
     m.target = target
     m.value = munki_pkg_name
+    if remove:
+      m.value = '-' + m.value
     for kw in kwargs:
       setattr(m, kw, kwargs[kw])
     return m

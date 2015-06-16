@@ -29,7 +29,7 @@
     </td>
     <td>{{ computer.serial }}</td>
     {% if uuid_lookup_url %}
-      <td><a href="{{ uuid_lookup_url }}{{ computer.uuid }}">view</a></td>
+      <td>{{ uuid_lookup_url|host_details_link:computer.uuid }}</td>
     {% endif %}
     <td>
       <a href="/admin?filter-type=owner&filter={{ computer.owner }}"
@@ -38,8 +38,8 @@
     {% if owner_lookup_url %}
       <td><a href="{{ owner_lookup_url }}{{ computer.owner }}">view</a></td>
     {% endif %}
-    <td>{{ computer.site }}</td>
-    <td>{{ computer.office }}</td>
+    <td>{{ computer.site|default_if_none:"&nbsp;" }}</td>
+    <td>{{ computer.office|default_if_none:"&nbsp;" }}</td>
     <td>{{ computer.config_track }}</td>
     <td>{{ computer.os_version }}</td>
     <td>{{ computer.root_disk_free|filesizeformat }}</td>
@@ -259,17 +259,6 @@
       <button>Set Client As Inactive</button>
     </form>
   {% endif %}
-  <br/>
-  <form method="POST">
-    {% if is_lost_stolen %}
-      <input type="hidden" name="action" value="remove_loststolen"/>
-      <button>Remove Client From Lost/Stolen</button>
-    {% else %}
-      <input type="hidden" name="action" value="set_loststolen"/>
-      <button>Set Client As Lost/Stolen</button>
-    {% endif %}
-  </form>
-  <br />
 </div>
 {% endif %}
 

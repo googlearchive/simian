@@ -43,12 +43,22 @@
   }
 </script>
 
-<form method="post" action="/admin/package/{{ pkg.filename }}?delete=1" id="deleteform"
-      onsubmit="return confirm('This will DELETE the Package. This action is not revertable.\nAre you sure?') && confirm('..sure?');">
-  <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
-</form>
+{% if pkg_safe_to_modify %}
+  <form method="post" action="/admin/package/{{ pkg.filename }}?delete=1" id="deleteform"
+        onsubmit="return confirm('This will DELETE the Package. This action is not revertable.\nAre you sure?') && confirm('..sure?');">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+  </form>
+{% endif %}
 {% if not pkg_safe_to_modify %}
   <form method="post" action="/admin/package/{{ pkg.filename }}?unlock=1" id="unlockform">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+  </form>
+{% endif %}
+{% if pkg.proposal.proposal_in_flight and approval_required %}
+  <form method="post" action="/admin/package/{{ pkg.filename }}?approve=1" id="approveform">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+  </form>
+  <form method="post" action="/admin/package/{{ pkg.filename }}?reject=1" id="rejectform">
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
   </form>
 {% endif %}
@@ -58,8 +68,8 @@
   <div style="margin-top: 10px" id="editbuttons">
     {% spaceless %}
     <a class="button leftbutton"
-       onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/packages'">
-       &laquo; Back to package list</a>
+       onclick="if(!formEdited || confirm('Discard changes?')) location.href='{{ return_address }}'">
+       &laquo; Back to {{ return_title }} list</a>
 
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
     <button type="submit" name="submit" value="save" class="rightbutton">Save</button>
@@ -84,9 +94,14 @@
        {% endif %}
     </a>
 
-    <button type="button" class="red delete" style="margin-left: 4px"
-            onclick="var deleteform = document.getElementById('deleteform'); if(deleteform.onsubmit()) deleteform.submit();">
-            Delete Package</button>
+    {% if is_admin_user or is_support_user %}
+      &nbsp;<a class="blue button" onclick="location.href='/pkgs-userauth/{{ pkg.filename }}'">Download</a>
+
+      <button type="button" class="red delete" style="margin-left: 4px"
+              {% if not pkg_safe_to_modify %} disabled{% endif %}
+              onclick="var deleteform = document.getElementById('deleteform'); if(deleteform.onsubmit()) deleteform.submit();">
+              Delete Package</button>
+    {% endif %}
     {% endspaceless %}
 
     {% if editxml and not pkg_safe_to_modify %}
@@ -116,11 +131,21 @@
 <div style="display:inline-block;margin:0;padding:0">
     {% if not pkg_safe_to_modify %}
       <div class="infopanel">
-        <div style="float:right">
-          <a onclick="unlockform.submit();" class="red button" style="margin: 6px 0 6px 10px">Unlock Package</a>
-        </div>
-        Some fields have been disabled because this package is either in stable or testing.<br/>
-        Please move to unstable and save before making other changes.
+        {% if is_admin_user %}
+          <div style="float:right">
+            <a onclick="unlockform.submit();" class="red button" style="margin: 6px 0 6px 10px">Unlock Package</a>
+          </div>
+        {% endif %}
+        {% if approval_required %}
+            Some fields have been disabled because this package is in at least
+            one catalog.<br/>
+            Please remove it from all catalogs and save before making other
+            changes.
+        {% else %}
+            Some fields have been disabled because this package is either in
+            stable or testing.<br/>
+            Please move to unstable and save before making other changes.
+        {% endif %}
         <div style="clear: both;"></div>
       </div>
     {% endif %}
@@ -171,6 +196,25 @@
            oninput="simian.validateField(this, /^(\d{2}.\d+\.\d+)?$/);" />
     <br/>
 
+    {% if categories %}
+      <label for="category">Category</label>
+      <select name="category" class="formfield" {% if not pkg_safe_to_modify %}disabled{% endif %}>
+        <option value="" {% if pkg.plist.category == "" %}selected{% endif %}>None</option>
+        {% for category in categories %}
+          <option value="{{ category }}" {% if category == pkg.plist.category %}selected{% endif %}>
+              {{ category }}</option>
+        {% endfor %}
+      </select>
+      <br/>
+    {% endif %}
+
+    <label for="developer">Developer</label>
+    <input type="text" name="developer" class="formfield"
+           value="{{ pkg.plist.developer }}"
+           {% if not pkg_safe_to_modify %} disabled{% endif %}
+           oninput="simian.validateField(this, /^.{0,50}$/);" />
+    <br/>
+
     <label for="force_install_after_date">Force install after date<br/>
     <span class="note">Time is evaluated in the client's local timezone</span></label>
     <div style="display:table; border-collapse: collapse">
@@ -216,22 +260,32 @@
       <input type="checkbox" name="catalogs" class="tags formfield" value="{{ track }}" id="catalog_{{ track }}"
         {% if track in pkg.catalogs %} checked{% endif %}
         {% if not manifests_and_catalogs_unlocked %} disabled{% endif %}
+        {% if approval_required and pkg.proposal.proposal_in_flight and track in pkg.proposal.catalogs and track not in pkg.catalogs %} proposed {% endif %}
+        {% if approval_required and pkg.proposal.proposal_in_flight and track not in pkg.proposal.catalogs and track in pkg.catalogs %} proposed_removal {% endif %}
         onchange="alsoCheck(this, 'manifest_{{ track }}', false)"
       />
       <label for="catalog_{{ track }}">{{ track }}</label>
     {% endfor %}
     <br/>
-
     <label>Manifests</label>
     {% for track in tracks reversed %}
       <input type="checkbox" name="manifests" class="tags formfield" value="{{ track }}" id="manifest_{{ track }}"
         {% if track in pkg.manifests %} checked{% endif %}
         {% if not manifests_and_catalogs_unlocked %} disabled{% endif %}
+        {% if approval_required and pkg.proposal.proposal_in_flight and track in pkg.proposal.manifests and track not in pkg.manifests %} proposed {% endif %}
+        {% if approval_required and pkg.proposal.proposal_in_flight and track not in pkg.proposal.manifests and track in pkg.manifests %} proposed_removal {% endif %}
         onchange="alsoCheck(this, 'catalog_{{ track }}', true)"
       />
       <label for="manifest_{{ track }}">{{ track }}</label>
     {% endfor %}
     <br/>
+    {% if approval_required and pkg.proposal.proposal_in_flight and is_admin_user %}
+      Proposed by {{ pkg.proposal.user }} <br/>
+        <a onclick="approveform.submit();" class="blue button">Approve</a>
+        <a onclick="rejectform.submit();" class="blue button">Reject</a>
+    {% endif %}
+    <br/>
+
 
     <label>Install Types</label>
     {% for type in install_types %}

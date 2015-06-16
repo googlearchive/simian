@@ -4,7 +4,7 @@
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
 SWIG=$(shell type -p swig 2>/dev/null)
-SIMIAN_VERSION=2.3
+SIMIAN_VERSION=2.4
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
 SDIST=${SDIST_TAR}.gz
@@ -18,7 +18,6 @@ TS=$(shell date '+%s')
 SWIG_VERSION=1.3.40
 SWIG_URL=http://downloads.sourceforge.net/project/swig/swig/swig-${SWIG_VERSION}/swig-${SWIG_VERSION}.tar.gz?r=&ts=${TS}
 BUILD_VERSION=$(shell (git rev-parse HEAD 2>/dev/null || echo ${SIMIAN_VERSION} | tr '.' '-') | cut -c1-12)
-
 
 os_check:
 	@if [ -z "${OSX_VERSION}" ]; then echo Must run on OS X ; exit 1 ; fi
@@ -118,7 +117,7 @@ ${MUNKIFILE}:
 add_munkicontents: os_check ${MUNKIFILE}
 	pkgutil --expand ${MUNKIFILE} tmpcontents/
 	cd tmpcontents/ && \
-	for pkg in *.pkg; do \
+	for pkg in *.pkg ; do \
 	gzip -dc "$$pkg/Payload" | pax -r ; done
 
 contents.tar.gz: client_config
@@ -139,7 +138,7 @@ contents.tar.gz: client_config
 	tar -v -c --exclude '*/.*' -f contents.tar -C tmpcontents .
 	# build gz
 	gzip -f contents.tar
-	
+
 install_name_tool:
 	cp /usr/bin/install_name_tool .
 
@@ -149,10 +148,11 @@ m2crypto:
 	M2Crypto-0.22.3-py2.6-macosx-10.7-intel.egg \
 	M2Crypto-0.22.3-py2.6-macosx-10.8-x86_64.egg \
 	M2Crypto-0.22.3-py2.6-macosx-10.9-x86_64.egg \
-	M2Crypto-0.22.3-py2.6-macosx-10.10-intel.egg ; do \
+	M2Crypto-0.22.3-py2.6-macosx-10.10-intel.egg \
+	M2Crypto-0.22.3-py2.6-macosx-10.11-intel.egg ; do \
 	[[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "https://storage.googleapis.com/m2crypto_eggs/$${egg}" ; \
-	done		
-	
+	done
+
 vep: install_name_tool
 
 ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
@@ -167,6 +167,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.8-*.egg \
 	-R simian_M2Crypto-*-10.9-*.egg \
 	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -194,6 +195,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.8-*.egg \
 	-R simian_M2Crypto-*-10.9-*.egg \
 	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -221,6 +223,7 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.8-*.egg \
 	-R simian_M2Crypto-*-10.9-*.egg \
 	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -246,6 +249,7 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.8-*.egg \
 	-R simian_M2Crypto-*-10.9-*.egg \
 	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
 	-R PyYAML-*.egg \
 	-R WebOb-*.egg \
 	-R google_apputils-*.egg \
@@ -268,7 +272,7 @@ dmg: ${SIMIAN}-and-${MUNKI}.dmg
 release: server_config
 	appcfg.py --version=${BUILD_VERSION} update gae_bundle/
 	appcfg.py --version=${BUILD_VERSION} set_default_version gae_bundle/
-	
+
 release_with_oauth: server_config
 	appcfg.py --version=${BUILD_VERSION} --oauth2 update gae_bundle/
 	appcfg.py --version=${BUILD_VERSION} --oauth2 set_default_version gae_bundle/

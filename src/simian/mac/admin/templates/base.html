@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-  <title>Simian Stats: {% block title %}{% endblock %}</title>
+  <title>Simian Admin: {% block title %}{% endblock %}</title>
   <link href="{{ static_path }}/admin/css/main.css" rel="stylesheet" type="text/css" />
   <script type="text/javascript" src="{{ static_path }}/admin/js/simian.js"></script>
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
@@ -78,19 +78,19 @@
       <a id="menupin" onclick="simian.menu.pinMenu();"></a>
       <div id="menuwrap">
       <ul>
-        {% for item in menu %}
-          {% if is_admin or not item.admin_only %}
-          {% if item.url %}
+        {% for key, value in menu.items %}
+          {% if is_admin or not value.admin_only %}
+          {% if value.url %}
             <li {% ifequal report_type item.type %}class="selected"{% endifequal %}>
-              <a href="{{ item.url }}">{{ item.name }}</a>
+              <a href="{{ value.url }}">{{ value.name }}</a>
             </li>
           {% else %}
-            {% if item.subitems %}
+            {% if value.subitems %}
               <li><a class="zippy_toggle
               {% for subitem in item.subitems %}{% ifequal report_type subitem.type %}expanded{% endifequal %}{% endfor %}"
-                     title="zippy_{{ item.type }}">{{ item.name }}</a>
-                <ul id="zippy_{{ item.type }}">
-                {% for subitem in item.subitems %}
+                     title="zippy_{{ key }}">{{ value.name }}</a>
+                <ul id="zippy_{{ key }}">
+                {% for subkey, subitem in value.subitems.items %}
                   <li {% ifequal report_type subitem.type %}class="selected"{% endifequal %}>
                     <a href="{{ subitem.url }}">{{ subitem.name }}</a>
                   </li>
@@ -98,7 +98,7 @@
                 </ul>
               </li>
             {% else %}
-              {% if item.title %}<hr><h3>{{ item.title }}</h3>{% endif %}
+              {% if value.title %}<hr><h3>{{ value.title }}</h3>{% endif %}
             {% endif %}
           {% endif %}
           {% endif %}

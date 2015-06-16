@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Munki common module tests."""
 
@@ -38,6 +39,15 @@ class CommonModuleTest(test.RequestHandlerTest):
 
   def GetTestClassModule(self):
     return common
+
+  def testGetBoolValueFromString(self):
+    """Tests GetBoolValueFromString() in various ways."""
+    self.assertTrue(common.GetBoolValueFromString('TrUe'))
+    self.assertTrue(common.GetBoolValueFromString('1'))
+    self.assertFalse(common.GetBoolValueFromString('FalSe'))
+    self.assertFalse(common.GetBoolValueFromString('0'))
+    self.assertEqual(common.GetBoolValueFromString(''), None)
+    self.assertEqual(common.GetBoolValueFromString(None), None)
 
   def testSaveFirstConnectionWithSkipSerial(self):
     """Tests _SaveFirstConnection() with a serial in skip_serials = []."""
@@ -146,10 +156,9 @@ class CommonModuleTest(test.RequestHandlerTest):
     uptime = 123
     root_disk_free = 456
     user_disk_free = 789
-    global_uuid = 'uuid'
     ip_address = 'fooip'
     runtype = 'auto'
-    report_feedback = 'foofeedback'
+    report_feedback = {'force_continue': True}
 
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
@@ -158,7 +167,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': global_uuid, 'runtype': runtype,
+        'runtype': runtype,
     }
     connection_datetimes = range(1, common.CONNECTION_DATETIMES_LIMIT + 1)
     connection_dates = range(1, common.CONNECTION_DATES_LIMIT + 1)
@@ -222,7 +231,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     uptime = 123
     root_disk_free = 456
     user_disk_free = 789
-    global_uuid = 'uuid'
     runtype = 'custom'
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
@@ -231,7 +239,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': uuid, 'runtype': runtype,
+        'runtype': runtype,
     }
     pkgs_to_install = ['FooApp1', 'FooApp2']
     apple_updates_to_install = ['FooUpdate1', 'FooUpdate2']
@@ -311,7 +319,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     uptime = 123
     root_disk_free = 456
     user_disk_free = 789
-    global_uuid = 'uuid'
     runtype = 'auto'
     client_id = {
         'uuid': uuid, 'hostname': hostname, 'serial': serial, 'owner': owner,
@@ -320,7 +327,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'last_notified_datetime': last_notified_datetime_str,
         'site': site, 'office': office, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
-        'global_uuid': global_uuid, 'runtype': runtype,
+        'runtype': runtype,
     }
 
     # bypass the db.run_in_transaction step
@@ -404,8 +411,8 @@ class CommonModuleTest(test.RequestHandlerTest):
         'hostname=foohost|serial=1serial2|config_track=fooconfigtrack|track=%s|'
         'os_version=10.6.3|client_version=0.6.0.759.0|on_corp=0|'
         'last_notified_datetime=2010-01-01|site=NYC|office=US-NYC-FOO|'
-        'uptime=123.0|root_disk_free=456|user_disk_free=789|'
-        'global_uuid=uuid|applesus=false|runtype=auto'
+        'uptime=123.0|root_disk_free=456|user_disk_free=789|applesus=false|'
+        'runtype=auto'
     )
 
     client_id_dict = {
@@ -423,7 +430,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         u'uptime': 123.0,
         u'root_disk_free': 456,
         u'user_disk_free': 789,
-        u'global_uuid': u'uuid',
         u'applesus': False,
         u'runtype': 'auto',
     }
@@ -522,6 +528,18 @@ class CommonModuleTest(test.RequestHandlerTest):
     client_id_dict['ASDFMOOCOW'] = '1'
     self.assertEqual(client_id_dict, common.ParseClientId('ASDFMOOCOW=1'))
     del(client_id_dict['ASDFMOOCOW'])
+
+  def testParseClientIdWithVeryLongStrValues(self):
+    """Tests ParseClientId() with str values that are over 500 characters."""
+    long_owner = ''.join(str(i) for i in range(999))
+    client_id_str, client_id_dict = self._GetClientIdTestData()
+    client_id_str = client_id_str.replace(
+        'owner=foouser', 'owner=%s' % long_owner)
+    client_id_dict['owner'] = long_owner[:500]
+    client_id_dict['track'] = common.common.DEFAULT_TRACK
+    output = common.ParseClientId(client_id_str)
+    for k in client_id_dict:
+      self.assertEqual(client_id_dict[k], output.get(k))
 
   def testIsPanicMode(self):
     """Tests IsPanicMode()."""

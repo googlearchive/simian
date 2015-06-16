@@ -13,7 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Module containing classes to connect to Simian as a client."""
 
@@ -27,7 +28,6 @@ import logging
 import mimetools
 import os
 import platform
-import re
 import subprocess
 import sys
 import tempfile
@@ -50,11 +50,11 @@ except ImportError:
 
 from google.appengine.tools import appengine_rpc
 
+from simian.auth import x509
 from simian import auth
 from simian import settings
 from simian.auth import client as auth_client
 from simian.auth import util
-from simian.auth import x509
 
 warnings.filterwarnings(
     'ignore', '.* md5 module .*', DeprecationWarning, '.*', 0)
@@ -69,6 +69,7 @@ else:
 
 
 DEFAULT_HTTP_ATTEMPTS = 4
+DEFAULT_RETRY_HTTP_STATUS_CODES = frozenset([500, 502, 503, 504])
 SERVER_HOSTNAME = settings.SERVER_HOSTNAME
 SERVER_PORT = settings.SERVER_PORT
 AUTH_DOMAIN = settings.AUTH_DOMAIN
@@ -306,8 +307,8 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
   _is_https = True
 
   def __init__(self, *args, **kwargs):
-    #Note: MultiBodyConnection has no __init__. Change this if it ever does.
-    #MultiBodyConnection.__init__(*args, **kwargs)
+    # Note: MultiBodyConnection has no __init__. Change this if it ever does.
+    # MultiBodyConnection.__init__(*args, **kwargs)
     httplib.HTTPSConnection.__init__(self, *args, **kwargs)
 
   @classmethod
@@ -544,14 +545,12 @@ class HttpsClient(object):
       logging.debug('LoadHost(): proxy host = %s, proxy port = %s',
                     self.proxy_hostname, self.proxy_port)
 
-  def _AdjustHeaders(self, headers):
+  def _AdjustHeaders(self, unused_headers):
     """Adjust headers before a request.
 
-    Override in subclasses.
-
-    Args:
-      headers: dict, headers that will be passed to a http request
+    Intended for override in subclasses to inject headers.
     """
+    return
 
   def _Connect(self):
     """Return a HTTPSConnection object.
@@ -631,7 +630,14 @@ class HttpsClient(object):
     """
     if body is not None and type(body) is dict:
       body = urllib.urlencode(body)
+
+    if headers is None:
+      headers = {}
+    if 'User-Agent' not in headers:
+      headers['User-Agent'] = 'gzip'
+
     self._AdjustHeaders(headers)
+
     # smash url to str(), in case unicode has slipped in, which never
     # sends properly.
     conn.request(method, str(url), body=body, headers=headers)
@@ -671,7 +677,8 @@ class HttpsClient(object):
   def Do(
       self, method, url,
       body=None, headers=None, output_filename=None,
-      retry_on_status=(500,), attempt_times=DEFAULT_HTTP_ATTEMPTS, _open=open):
+      retry_on_status=DEFAULT_RETRY_HTTP_STATUS_CODES,
+      attempt_times=DEFAULT_HTTP_ATTEMPTS, _open=open):
     """Make a request and return the response.
 
     Args:
@@ -680,8 +687,8 @@ class HttpsClient(object):
       body: str or dict or file, optional, body to send with request
       headers: dict, optional, headers to send with request
       output_filename: str, optional, filename to write response body to
-      retry_on_status: list, default [500], int status codes to retry upon
-          receiving.
+      retry_on_status: list, default (500, 502, etc.), int status codes to
+          retry upon receiving.
       attempt_times: int, default 4, how many times to attempt the request
       _open: func, optional, default builtin open, to open output_filename
     Returns:
@@ -882,8 +889,6 @@ class UAuth(object):
     self._ca_cert_chain = certs
 
 
-
-
 class HttpsAuthClient(HttpsClient):
   """Https client with support for authentication."""
 
@@ -911,17 +916,30 @@ class HttpsAuthClient(HttpsClient):
   def _PlatformSetup(self):
     """Platform specific instance setup."""
     if platform.system() == 'Darwin':
-      self.FACTER_CACHE_PATH = self.FACTER_CACHE_OSX_PATH
+      self.facter_cache_path = self.FACTER_CACHE_OSX_PATH
     else:
-      self.FACTER_CACHE_PATH = self.FACTER_CACHE_DEFAULT_PATH
+      self.facter_cache_path = self.FACTER_CACHE_DEFAULT_PATH
 
   def _LoadCaParameters(self):
     """Load CA parameters from settings."""
     logging.debug('LoadCaParameters')
-    self._ca_params = util.GetCaParameters(settings)
+    self._ca_params = util.GetCaParameters(
+        settings, omit_server_private_key=True)
     logging.debug('Loaded ca_params')
-    self._default_ca_params = util.GetCaParametersDefault(settings)
+    self._default_ca_params = util.GetCaParametersDefault(
+        settings, omit_server_private_key=True)
     logging.debug('Loaded default_ca_params')
+
+  def _AdjustHeaders(self, headers):
+    """Adjust headers before a request.
+
+    Override in subclasses.
+
+    Args:
+      headers: dict, headers that will be passed to a http request.
+    """
+    if self._cookie_token and headers is not None:
+      headers['Cookie'] = self._cookie_token
 
   def GetSystemRootCACertChain(self):
     """Load system supplied root CA certs.
@@ -932,7 +950,7 @@ class HttpsAuthClient(HttpsClient):
     try:
       f = open(settings.ROOT_CA_CERT_CHAIN_PEM_PATH, 'r')
       contents = f.read()
-    except (AttributeError, OSError):
+    except (AttributeError, IOError):
       contents = None  # root CA cert chain is optional
     if contents:
       logging.debug('Got Root CA Cert Chain: %s', contents)
@@ -940,11 +958,6 @@ class HttpsAuthClient(HttpsClient):
     else:
       logging.warning('Root CA Cert Chain was EMPTY!')
       return ''
-
-  def _AdjustHeaders(self, headers):
-    """Adjust headers before sending request."""
-    if self._cookie_token:
-      headers['Cookie'] = self._cookie_token
 
   def _SudoExec(self, argv, expect_rc=None):
     """Run an argv list with sudo.
@@ -1030,18 +1043,17 @@ class HttpsAuthClient(HttpsClient):
     Returns:
       dict, facter contents
     """
-    if self.FACTER_CACHE_PATH is None:
+    if self.facter_cache_path is None:
       return {}
 
-    if not os.path.isfile(self.FACTER_CACHE_PATH):
+    if not os.path.isfile(self.facter_cache_path):
       logging.info('GetFacter: facter cache file does not exist.')
       return {}
 
     facter = {}
     use_facter_cache = False
-    now = datetime.datetime.now()
     try:
-      st = os.stat(self.FACTER_CACHE_PATH)
+      st = os.stat(self.facter_cache_path)
       # if we are root, and the writer of the cache was not root, OR
       # if we are not root, the cache was not written by root, and
       # the cache was not written by ourselves
@@ -1061,7 +1073,7 @@ class HttpsAuthClient(HttpsClient):
     if use_facter_cache:
       try:
         logging.debug('GetFacter: reading recent facter cache')
-        f = open_fn(self.FACTER_CACHE_PATH, 'r')
+        f = open_fn(self.facter_cache_path, 'r')
         facter = {}
         line = f.readline()
         while line:
@@ -1152,7 +1164,11 @@ class HttpsAuthClient(HttpsClient):
       else:
         logging.debug('_GetPuppetSslDetails not IsFile %s', priv_key)
 
-    logging.info('Output = %s', output)
+    # NOTE(user):  There is a maximum size of a single syslog message
+    # under OS X on Python (the exact value of which seems to depend on OS
+    # X version)
+    if 'headers' in output:
+      logging.info('Output headers = %s', output['headers'])
     return output
 
   def _ValidatePuppetSslCert(self, cert_dir_path, cert_fname):
@@ -1192,7 +1208,7 @@ class HttpsAuthClient(HttpsClient):
             default_required_issuer == issuer):
           # match, good.
           msg = ('Cert %s does not match config issuer, '
-              'but matches default' % cert_fname)
+                 'but matches default' % cert_fname)
           logging.warning(msg)
           logging.warning('Dumping config CA params for defaults')
           self._ca_params = self._default_ca_params
@@ -1301,16 +1317,15 @@ class HttpsAuthClient(HttpsClient):
 
     self._cookie_token = token
 
-
-  def DoUserAuth(self, user_auth=None):
+  def DoUserAuth(self, unused_user_auth=None):
     """Do user authentication.
 
     This method causes the client to authenticate as a user, not as a machine.
     So, it is somewhat the opposite method to DoSimianAuth().
 
     Args:
-      user_auth: str or None, control the user auth type, or when None,
-        use default.
+      unused_user_auth: str or None, control the user auth type, or when None,
+        use default.  Currently a noop.
     """
     return self.DoUAuth()
 
@@ -1368,7 +1383,9 @@ class HttpsAuthClient(HttpsClient):
           ' '.join(self._auth1.ErrorOutput())))
 
     # Success
-    logging.info('headers = %s', response.headers)
+    sanitized_headers = response.headers.copy()
+    del sanitized_headers['set-cookie']
+    logging.info('headers = %s', sanitized_headers)
 
     tokens = response.headers.get('set-cookie', None)
     if tokens is None:
@@ -1378,7 +1395,7 @@ class HttpsAuthClient(HttpsClient):
     for token in tokens:
       if token.startswith(auth.AUTH_TOKEN_COOKIE):
         self._cookie_token = token
-        logging.debug('Found cookie token: %s', token)
+        logging.debug('Found cookie token.')
         break
 
     if self._cookie_token is None:
@@ -1410,10 +1427,6 @@ class SimianClient(HttpsAuthClient):
   def IsDefaultHostClient(self):
     """Returns True if the client was initialized with default hostname."""
     return self._default_hostname
-
-  def GetGlobalUuid(self):
-    """Returns str, a global, platform independent, UUID for this machine."""
-    raise NotImplementedError('Client must implement GetGlobalUuid')
 
   def _SimianRequest(
       self, method, url, body=None, headers=None, output_filename=None,
@@ -1517,8 +1530,8 @@ class SimianClient(HttpsAuthClient):
     """Put a package file contents.
 
     Read the documentation at
-        http://code.google.com/
-            appengine/docs/python/tools/webapp/blobstorehandlers.html
+        https://cloud.google.com/
+            appengine/docs/python/tools/webapp/blobstorehandlers
 
     for more information about why this method looks strange.  BlobStore
     upload requires a multipart/form POST to a dynamic URL.
@@ -1592,7 +1605,7 @@ class SimianClient(HttpsAuthClient):
     response = self._SimianRequest('GET', url, full_response=True)
 
     if get_hash:
-      if not 'x-pkgsinfo-hash' in response.headers:
+      if 'x-pkgsinfo-hash' not in response.headers:
         logging.debug(
             'GET %s returned headers = %s', url, str(response.headers))
         raise SimianServerError('No hash was supplied with pkginfo')
@@ -1785,7 +1798,6 @@ class SimianClient(HttpsAuthClient):
     Args:
       file_path: str, path of log file to upload.
       file_type: str, type of file being uploaded, like 'log'.
-      params: dict, params to send with the request.
       _open: func, optional, default builtin open, to open file_path.
     """
     if os.path.isfile(file_path):

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2012 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Custom template filters."""
 
@@ -24,6 +25,7 @@ import cgi
 import datetime
 import re
 import time
+import urlparse
 
 from google.appengine.ext import webapp
 
@@ -40,26 +42,51 @@ except ImportError:
 
 register = webapp.template.create_template_register()
 
+# filter names are lower_with_under to match other Django template filters.
+# pylint: disable=g-bad-name
+
+
+@register.filter
+def install_count(munki_name, pkgs_dict):
+  return pkgs_dict.get(munki_name, {}).get('install_count', '0')
+
+
+@register.filter
+def failure_count(munki_name, pkgs_dict):
+  return pkgs_dict.get(munki_name, {}).get('install_fail_count', '0')
+
 
 @register.filter
 def spacify(value, autoescape=None):
-    if autoescape:
-        esc = conditional_escape
-    else:
-        esc = lambda x: x
-    return mark_safe(re.sub('\s', '&nbsp;', esc(value)))
+  if autoescape:
+    esc = conditional_escape
+  else:
+    esc = lambda x: x
+  return mark_safe(re.sub(r'\s', '&nbsp;', esc(value)))
 spacify.needs_autoescape = True
 
 
 @register.filter
-def tracks_display(tracks):
-  """Prints out [u][t][s]-style track information for a list of tracks."""
-  if not tracks:
+def tracks_display(track_dict):
+  """Prints out [u][t][s]-style track with pending proposals marked."""
+  if not track_dict:
     return ''
   html = []
-  for track in sorted(tracks, reverse=True):
-    html.append(
-        '<span class="track %s" title="%s"></span>' % (track, track))
+  for track in sorted(track_dict, reverse=True):
+    html.append('<span class="track %s %s" title="%s"></span>' % (
+        track, track_dict[track], track))
+  return mark_safe(''.join(html))
+
+
+@register.filter
+def tracks_display_no_proposals(track_list):
+  """Prints out [u][t][s]-style track with no proposals."""
+  if not track_list:
+    return ''
+  html = []
+  for track in sorted(track_list, reverse=True):
+    html.append('<span class="track %s" title="%s"></span>' % (
+        track, track))
   return mark_safe(''.join(html))
 
 
@@ -69,11 +96,11 @@ def munki_property(tag, tagname=None):
   if not tag:
     return ''
   tags = {
-    'managed_installs': 'install',
-    'managed_updates': 'update',
-    'managed_uninstalls': 'uninstall',
-    'optional_installs': 'optional',
-    'unattended_install': 'unattd',
+      'managed_installs': 'install',
+      'managed_updates': 'update',
+      'managed_uninstalls': 'uninstall',
+      'optional_installs': 'optional',
+      'unattended_install': 'unattd',
   }
   html = '<span class="tags %s" title="%s">%s</span>'
   abbr = tags.get(tag, tag)
@@ -114,6 +141,13 @@ def download_speed(kbytes_per_second):
     return '%s KB/s' % kbytes_per_second
   else:
     return '%.2f MB/s' % (float(kbytes_per_second) / 1024)
+
+
+@register.filter
+def host_details_link(uri, uuid):
+  """Returns a joined URL to host record details page."""
+  url = urlparse.urljoin(uri, uuid)
+  return mark_safe('<a href="%s">view</a>' % url)
 
 
 @register.filter

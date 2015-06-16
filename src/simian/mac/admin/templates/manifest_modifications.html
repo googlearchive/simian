@@ -3,6 +3,8 @@
 {% block title %}Dynamic Manifest Modifications{% endblock %}
 
 {% block page-content %}
+ {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
+
  {% if can_add_manifest_mods %}
   <form method="POST" action="/admin/manifest_modifications" class="form">
     <fieldset style="max-width: 650px">
@@ -54,6 +56,8 @@
             <option value="{{ item.name }}">{{ item.munki_name }}</option>
           {% endfor %}
         </select>
+        <input type="checkbox" name="remove-from-manifest" id="remove-from-manifest" class="tags" />
+        <label for="remove-from-manifest">Block</label>
         <br/>
         </div>
       </td>

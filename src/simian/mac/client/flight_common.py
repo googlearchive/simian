@@ -1,24 +1,20 @@
 #!/usr/bin/env python
-# 
-# Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
+# Copyright 2015 Google Inc. All Rights Reserved.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
-
+#
 """Custom preflight/postflight common module."""
-
-
-
 
 import ctypes
 import ctypes.util
@@ -34,14 +30,16 @@ import select
 import signal
 import struct
 import subprocess
-import sys
 import tempfile
 import time
 import urllib
 import urlparse
-import version
+
+from simian.mac.client import version
+
 # Place all ObjC-dependent imports in this try/except block.
 # Silently work around missing modules within this module using OBJC_OK!
+# pylint: disable=g-import-not-at-top,import-error,relative-import
 try:
   from munkilib import FoundationPlist as fpl
   from munkilib import munkicommon
@@ -56,7 +54,6 @@ except ImportError:
   OBJC_OK = False
 
 
-AUTH_BINARY = '/usr/local/bin/simianauth'
 FACTER_CMD = '/usr/local/bin/simianfacter'
 DATETIME_STR_FORMAT = '%Y-%m-%d %H:%M:%S'
 DELIMITER = '|'
@@ -70,12 +67,9 @@ DEFAULT_ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
 DEFAULT_FACTER_CACHE_PATH = (
     '/Library/Managed Installs/facter.cache')
 DEFAULT_FACTER_CACHE_TIME = datetime.timedelta(hours=3)
-# InstallResults legacy string matching regex.
-LEGACY_INSTALL_RESULTS_STRING_REGEX = (
-    '^Install of (.*)-(\d+.*): (SUCCESSFUL|FAILED with return code: (\-?\d+))$')
 # Global for holding the auth token to be used to communicate with the server.
 AUTH1_TOKEN = None
-HUNG_MSU_TIMEOUT = datetime.timedelta(seconds=2*60*60)
+HUNG_MSU_TIMEOUT = datetime.timedelta(hours=2)
 
 
 DEBUG = False
@@ -95,26 +89,6 @@ class ServerRequestError(Error):
 
 class RepairClientError(Error):
   """Error repairing client."""
-
-
-class ReportFeedback(object):
-  """Class container for feedback status constants."""
-
-  # Client should proceed as normally defined.
-  OK = 'OK'
-
-  # Client should NOT exit and instead continue, even if this means masking
-  # an error which it would usually stop running because of.
-  FORCE_CONTINUE = 'FORCE_CONTINUE'
-
-  # Client should exit instead of continuing as normal.
-  EXIT = 'EXIT'
-
-  # Client should repair (download and reinstall) itself.
-  REPAIR = 'REPAIR'
-
-  # Client should upload logs to the server.
-  UPLOAD_LOGS = 'UPLOAD_LOGS'
 
 
 def GetClientVersion():
@@ -156,7 +130,7 @@ def _GetSerialNumber():
   return_code, stdout, unused_stderr = Exec(
       'system_profiler SPHardwareDataType')
   if return_code == 0 and stdout:
-    match = re.search('^\s+Serial Number[^:]+: (.*)$', stdout, re.MULTILINE)
+    match = re.search(r'^\s+Serial Number[^:]+: (.*)$', stdout, re.MULTILINE)
     if match:
       return match.group(1)
   return ''
@@ -167,7 +141,7 @@ def _GetHardwareUUID():
   return_code, stdout, unused_stderr = Exec(
       'system_profiler SPHardwareDataType')
   if return_code == 0 and stdout:
-    match = re.search('^\s+Hardware UUID: (.*)$', stdout, re.MULTILINE)
+    match = re.search(r'^\s+Hardware UUID: (.*)$', stdout, re.MULTILINE)
     if match:
       return match.group(1)
   return ''
@@ -175,7 +149,7 @@ def _GetHardwareUUID():
 
 def _GetPrimaryUser():
   """Returns the str username of the user that has logged in the most."""
-  return_code, stdout, unused_stderr = Exec(['last', '-100'])
+  return_code, stdout, unused_stderr = Exec(['/usr/bin/last', '-100'])
   if return_code == 0 and stdout:
     users = {}
     for line in stdout.splitlines():
@@ -299,7 +273,7 @@ def GetPlistValue(key, secure=False, plist=None):
 
   # get XML output of (potential) binary plist from plutil.
   exit_code, plist_xml, unused_err = Exec(
-      ['plutil', '-convert', 'xml1', '-o', '-', plist])
+      ['/usr/bin/plutil', '-convert', 'xml1', '-o', '-', plist])
   if exit_code:
     logging.error('Failed to convert plist to xml1: %s', plist)
     return ''
@@ -337,6 +311,15 @@ def GetPlistDateValue(key, secure=False, plist=None, str_format=None):
     return value
 
 
+def GetUserSettings():
+  """Read Google user settings from com.google.corp.machineinfo.
+
+  Returns:
+    dict, {} if there are no user settings defined
+  Raises:
+    ValueError if the user settings are malformed
+  """
+  return {}
 
 
 def CacheFacterContents():
@@ -580,7 +563,6 @@ def GetClientIdentifier(runtype=None):
       'uptime': uptime,
       'root_disk_free': root_disk_free,
       'user_disk_free': user_disk_free,
-      'global_uuid': '__GLOBAL_UUID__',  # replaced by simianauth
   }
   return client_id
 
@@ -611,21 +593,38 @@ def GetAppleSUSCatalog():
   """Fetches an Apple Software Update Service catalog from the server."""
   url = GetServerURL()
   try:
-    updatecheck.getResourceIfChangedAtomically(
+    new = updatecheck.getResourceIfChangedAtomically(
         '%s/applesus/' % url, APPLE_SUS_CATALOG)
-    # Update the CatalogURL setting in com.apple.SoftwareUpdate.plist.
-    sus_catalog = fpl.readPlist(APPLE_SUS_PLIST)
-    sus_catalog['CatalogURL'] = urlparse.urljoin(
-        'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
-    fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
-  except (fetch.MunkiDownloadError, fpl.NSPropertyListSerializationException):
+  except fetch.MunkiDownloadError:
     logging.exception('MunkiDownloadError getting Apple SUS catalog.')
+    return
+
+  if new:
+    # SUS catalog changed, clear last check date to run softwareupdate soon.
+    munkicommon.set_pref('LastAppleSoftwareUpdateCheck', None)
+
+  try:
+    sus_catalog = fpl.readPlist(APPLE_SUS_PLIST)
+  except fpl.NSPropertyListSerializationException:
+    # plist may not exist, but will be created when softwareupdate is run, then
+    # the next execution of of this code will set the CatalogURL.
+    logging.exception('Failed to read Apple SoftwareUpdate plist.')
+    return
+
+  # Update the CatalogURL setting in com.apple.SoftwareUpdate.plist.
+  sus_catalog['CatalogURL'] = urlparse.urljoin(
+      'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
+  fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
 
 
 def GetAuth1Token():
   """Returns an Auth1Token for use with server authentication."""
   if AUTH1_TOKEN:
     return AUTH1_TOKEN
+
+  if not OBJC_OK:
+    logging.error('Objective-C bindings not available.')
+    return None
 
   pref_value = Foundation.CFPreferencesCopyAppValue(
       'AdditionalHttpHeaders', 'ManagedInstalls')
@@ -645,96 +644,6 @@ def GetAuth1Token():
 
   logging.error('GetAuth1Token(): AdditionalHttpHeaders lacks a token.')
   return None
-
-
-def PostReportToServer(
-    report_type, params, login=False, logout=True, raise_exc=False):
-  """POSTs report to server.
-
-  Args:
-    report_type: str report type.
-    params: dict of data to POST.
-    login: optional boolean; True to pass --login to simianauth binary.
-        Default False. If True, global AUTH1_TOKEN is ignored.
-    logout: optional boolean. True to logout after posting the report.
-    raise_exc: bool, optional, True to raise exceptions on non 0 status
-      from underlying server request handler, False (default) to nicely
-      log and ignore.
-  Returns:
-    None or a status string like 'FORCE_CONTINUE'
-  Raises:
-    ServerRequestError: if raise_exc is True and a server exception occurs
-  """
-  params['_report_type'] = report_type  # add report type to post data.
-  # encode post dict to url query string; doseq=True for sequence support.
-  params = urllib.urlencode(params, doseq=True)
-  params = (
-      '--report',
-      'feedback:OK=0:%s=99:body:%s' % (ReportFeedback.FORCE_CONTINUE, params))
-  response = None
-  try:
-    try:
-      PerformServerRequest(
-          params, login=login, logout=logout, raise_exc=True)
-    except OSError, e:
-      if e.args[1] == 99:
-        response = ReportFeedback.FORCE_CONTINUE
-      else:
-        raise ServerRequestError(e)
-  except ServerRequestError, e:
-    if raise_exc is True:
-      raise
-    # gracefully allow report posting failures, but display notification.
-    logging.exception('Failure post to report to server: %s', str(e))
-  return response
-
-
-def PerformServerRequest(
-    params=None, login=False, logout=False, raise_exc=False):
-  """Performs a urllib2 request to the passed URL.
-
-  Args:
-    params: sequence, optional, params to pass to auth binary.
-    login: bool, optional, True to pass --login to simianauth binary.
-        Default False. If True, global AUTH1_TOKEN is ignored.
-    logout: bool, optional, True to logout after any other commands.
-    raise_exc: bool, optional, True to raise exceptions on non 0 status
-      from underlying server request handler, False (default) to nicely
-      log and ignore.
-  Returns:
-    Str response from server.
-  """
-  script_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
-  cmd = [os.path.join(script_dir, AUTH_BINARY)]
-
-  url = GetServerURL()
-  cmd.append('--server')
-  cmd.append(url)
-
-  env = None
-  if login:
-    cmd.append('--login')
-  else:
-    token = GetAuth1Token()
-    if token:
-      env = {'SIMIAN_AUTH1TOKEN': token}
-
-  if params:
-    cmd.extend(params)
-  if logout:
-    cmd.append('--logout')
-
-  try:
-    rc, stdout, stderr = Exec(cmd, env=env, timeout=90, waitfor=0.5)
-    if rc != 0:
-      raise OSError('Exec %d: %s' % (rc, stderr), rc)
-  except OSError, e:
-    if raise_exc is True:
-      raise
-    # gracefully allow failed server requests, but display error.
-    logging.exception('Error contacting server: %s', str(e))
-
-  return stdout
 
 
 def Flatten(o):
@@ -778,39 +687,6 @@ def GetManagedInstallReport(install_report_path=None):
   return install_report, install_report_path
 
 
-def GetInstallResults(install_results):
-  """Returns list of dicts for InstallResults list of str or NSCFDictionary.
-
-  Args:
-    install_results: list of strs or NSCFDictionary.
-  Returns:
-    list of strings or list of dict
-  """
-  out = []
-  for item in install_results:
-    if not hasattr(item, 'keys'):
-      # if any old-style InstallResults strings exist, convert them to dict.
-      try:
-        m = re.search(LEGACY_INSTALL_RESULTS_STRING_REGEX, item)
-        if m.group(3) == 'SUCCESSFUL':
-          status = 0
-        else:
-          status = m.group(4)
-        item = {
-            'name': m.group(1), 'version': m.group(2), 'applesus': False,
-            'status': status, 'duration_seconds': None,
-            'download_kbytes_per_sec': None, 'unattended': None,
-        }
-      except (IndexError, AttributeError):
-        item = {
-            'name': item, 'version': '', 'applesus': False,
-            'status': 'UNKNOWN', 'duration_seconds': None,
-            'download_kbytes_per_sec': None, 'unattended': None,
-        }
-    out.append(item)
-  return out
-
-
 def GetMunkiName(item_dict):
   """Returns the display_name or name of a Munki package."""
   return item_dict.get('display_name', item_dict.get('name')).encode('utf-8')
@@ -845,16 +721,13 @@ def GetRemainingPackagesToInstall():
   return pkgs_to_install, apple_updates_to_install
 
 
-def _UploadManagedInstallReport(on_corp, install_report, logout=False):
+def _UploadManagedInstallReport(client, on_corp, install_report):
   """Reports any installs, updates, uninstalls back to Simian server.
 
-  If no reports of installs/updates/uninstalls exist to report,
-  then this function only contacts the server if logout is True.
-
   Args:
+    client: SimianAuthClient.
     on_corp: str, on_corp status from GetClientIdentifier.
     install_report: plist object for ManagedInstallsReport.plist.
-    logout: bool, default False, whether to logout or not.
   """
   if not install_report:
     return
@@ -870,13 +743,13 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
 
   # convert dict problems to strings, and encode as utf-8.
   for i in xrange(len(problem_installs)):
+    # TODO(user): send dict to server so details can be stored separately:
+    #    problem_installs[i] = DictToStr(problem_installs[i])
     p = problem_installs[i]
     if hasattr(p, 'keys'):
       p = u'%s: %s' % (p.get('name', ''), p.get('note', ''))
     problem_installs[i] = p.encode('utf-8')
 
-  # convert any InstallResults entries to standardized strings.
-  installs = GetInstallResults(installs)
   for i in xrange(len(installs)):
     # If 'time' exists, convert it to an epoc timestamp.
     install_time = installs[i].get('time', None)
@@ -884,7 +757,8 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
       installs[i]['time'] = install_time.timeIntervalSince1970()
     # TODO(user): if we moved all of this code to simianauth, we could just use
     #      JSON instead of doing all this DictToStr nonsense just to pass it
-    #      over the commandline.
+    #      over the commandline. JSON wasn't used initially since it was not
+    #      built into python2.5 we didn't want to depend on simplejson install.
     installs[i] = DictToStr(installs[i])
 
   if installs or removals or problem_installs:
@@ -894,21 +768,15 @@ def _UploadManagedInstallReport(on_corp, install_report, logout=False):
         'removals': removals,
         'problem_installs': problem_installs,
     }
-    PostReportToServer('install_report', data, logout=logout, raise_exc=True)
-  else:
-    if logout:
-      PerformServerRequest(logout=True)
+    client.PostReport('install_report', data)
 
 
-def UploadAllManagedInstallReports(on_corp, logout=False):
+def UploadAllManagedInstallReports(client, on_corp):
   """Uploads any installs, updates, uninstalls back to Simian server.
 
-  If no reports of installs/updates/uninstalls exist to report,
-  then this function only contacts the server if logout is True.
-
   Args:
+    client: A SimianAuthClient.
     on_corp: str, on_corp status from GetClientIdentifier.
-    logout: bool, default False, whether to logout or not when finished.
   """
   # Report installs from the ManagedInstallsReport archives.
   archives_dir = os.path.join(munkicommon.pref('ManagedInstallDir'), 'Archives')
@@ -922,7 +790,7 @@ def UploadAllManagedInstallReports(on_corp, logout=False):
       install_report, _ = GetManagedInstallReport(
           install_report_path=install_report_path)
       try:
-        _UploadManagedInstallReport(on_corp, install_report)
+        _UploadManagedInstallReport(client, on_corp, install_report)
         try:
           os.unlink(install_report_path)
         except (IOError, OSError):
@@ -935,7 +803,7 @@ def UploadAllManagedInstallReports(on_corp, logout=False):
   # Report installs from the current ManagedInstallsReport.plist.
   install_report, install_report_path = GetManagedInstallReport()
   try:
-    _UploadManagedInstallReport(on_corp, install_report, logout=logout)
+    _UploadManagedInstallReport(client, on_corp, install_report)
     # Clear reportable information now that is has been published.
     install_report['InstallResults'] = []
     install_report['RemovalResults'] = []
@@ -945,42 +813,36 @@ def UploadAllManagedInstallReports(on_corp, logout=False):
     logging.exception('Error uploading ManagedInstallReport installs.')
 
 
-def UploadClientLogFiles():
-  """Uploads the Munki client log files to the server."""
-  params = []
+def UploadClientLogFiles(client):
+  """Uploads the Munki client log files to the server.
 
-  # Upload select Munki logs.
+  Args:
+    client: A SimianAuthClient object.
+  """
   managed_installs_dir = munkicommon.pref('ManagedInstallDir')
-  log_file_names = ['ManagedSoftwareUpdate.log']
-  for log_file_name in log_file_names:
-    log_file_path = os.path.join(managed_installs_dir, 'Logs', log_file_name)
-    if log_file_path:
-      params.append('--uploadfile')
-      params.append(log_file_path)
-
-  # Upload system.log.
-  params.append('--uploadfile')
-  params.append('/var/log/system.log')
-
-  # Upload install.log.
-  params.append('--uploadfile')
-  params.append('/var/log/install.log')
+  log_file_paths = [
+      os.path.join(managed_installs_dir, 'InstallInfo.plist'),
+      os.path.join(managed_installs_dir, 'ManagedInstallReport.plist'),
+      os.path.join(managed_installs_dir, 'Logs', 'ManagedSoftwareUpdate.log'),
+      '/Users/Shared/.SelfServeManifest',
+      '/var/log/system.log',
+      '/var/log/debug.log',
+      '/var/log/install.log',
+  ]
+  for log_file_path in log_file_paths:
+    if os.path.exists(log_file_path):
+      client.UploadFile(log_file_path, 'log')
 
   # Upload output of 'ps -ef'.
-  return_code, stdout, _ = Exec(['ps', '-ef'])
+  return_code, stdout, _ = Exec(['/bin/ps', '-ef'])
   if not return_code:
-    path = os.path.join(tempfile.mkdtemp(dir='/tmp'), 'ps_ef_output')
+    path = os.path.join(
+        tempfile.mkdtemp(prefix='munki_ps_ef_output_', dir='/tmp'),
+        'ps_ef_output')
     f = open(path, 'w')
     f.write(stdout)
     f.close()
-    params.append('--uploadfile')
-    params.append(path)
-
-  # Inform simianauth which type of file(s) we're uploading.
-  params.append('--uploadfiletype')
-  params.append('log')
-
-  PerformServerRequest(params)
+    client.UploadFile(path, 'log')
 
 
 def KillHungManagedSoftwareUpdate():
@@ -1037,6 +899,30 @@ def KillHungManagedSoftwareUpdate():
 
   return bool(len(kill))
 
+def Pkill(process, sig='-SIGKILL', waitfor=0):
+  """Kills a process by exact name with 'pkill'.
+
+  Useful for killing installd, effectively terminating any hung installations.
+
+  Args:
+    process: name of process to kill, like 'installd'.
+    sig: string, signal to send, default of '-SIGKILL'.
+    waitfor: int or float, if >0, Pkill() will wait waitfor seconds
+      before returning.
+  Returns:
+    True if process could be killed, False otherwise.
+  """
+  logging.warning('Sending %s to %s', sig, process)
+  cmd = ['/usr/bin/pkill', sig, '-x', process]
+  rc, _, _ = Exec(cmd)
+  if rc == 0:
+    logging.warning('Killed %s', process)
+    time.sleep(waitfor)
+    return True
+  else:
+    logging.error('Could not kill %s!', process)
+    return False
+
 
 def RepairClient():
   """Downloads and installs a new Simian client.
@@ -1045,44 +931,53 @@ def RepairClient():
     RepairClientError: there was an error repairing this client.
   """
   url = GetServerURL()
+  logging.info('Fetching repair client from: %s/repair', url)
   # TODO(user): figure out a way to not specify filename, then add a version
   # check so if the downloaded client is the same version that is running the
   # repair will just abort.
-  download = '/tmp/munkiclient.dmg'
+  download_path = os.path.join(
+      tempfile.mkdtemp(prefix='munki_repair_dmg_', dir='/tmp'),
+      'munkiclient.dmg')
+  mount_path = tempfile.mkdtemp(prefix='munki_repair_client_', dir='/tmp')
+
   try:
-    logging.info('Fetching repair client from: %s/repair', url)
-    updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download)
+    updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download_path)
   except fetch.MunkiDownloadError, e:
     raise RepairClientError(
         'MunkiDownloadError getting Munki client: %s' % str(e))
 
-  return_code, stdout, stderr = Exec(
-      ['/usr/bin/hdiutil', 'attach', '-mountRandom', '/tmp', '-nobrowse',
-       '-plist', '/tmp/munkiclient.dmg'])
+  return_code, unused_stdout, stderr = Exec(
+      ['/usr/bin/hdiutil', 'attach', '-mountpoint', mount_path, '-nobrowse',
+       '-readonly', download_path])
+
+  logging.info('Mounted munki repair client dmg at %s.', mount_path)
   if return_code != 0:
-    raise RepairClientError(
-        'Failed to attach dmg with ret %s. Error: %s' % (return_code, stderr))
+    raise RepairClientError('Failed to attach repair client dmg with ret %s. '
+                            'Error: %s' % (return_code, stderr))
 
-  # Get the mount point of the the mounted dmg; NOTE: if the munki dmg ever has
-  # multiple mount points then this will need adjusting.
-  mount_point = None
-  pl = fpl.readPlistFromString(stdout)
-  for item in pl['system-entities']:
-    if 'mount-point' in item:
-      mount_point = item['mount-point']
-  if not mount_point or not os.path.isdir(mount_point):
-    raise RepairClientError('Mount point not found:' % mount_point)
+  if not os.path.isdir(mount_path):
+    raise RepairClientError('Mount path not found:' % mount_path)
 
-  return_code, stdout, stderr = Exec(
-      ['/usr/sbin/installer', '-pkg', '%s/munkitools.pkg' % mount_point,
-       '-target', '/'])
+  file_list = os.listdir(mount_path)
+  for file_name in file_list:
+    if re.match(r'^(munkitools.*|simian.*)\.pkg$', file_name):
+      installer_file = os.path.join(mount_path, file_name)
+
+  cmd = ['/usr/sbin/installer', '-pkg', installer_file, '-target', '/']
+  logging.info('Trying to install repair client with %s.', ' '.join(cmd))
+  return_code, unused_stdout, stderr = Exec(cmd)
+
   if return_code != 0:
     raise RepairClientError(
         'Failed to install pkg with ret %s. Error: %s' % (return_code, stderr))
 
-  unused_return_code, unused_stdout, unused_stderr = Exec(
-      ['/usr/bin/hdiutil', 'detach', mount_point, '-force'])
+  return_code, unused_stdout, unused_stderr = Exec(
+      ['/usr/bin/hdiutil', 'detach', mount_path, '-force'])
+
+  if return_code != 0:
+    logging.warning('Could not detach %s!', mount_path)
 
   # If we've just repaired, kill any hung managedsofwareupdate instances, as
   # that may be the main reason we needed to repair in the first place.
   KillHungManagedSoftwareUpdate()
+

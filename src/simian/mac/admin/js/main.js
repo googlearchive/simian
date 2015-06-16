@@ -223,12 +223,11 @@ window.onload = function() {
 /**
  * Make a table sortable by clicking the header.
  * The table must have THEAD and TBODY tags.
- * @param {String} sortableTableClass Class name of tables to sort.
- * @param {String} alphaSortClass Class name of th/td's that should be sorted
- *     alphabetically instead of numerically.
+ * @param {string} sortableTableClass Class name of tables to sort.
+ * @param {string} alphaSortClass Class name of th/td's that should be
+ *     sorted alphabetically instead of numerically.
  */
 simian.makeTableSortable = function(sortableTableClass, alphaSortClass) {
-
   if (!sortableTableClass) {
     sortableTableClass = 'sortable-table';
   }

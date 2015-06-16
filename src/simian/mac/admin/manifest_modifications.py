@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Manifest Modifications admin handler."""
@@ -80,6 +81,7 @@ class ManifestModifications(admin.AdminHandler):
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
     manifests = self.request.get_all('manifests')
     install_types = self.request.get_all('install_types')
+    remove_from_manifest = self.request.get('remove-from-manifest') != ''
 
     # Security users are only able to inject specific packages.
     if not self.IsAdminUser():
@@ -129,7 +131,8 @@ class ManifestModifications(admin.AdminHandler):
 
     mod = models.BaseManifestModification.GenerateInstance(
         mod_type, target, munki_pkg_name, manifests=manifests,
-        install_types=install_types, user=users.get_current_user())
+        install_types=install_types, user=users.get_current_user(),
+        remove=remove_from_manifest)
     mod.put()
     models.BaseManifestModification.ResetModMemcache(mod_type, target)
     msg = 'Manifest Modification successfully saved.'
@@ -162,15 +165,16 @@ class ManifestModifications(admin.AdminHandler):
 
   def _DisplayMain(self):
     """Displays the main Manifest Modification report."""
-    error = self.request.get('error')
+    error_msg = self.request.get('error')
 
     mod_type = self.request.get('mod_type') or 'owner'
     model = models.MANIFEST_MOD_MODELS.get(mod_type)
     if mod_type and not model:
-      raise ValueError('Invalid mod_type: %s' % mod_type)
-    elif mod_type:
-      mods_query = model.all().order('-mtime')
+      error_msg = 'Unknown mod_type provided; defaulting to owner'
+      mod_type = 'owner'
+      model = models.MANIFEST_MOD_MODELS.get(mod_type)
 
+    mods_query = model.all().order('-mtime')
     mods = self.Paginate(mods_query, DEFAULT_MANIFEST_MOD_FETCH_LIMIT)
 
     is_admin = self.IsAdminUser()
@@ -200,7 +204,7 @@ class ManifestModifications(admin.AdminHandler):
       'mod_types': mod_types,
       'mod_type': mod_type,
       'mods': mods,
-      'error': error,
+      'error': error_msg,
       'can_add_manifest_mods': is_admin or is_support or is_security,
       'munki_pkg_names': munki_pkg_names,
       'install_types': common.INSTALL_TYPES,

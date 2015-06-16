@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2012 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """App Engine Models related to Munki."""
 
@@ -22,30 +23,28 @@
 
 import datetime
 import logging
+import os
 import re
+import urllib
 
+from google.appengine.api import mail as mail_tool
+from google.appengine.api import taskqueue
 from google.appengine.api import users
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import deferred
+from google.appengine.runtime import apiproxy_errors
 
 from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.models import base
 from simian.mac.models import constants
+from simian.mac.models import settings
 from simian.mac.munki import plist as plist_lib
 
 
 class MunkiError(base.Error):
   """Class for domain specific exceptions."""
-
-
-class CatalogGenerateError(MunkiError):
-  """There was an error generating a catalog."""
-
-
-class ManifestGenerateError(MunkiError):
-  """There was an error updating the manifest."""
 
 
 class PackageInfoUpdateError(MunkiError):
@@ -58,6 +57,14 @@ class PackageInfoLockError(PackageInfoUpdateError):
 
 class PackageInfoAccessError(PackageInfoUpdateError):
   """Access denied for this user."""
+
+
+class PackageInfoProposalError(MunkiError):
+  """Error during PackageInfoProposal Update."""
+
+
+class PackageInfoProposalApprovalError(PackageInfoProposalError):
+  """User not allowed to approve proposal."""
 
 
 class PackageInfoNotFoundError(PackageInfoUpdateError):
@@ -112,14 +119,14 @@ class Catalog(BaseMunkiModel):
       cls.Generate(name, delay=10)
       return
 
-    #logging.debug('Creating catalog: %s', name)
     package_names = []
     try:
       pkgsinfo_dicts = []
-      package_infos = PackageInfo.all().filter('catalogs =', name)
+      package_infos = PackageInfo.all().filter('catalogs =', name).fetch(None)
       if not package_infos:
         # TODO(user): if this happens we probably want to notify admins...
-        raise CatalogGenerateError('No pkgsinfo found with catalog: %s' % name)
+        logging.error('No pkgsinfo found with catalog: %s', name)
+        return
 
       for p in package_infos:
         package_names.append(p.name)
@@ -133,10 +140,9 @@ class Catalog(BaseMunkiModel):
       c.plist = catalog
       c.put()
       cls.DeleteMemcacheWrap(name, prop_name='plist_xml')
-      #logging.debug('Generated catalog successfully: %s', name)
       # Generate manifest for newly generated catalog.
       Manifest.Generate(name, delay=1)
-    except (CatalogGenerateError, db.Error, plist_lib.Error):
+    except (db.Error, plist_lib.Error):
       logging.exception('Catalog.Generate failure for catalog: %s', name)
       raise
     finally:
@@ -177,12 +183,12 @@ class Manifest(BaseMunkiModel):
       cls.Generate(name, delay=5)
       return
 
-    #logging.debug('Creating manifest: %s', name)
     try:
-      package_infos = PackageInfo.all().filter('manifests =', name)
+      package_infos = PackageInfo.all().filter('manifests =', name).fetch(None)
       if not package_infos:
         # TODO(user): if this happens we probably want to notify admins...
-        raise ManifestGenerateError('PackageInfo entities found: %s' % name)
+        logging.error('No PackageInfo entities found for: %s', name)
+        return
 
       install_types = {}
       for p in package_infos:
@@ -203,9 +209,7 @@ class Manifest(BaseMunkiModel):
       manifest_entity.plist.SetContents(manifest_dict)
       manifest_entity.put()
       cls.DeleteMemcacheWrap(name)
-      #logging.debug(
-      #    'Manifest %s created successfully', name)
-    except (ManifestGenerateError, db.Error, plist_lib.Error):
+    except (db.Error, plist_lib.Error):
       logging.exception('Manifest.Generate failure: %s', name)
       raise
     finally:
@@ -294,24 +298,51 @@ class PackageInfo(BaseMunkiModel):
 
   blob_info = property(_GetBlobInfo, _SetBlobInfo)
 
+  @property
+  def approval_required(self):
+    if not hasattr(self, '_is_approval_required'):
+      self._is_approval_required, _ = settings.Settings.GetItem(
+          'approval_required')
+    return self._is_approval_required
+
+  @property
+  def proposal(self):
+    if not hasattr(self, '_proposal'):
+      self._proposal = PackageInfoProposal.FindOrCreatePackageInfoProposal(self)
+    return self._proposal
+
+  @property
+  def catalog_matrix(self):
+    return common.util.MakeTrackMatrix(self.catalogs, self.proposal.catalogs)
+
+  @property
+  def manifest_matrix(self):
+    return common.util.MakeTrackMatrix(self.manifests, self.proposal.manifests)
+
   def IsSafeToModify(self):
     """Returns True if the pkginfo is modifiable, False otherwise."""
-    if common.STABLE in self.manifests:
-      return False
-    elif common.TESTING in self.manifests:
-      return False
-    return True
+    if self.approval_required:
+      return self.proposal.IsPackageInfoSafeToModify()
+    else:
+      if common.STABLE in self.manifests:
+        return False
+      elif common.TESTING in self.manifests:
+        return False
+      return True
 
   def MakeSafeToModify(self):
     """Modifies a PackageInfo such that it is safe to modify."""
-    self.Update(catalogs=[], manifests=[])
+    if self.approval_required:
+      self.proposal.MakePackageInfoSafeToModify()
+    else:
+      self.Update(catalogs=[], manifests=[])
 
   def put(self, *args, **kwargs):
     """Put to Datastore, generating and setting the "munki_name" property.
 
     Args:
-      args: list, optional, args to superclass put()
-      kwargs: dict, optional, keyword args to superclass put()
+      *args: list, optional, args to superclass put()
+      **kwargs: dict, optional, keyword args to superclass put()
     Returns:
       return value from superclass put()
     Raises:
@@ -337,12 +368,15 @@ class PackageInfo(BaseMunkiModel):
     Any Blobstore blob associated with the PackageInfo is deleted, and all
     Catalogs the PackageInfo was a member of are regenerated.
 
+    Args:
+      *args: list, optional, args to superclass delete()
+      **kwargs: dict, optional, keyword args to superclass delete()
     Returns:
       return value from superlass delete()
     """
     ret = super(PackageInfo, self).delete(*args, **kwargs)
     for catalog in self.catalogs:
-      Catalog.Generate(catalog, delay=5)
+      Catalog.Generate(catalog)
     if self.blobstore_key:
       gae_util.SafeBlobDel(self.blobstore_key)
     return ret
@@ -374,26 +408,28 @@ class PackageInfo(BaseMunkiModel):
     """
     new_catalogs = [c for c in pkginfo.catalogs if c not in original_catalogs]
     pkginfo.VerifyPackageIsEligibleForNewCatalogs(new_catalogs)
-
     pkginfo.put()
 
-    delay = 0
     changed_catalogs = set(original_catalogs + pkginfo.catalogs)
     for track in sorted(changed_catalogs, reverse=True):
-      delay += 5
-      Catalog.Generate(track, delay=delay)
+      Catalog.Generate(track)
 
     # Log admin pkginfo put to Datastore.
     user = users.get_current_user().email()
     log = base.AdminPackageLog(
         user=user, action='pkginfo', filename=pkginfo.filename,
-        catalogs=pkginfo.catalogs, manifests=pkginfo.manifests,
+        catalogs=pkginfo.catalogs,
+        manifests=pkginfo.manifests,
         original_plist=original_plist, install_types=pkginfo.install_types,
         manifest_mod_access=pkginfo.manifest_mod_access)
     # The plist property is a py property of _plist, and therefore cannot be
     # set in the constructure, so set here.
     log.plist = pkginfo.plist
     log.put()
+
+  def PutAndLogFromProposal(self, original_plist, original_catalogs):
+    if self.proposal.status == 'approved':
+      self._PutAndLogPackageInfoUpdate(self, original_plist, original_catalogs)
 
   @classmethod
   def _New(cls, key_name):
@@ -416,7 +452,8 @@ class PackageInfo(BaseMunkiModel):
       plist: str or plist_lib.ApplePlist object.
       create_new: bool, optional, default False. If True, create a new
           PackageInfo entity, only otherwise update an existing one.
-
+    Returns:
+      pkginfo: Returns updated PackageInfo object.
     Raises:
       PackageInfoLockError: if the package is already locked in the datastore.
       PackageInfoNotFoundError: if the filename is not a key in the datastore.
@@ -427,16 +464,15 @@ class PackageInfo(BaseMunkiModel):
       plist.EncodeXml()
       try:
         plist.Parse()
-      except plist_lib.PlistError, e:
+      except plist_lib.PlistError as e:
         raise PackageInfoUpdateError(
-            'plist_lib.PlistError parsing plist XML: %s', str(e))
+            'plist_lib.PlistError parsing plist XML: %s' % str(e))
 
     filename = plist['installer_item_location']
 
     lock = 'pkgsinfo_%s' % filename
     if not gae_util.ObtainLock(lock, timeout=5.0):
       raise PackageInfoLockError('This PackageInfo is locked.')
-
 
     if create_new:
       if cls.get_by_key_name(filename):
@@ -511,6 +547,8 @@ class PackageInfo(BaseMunkiModel):
     version = kwargs.get('version')
     minimum_os_version = kwargs.get('minimum_os_version')
     maximum_os_version = kwargs.get('maximum_os_version')
+    category = kwargs.get('category')
+    developer = kwargs.get('developer')
     force_install_after_date = kwargs.get('force_install_after_date')
 
     original_plist = self.plist.GetXml()
@@ -561,23 +599,32 @@ class PackageInfo(BaseMunkiModel):
             del self.plist['force_install_after_date']
 
       self.plist.SetUnattendedInstall(unattended_install)
+      self.plist['category'] = category
+      self.plist['developer'] = developer
     else:
       # If not safe to modify, only catalogs/manifests can be changed.
       for k, v in kwargs.iteritems():
         if v and k not in ['catalogs', 'manifests']:
+          if self.approval_required:
+            failure_message = ('PackageInfo is not safe to modify;'
+                               ' please remove from catalogs first.')
+          else:
+            failure_message = ('PackageInfo is not safe to modify;'
+                               ' please move to unstable first.')
           gae_util.ReleaseLock(lock)
-          raise PackageInfoUpdateError(
-              'PackageInfo is not safe to modify; move to unstable first.')
+          raise PackageInfoUpdateError(failure_message)
 
-    if catalogs is not None:
-      original_catalogs = self.catalogs
-      self.catalogs = catalogs
-      self.plist['catalogs'] = catalogs
+    original_catalogs = self.catalogs
+
+    if self.approval_required and (
+        catalogs != self.catalogs or manifests != self.manifests):
+      self.proposal.Propose(catalogs=catalogs, manifests=manifests)
     else:
-      original_catalogs = self.catalogs
-
-    if manifests is not None:
-      self.manifests = manifests
+      if catalogs is not None:
+        self.catalogs = catalogs
+        self.plist['catalogs'] = catalogs
+      if manifests is not None:
+        self.manifests = manifests
 
     try:
       self._PutAndLogPackageInfoUpdate(self, original_plist, original_catalogs)
@@ -602,3 +649,230 @@ class PackageInfo(BaseMunkiModel):
     else:
       pkgs = [{'name': e.name, 'munki_name': e.munki_name} for e in query]
       return sorted(pkgs, key=lambda d: unicode.lower(d.get('munki_name')))
+
+
+class PackageInfoProposal(PackageInfo):
+  """Proposed settings for a package."""
+
+  # user who approved catalogs.
+  approver = db.StringProperty()
+  # status of proposal. One of 'proposed', 'approved', 'rejected'.
+  status = db.StringProperty()
+
+  # properties that will get copied between PackageInfo and PackageInfoProposal
+  # objects
+  COMMON_PROPERTIES = ['catalogs', 'manifests', 'install_types', 'plist',
+                       'munki_name', 'manifest_mod_access', 'filename',
+                       'name', 'pkgdata_sha256', 'manifest_mod_access']
+
+  @classmethod
+  def _New(cls, pkginfo):
+    new_pkginfo_proposal = cls(key_name=pkginfo.filename)
+    for key in cls.COMMON_PROPERTIES:
+      value = getattr(pkginfo, key)
+      setattr(new_pkginfo_proposal, key, value)
+    new_pkginfo_proposal.user = users.get_current_user().email()
+    new_pkginfo_proposal.pkginfo = pkginfo
+    return new_pkginfo_proposal
+
+  @property
+  def proposal_in_flight(self):
+    if self.status == 'proposed':
+      return True
+    return False
+
+  def _GetPkginfo(self):
+    if not hasattr(self, '_pkginfo'):
+      self._pkginfo = PackageInfo.get_by_key_name(self.filename)
+    return self._pkginfo
+
+  def _SetPkginfo(self, pkginfo):
+    self._pkginfo = pkginfo
+
+  pkginfo = property(_GetPkginfo, _SetPkginfo)
+
+  @property
+  def catalog_matrix(self):
+    return common.util.MakeTrackMatrix(self.pkginfo.catalogs, self.catalogs)
+
+  @property
+  def manifest_matrix(self):
+    return common.util.MakeTrackMatrix(self.pkginfo.manifests, self.manifests)
+
+  @classmethod
+  def FindOrCreatePackageInfoProposal(cls, pkginfo):
+    proposal = PackageInfoProposal.get_by_key_name(pkginfo.filename)
+    return proposal or cls._New(pkginfo)
+
+  def IsPackageInfoSafeToModify(self):
+    """Returns True if the pkginfo is modifiable, False otherwise."""
+    if self.proposal_in_flight:
+      return False
+    elif hasattr(self.pkginfo, 'catalogs') and self.pkginfo.catalogs:
+      return False
+    elif hasattr(self.pkginfo, 'manifests') and self.pkginfo.manifests:
+      return False
+    else:
+      return True
+
+  @classmethod
+  def _PutAndLogPackageInfoProposalUpdate(
+      cls, pkginfo_proposal, original_plist, original_catalogs,
+      action='propose'):
+    """Helper method called to put/log the update.
+
+    Args:
+      pkginfo_proposal: a PackageInfoProposal entity to be put to Datastore.
+      original_plist: str XML of the original pkginfo plist, before updates.
+      original_catalogs: list of catalog names the pkg was previously in.
+      action: str one of 'propose', 'approve', 'reject'.
+    Raises:
+      PackageInfoUpdateError: there were validation problems with the pkginfo.
+    """
+    pkginfo_proposal.put()
+
+    changed_catalogs = set(original_catalogs + pkginfo_proposal.catalogs)
+    for track in sorted(changed_catalogs, reverse=True):
+      Catalog.Generate(track)
+
+    # Log admin pkginfo proposal put to Datastore.
+    log = base.AdminPackageProposalLog(
+        user=pkginfo_proposal.user, action=action,
+        filename=pkginfo_proposal.filename,
+        catalogs=pkginfo_proposal.catalogs,
+        manifests=pkginfo_proposal.manifests,
+        original_plist=original_plist,
+        install_types=pkginfo_proposal.install_types,
+        manifest_mod_access=pkginfo_proposal.manifest_mod_access,
+        approver=pkginfo_proposal.approver)
+    # The plist property is a py property of _plist, and therefore cannot be
+    # set in the constructure, so set here.
+    log.plist = pkginfo_proposal.plist
+    log.put()
+
+  def MakePackageInfoSafeToModify(self):
+    """Proposes to make a PackageInfo safe to modify."""
+    self.Propose(catalogs=[], manifests=[])
+
+  def Propose(self, **kwargs):
+    """Proposes changes to a package.
+
+    Args:
+      **kwargs: dict, changes being proposed.
+    Raises:
+      PackageInfoUpdateError: there were validation problems with the pkginfo.
+    """
+    for key in self.COMMON_PROPERTIES:
+      setattr(self, key, getattr(self.pkginfo, key))
+
+    for k, v in kwargs.iteritems():
+      setattr(self, k, v)
+    self.status = 'proposed'
+
+    self._PutAndLogPackageInfoProposalUpdate(
+        self, self.pkginfo.plist.GetXml(), self.catalogs,
+        action='propose')
+    self.ProposalMailer('proposal')
+
+  def ApproveProposal(self):
+    """Approve a pending proposal.
+
+    Raises:
+      PackageInfoProposalApprovalError: Approver not alloed to approve.
+      PackageInfoLockError: PackageInfo is locked.
+      PackageInfoUpdateError: Package is not eligible for catalogs.
+    """
+    lock = 'pkgsinfo_%s' % self.filename
+    if not gae_util.ObtainLock(lock, timeout=5.0):
+      raise PackageInfoLockError
+
+    new_catalogs = [c for c in self.catalogs if c not in self.pkginfo.catalogs]
+
+    try:
+      self.pkginfo.VerifyPackageIsEligibleForNewCatalogs(
+          new_catalogs)
+    except PackageInfoUpdateError:
+      gae_util.ReleaseLock(lock)
+      raise
+
+    approver = users.get_current_user().email()
+    if approver == self.user:
+      raise PackageInfoProposalApprovalError
+
+    self.approver = approver
+    self.status = 'approved'
+
+    self._PutAndLogPackageInfoProposalUpdate(
+        self, self.pkginfo.plist.GetXml(), self.catalogs, action='approve')
+
+    original_plist = self.pkginfo.plist.GetXml()
+    original_catalogs = self.pkginfo.catalogs
+
+    for key in self.COMMON_PROPERTIES:
+      setattr(self.pkginfo, key, getattr(self, key))
+
+    self.pkginfo.PutAndLogFromProposal(original_plist, original_catalogs)
+
+    gae_util.ReleaseLock(lock)
+
+    self.ProposalMailer('approval')
+
+    self.delete()
+
+  def RejectProposal(self):
+    """Deletes proposal without changing package."""
+    self.approver = users.get_current_user().email()
+    self.status = 'rejected'
+    self._PutAndLogPackageInfoProposalUpdate(
+        self, self.pkginfo.plist.GetXml(),
+        self.pkginfo.catalogs, action='reject')
+
+    self.ProposalMailer('rejection')
+
+    self.delete()
+
+  def ProposalMailer(self, action):
+    """Notifies admins of proposed changes and changed proposals.
+
+    Args:
+      action: string, defines what message will be sent.
+    """
+    current_user = users.get_current_user()
+    current_user_nick = current_user.nickname()
+
+    body = self._BuildProposalBody(os.environ.get('DEFAULT_VERSION_HOSTNAME'),
+                                   self.filename)
+
+    if action == 'proposal':
+      subject = 'Proposal for %s by %s' % (self.filename, current_user_nick)
+    elif action == 'approval':
+      subject = 'Proposal Approved for %s by %s' % (
+          self.filename, current_user_nick)
+    elif action == 'rejection':
+      subject = 'Proposal Rejected for %s by %s' % (
+          self.filename, current_user_nick)
+    else:
+      logging.warning('Unknown action in ProposalMailer: %s', action)
+      return
+
+    recipient, _ = settings.Settings.GetItem('email_admin_list')
+    recipient_list = [recipient, self.user]
+    return_address, _ = settings.Settings.GetItem('email_sender')
+    message = mail_tool.EmailMessage(to=recipient_list, sender=return_address,
+                                     subject=subject, body=body)
+    try:
+      deferred.defer(message.send)
+    except (deferred.Error, taskqueue.Error, apiproxy_errors.Error):
+      logging.exception('Notification failed to send.')
+
+  def _BuildProposalBody(self, hostname, filename):
+    body = ''
+    for key in self.COMMON_PROPERTIES:
+      if getattr(self, key) != getattr(self.pkginfo, key):
+        body += '%s --> %s\n' % (
+            getattr(self.pkginfo, key), getattr(self, key))
+
+    hostname = urllib.quote(hostname)
+    filename = urllib.quote(filename)
+    body += '\nhttps://%s/admin/package/%s' % (hostname, filename)
+    return body

@@ -1,11 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}Package Logs{% endblock %}
+{% block title %}Logs{% endblock %}
 
 {% block page-content %}
 
 {% if filename %}
-  <h2>Package Logs: {{ filename }}</h2>
+  <h2>
+  {% if report_type == "proposal_logs" %}
+    Proposals
+  {% else %}
+    Package
+  {% endif %}
+    Logs: {{ filename }}</h2>
   {% if is_admin %}
     <a href="/admin/package/{{ filename }}">(edit)</a>
   {% endif %}
@@ -28,49 +34,57 @@
        <th>Install Types</th>
        <th style="min-width: 60px;">Catalogs</th>
        <th style="min-width: 60px;">Manifests</th>
-       <th>User</th>
+       {% if report_type == "proposal_logs" %}
+         <th>Proposer</th>
+         <th>Approver</th>
+       {% else %}
+         <th>User</th>
+       {% endif %}
        <th>Time</th>
-       <th>Time Since</th>
+      <th>Time Since</th>
     </tr>
     {% for log in logs %}
       <tr>
         <td>
-          {{ log.action }}
+          {{ log.data.action }}
         </td>
-        {% if log.plist and log.action == "pkginfo" %}
+        {% if log.data.plist and log.data.action == "pkginfo" %}
           <td style="text-align: center;">
-            <a href="/admin/packages/logs?plist={{ log.key.id }}">
+            <a href="/admin/packages/logs?plist={{ log.data.key.id }}">
               <img src="/admin/static/file.png" alt="View plist"/></a>
           </td>
           <td>
-            <a class="zippy_toggle button" style="padding-left:10px;" title="diff_{{ log.key.id }}">View diff</a>
+            <a class="zippy_toggle button" style="padding-left:10px;" title="diff_{{ log.data.key.id }}">View diff</a>
           </td>
         {% else %}
           <td>&nbsp;</td><td>&nbsp;</td>
         {% endif %}
         {% if not filename %}
           <td>
-            <a href="/admin/packages/logs?filename={{ log.filename }}">{{ log.filename }}</a>
+            <a href="/admin/packages/logs?filename={{ log.data.filename }}">{{ log.data.filename }}</a>
           </td>
         {% endif %}
         {% if is_admin %}
           <td>
-            <a href="/admin/package/{{ log.filename }}">(edit)</a>
+            <a href="/admin/package/{{ log.data.filename }}">(edit)</a>
           </td>
         {% endif %}
-        <td>{{ log.install_types|munki_properties }}</td>
+        <td>{{ log.data.install_types|munki_properties }}</td>
         <td>{{ log.catalogs|tracks_display }}</td>
         <td>{{ log.manifests|tracks_display }}</td>
-        <td>{{ log.user }}</td>
-        <td>{{ log.mtime }}</td>
-        <td>{{ log.mtime|timesince }}</td>
+        <td>{{ log.data.user }}</td>
+        {% if report_type == "proposal_logs" %}
+          <td>{{ log.data.approver}}
+        {% endif %}
+        <td>{{ log.data.mtime }}</td>
+        <td>{{ log.data.mtime|timesince }}</td>
       </tr>
-      {% if log.plist and log.action == "pkginfo" %}
-      <tr id="diff_{{ log.key.id }}" class="diffrow">
+      {% if log.data.plist and log.data.action == "pkginfo" %}
+      <tr id="diff_{{ log.data.key.id }}" class="diffrow">
         <td colspan="2">&nbsp;</td>
         <td colspan="8">
           <span class="diffcode">
-          {% for line in log.plist_diff %}
+          {% for line in log.data.plist_diff %}
             {% if line.start_omitting %}
               <span class="ellipsis" onclick="simian.addClass(this, 'visible');">&nbsp;&nbsp;&nbsp;&#8942;&nbsp;&nbsp;&nbsp;&nbsp;</span>
               <span class="omittable">{% endif %}

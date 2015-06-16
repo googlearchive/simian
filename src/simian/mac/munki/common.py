@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Shared resources for handlers."""
 
@@ -43,8 +44,7 @@ CLIENT_ID_FIELDS = {
     'config_track': str, 'track': str, 'site': str, 'office': str,
     'os_version': str, 'client_version': str, 'on_corp': bool,
     'last_notified_datetime': str, 'uptime': float, 'root_disk_free': int,
-    'user_disk_free': int, 'global_uuid': str, 'applesus': bool,
-    'runtype': str,
+    'user_disk_free': int, 'applesus': bool, 'runtype': str,
 }
 CONNECTION_DATETIMES_LIMIT = 10
 CONNECTION_DATES_LIMIT = 30
@@ -78,26 +78,6 @@ class ManifestNotFoundError(Error):
 
 class ManifestDisabledError(Error):
   """Disable manifest was requested."""
-
-
-class ReportFeedback(object):
-  """Class container for feedback status constants."""
-
-  # Client should proceed as normally defined.
-  OK = 'OK'
-
-  # Client should NOT exit and instead continue, even if this means masking
-  # an error which it would usually stop running because of.
-  FORCE_CONTINUE = 'FORCE_CONTINUE'
-
-  # Client should exit instead of continuing as normal.
-  EXIT = 'EXIT'
-
-  # Client should repair (download and reinstall) itself.
-  REPAIR = 'REPAIR'
-
-  # Client should send logs to the server.
-  UPLOAD_LOGS = 'UPLOAD_LOGS'
 
 
 def _SaveFirstConnection(client_id, computer):
@@ -142,7 +122,7 @@ def LogClientConnection(
     apple_updates_to_install: optional list of string Apple updates remaining
         to install.
     ip_address: str IP address of the connection.
-    report_feedback: str ReportFeedback command sent to the client.
+    report_feedback: dict ReportFeedback commands sent to the client.
     computer: optional models.Computer object.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
   """
@@ -191,7 +171,6 @@ def LogClientConnection(
     c.uptime = _client_id['uptime']
     c.root_disk_free = _client_id['root_disk_free']
     c.user_disk_free = _client_id['user_disk_free']
-    c.global_uuid = _client_id['global_uuid']
     c.runtype = _client_id['runtype']
     c.ip_address = _ip_address
 
@@ -214,7 +193,7 @@ def LogClientConnection(
       # Increment the number of preflight connections since the last successful
       # postflight, but only if the current connection is not going to exit due
       # to report feedback (WWAN, GoGo InFlight, etc.)
-      if _report_feedback != ReportFeedback.EXIT:
+      if not _report_feedback or not _report_feedback.get('exit'):
         if c.preflight_count_since_postflight is not None:
           c.preflight_count_since_postflight += 1
         else:
@@ -395,9 +374,9 @@ def WriteComputerMSULog(uuid, details):
 
 def GetBoolValueFromString(s):
   """Returns True for true/1 strings, and False for false/0, None otherwise."""
-  if s.lower() == 'true' or s == '1':
+  if s and s.lower() == 'true' or s == '1':
     return True
-  elif s.lower() == 'false' or s == '0':
+  elif s and s.lower() == 'false' or s == '0':
     return False
   else:
     return None
@@ -428,6 +407,8 @@ def KeyValueStringToDict(s, delimiter='|'):
 def ParseClientId(client_id, uuid=None):
   """Splits a client id string and converts all key/value pairs to a dict.
 
+  Also, this truncates string values to 500 characters.
+
   Args:
     client_id: string client id with "|" as delimiter.
     uuid: optional string uuid to override the uuid in client_id.
@@ -454,11 +435,14 @@ def ParseClientId(client_id, uuid=None):
   # If any required fields were not present in the client id string, add them.
   # Also cast all values to their defined output types.
   for field, value_type in CLIENT_ID_FIELDS.iteritems():
-    if field not in out:
+    if field not in out or out[field] is None:
       out[field] = None
-    elif value_type is bool and out[field] is not None:
+    elif value_type is bool:
       out[field] = GetBoolValueFromString(out[field])
-    elif out[field] is not None and value_type is not str:
+    elif value_type is str:
+      # truncate str fields to 500 characters, the StringProperty limit.
+      out[field] = out[field][:500]
+    else:
       try:
         out[field] = value_type(out[field])
       except ValueError:

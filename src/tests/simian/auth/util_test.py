@@ -1,30 +1,32 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2012 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """settings module tests."""
 
 
 
-from google.apputils import app
-from google.apputils import basetest
 import mox
 import stubout
-from simian.auth import util
+
+from google.apputils import app
+from google.apputils import basetest
 from tests.simian import test_settings
+from simian.auth import util
 
 
 class SettingsModuleTest(mox.MoxTestBase):
@@ -73,6 +75,23 @@ class SettingsModuleTest(mox.MoxTestBase):
     self.assertEqual(ca_id, 'FOO')
     self.mox.VerifyAll()
 
+  def testGetCaParametersWithOmitServerPrivateKey(self):
+    """Test GetCaParameters()."""
+    self.settings.CA_ID = None
+
+    self.mox.StubOutWithMock(util, 'GetCaId')
+    util.GetCaId(self.settings).AndReturn(None)  # CA_ID=None
+
+    self.mox.ReplayAll()
+    p = util.GetCaParameters(self.settings, omit_server_private_key=True)
+    self.assertEqual(p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
+    self.assertEqual(
+        p.server_public_cert_pem, self.settings.SERVER_PUBLIC_CERT_PEM)
+    self.assertEqual(p.required_issuer, self.settings.REQUIRED_ISSUER)
+    self.assertEqual(p.server_private_key_pem, None)
+    self.assertTrue(p.ca_id is None)
+    self.mox.VerifyAll()
+
   def testGetCaParametersWhenFollowCaIdValueNone(self):
     """Test GetCaParameters()."""
     self.settings.CA_ID = None
@@ -82,14 +101,11 @@ class SettingsModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     p = util.GetCaParameters(self.settings)
-    self.assertEqual(
-        p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
+    self.assertEqual(p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         p.server_public_cert_pem, self.settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        p.server_private_key_pem,  'foo_server_private_pem')
-    self.assertEqual(
-        p.required_issuer, self.settings.REQUIRED_ISSUER)
+    self.assertEqual(p.server_private_key_pem,  'foo_server_private_pem')
+    self.assertEqual(p.required_issuer, self.settings.REQUIRED_ISSUER)
     self.assertTrue(p.ca_id is None)
     self.mox.VerifyAll()
 
@@ -100,14 +116,11 @@ class SettingsModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     p = util.GetCaParameters(self.settings, None)  # Force primary CA settings
-    self.assertEqual(
-        p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
+    self.assertEqual(p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         p.server_public_cert_pem, self.settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(
-        p.server_private_key_pem,  'foo_server_private_pem')
-    self.assertEqual(
-        p.required_issuer, self.settings.REQUIRED_ISSUER)
+    self.assertEqual(p.server_private_key_pem,  'foo_server_private_pem')
+    self.assertEqual(p.required_issuer, self.settings.REQUIRED_ISSUER)
     self.assertTrue(p.ca_id is None)
     self.mox.VerifyAll()
 
@@ -169,7 +182,7 @@ class SettingsModuleTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertRaises(
-        util.CaParametersError,util.GetCaParameters, self.settings)
+        util.CaParametersError, util.GetCaParameters, self.settings)
     self.mox.VerifyAll()
 
   def testGetCaParametersWhenInvalidCaId(self):
@@ -181,10 +194,24 @@ class SettingsModuleTest(mox.MoxTestBase):
     """Test GetCaParametersDefault()."""
     self.mox.StubOutWithMock(util, 'GetCaParameters')
     settings = {'whatever': 1}
-    util.GetCaParameters(settings, None).AndReturn('ok')
+    util.GetCaParameters(
+        settings, None, omit_server_private_key=False).AndReturn('ok')
 
     self.mox.ReplayAll()
     self.assertEqual('ok', util.GetCaParametersDefault(settings))
+    self.mox.VerifyAll()
+
+  def testGetCaParametersDefaultWithOmitServerPrivateKey(self):
+    """Test GetCaParametersDefault()."""
+    self.mox.StubOutWithMock(util, 'GetCaParameters')
+    settings = {'whatever': 1}
+    util.GetCaParameters(
+        settings, None, omit_server_private_key=True).AndReturn('ok')
+
+    self.mox.ReplayAll()
+    self.assertEqual(
+        'ok',
+        util.GetCaParametersDefault(settings, omit_server_private_key=True))
     self.mox.VerifyAll()
 
 

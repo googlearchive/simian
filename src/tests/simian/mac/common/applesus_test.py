@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Apple SUS module tests."""
@@ -22,12 +23,13 @@
 
 import plistlib
 
+import mox
+import stubout
+
 import tests.appenginesdk
 import datetime
 from google.apputils import app
 from google.apputils import basetest
-import mox
-import stubout
 from simian.mac.common import applesus
 
 
@@ -54,6 +56,25 @@ class AppleModuleTest(mox.MoxTestBase):
     return ''.join(buf)
 
 
+  def testGenerateAppleSUSCatalogWhereUntouchedDoesNotExist(self):
+    """Test GenerateAppleSUSCatalog() where untouched catalog does not exist."""
+    os_version = 'foo-version'
+    track = 'foo'
+
+    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
+    self.mox.StubOutWithMock(applesus.models.AppleSUSCatalog, 'get_by_key_name')
+
+    applesus.gae_util.ReleaseLock(
+        applesus.CATALOG_REGENERATION_LOCK_NAME % track)
+    applesus.models.AppleSUSCatalog.get_by_key_name(
+        '%s_untouched' % os_version).AndReturn(None)
+
+    self.mox.ReplayAll()
+    catalog, new_plist = applesus.GenerateAppleSUSCatalog(os_version, track)
+    self.assertEqual(None, catalog)
+    self.assertEqual(None, new_plist)
+    self.mox.VerifyAll()
+
   def testGenerateAppleSUSCatalog(self):
     """Test GenerateAppleSUSCatalog()."""
     catalog_xml = self._GetTestData('applesus.sucatalog')
@@ -72,14 +93,19 @@ class AppleModuleTest(mox.MoxTestBase):
     mock_plist = self.mox.CreateMockAnything()
     mock_new_catalog_obj = self.mox.CreateMockAnything()
 
-    self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'all')
+    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
     self.mox.StubOutWithMock(applesus.models.AppleSUSCatalog, 'get_by_key_name')
     self.mox.StubOutWithMock(applesus.models, 'AppleSUSCatalog')
+    self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'AllActive')
 
-    applesus.models.AppleSUSProduct.all().AndReturn(mock_query)
-    mock_query.filter('tracks =', track).AndReturn(products)
+    applesus.gae_util.ReleaseLock(
+        applesus.CATALOG_REGENERATION_LOCK_NAME % track)
+
     applesus.models.AppleSUSCatalog.get_by_key_name(
         '%s_untouched' % os_version).AndReturn(mock_catalog_obj)
+
+    applesus.models.AppleSUSProduct.AllActive().AndReturn(mock_query)
+    mock_query.filter('tracks =', track).AndReturn(products)
 
     mock_datetime = self.mox.CreateMockAnything()
     utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)

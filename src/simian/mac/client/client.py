@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Module containing classes to connect to Simian as a Mac client."""
 
@@ -28,7 +29,6 @@ import platform
 import re
 import subprocess
 from simian.client import client
-from simian.client import uuid
 from simian.mac.munki import pkgs
 from simian.mac.munki import plist
 from simian.mac.common import hw
@@ -75,7 +75,7 @@ class BaseSimianClient(object):
       return ''
 
   def _GetSystemProfile(self):
-    """Get hardware profile
+    """Get hardware profile.
 
     Returns:
       dict from hw.SystemProfile.GetProfile
@@ -85,47 +85,6 @@ class BaseSimianClient(object):
     sp = hw.SystemProfile(include_only=['network', 'system'])
     profile = sp.GetProfile()
     return profile
-
-  def _GetMachineUuid(self, profile):
-    """Return machine uuid for system profile.
-
-    Args:
-      profile: dict of system profile
-    Returns:
-      str uuid or None if one cannot be determined
-    """
-    muuid = uuid.MachineUuid()
-    for i in xrange(10):  # covers en0-en9
-      ki = 'interface_en%d' % i
-      if ki in profile:
-        intf_type = profile[ki]
-        if '%s_mac' % intf_type in profile:
-          mac = profile['%s_mac' % intf_type]
-          if intf_type == 'airport':
-            muuid.SetWirelessMac(i, mac)
-          elif intf_type == 'ethernet':
-            muuid.SetEthernetMac(i, mac)
-    if 'platform_uuid' in profile:
-      muuid.SetMachineHardwareId(profile['platform_uuid'])
-
-    try:
-      return muuid.GenerateMachineUuid()
-    except uuid.GenerateMachineUuidError:
-      return None
-
-  def GetGlobalUuid(self):
-    """Returns a global, platform independant UUID for this machine.
-
-    Returns:
-      str, a global, platform independent, UUID for this machine, or None if
-      there was a profile with System Profiler.
-    """
-    try:
-      profile = self._GetSystemProfile()
-    except hw.SystemProfilerError:
-      return None
-
-    return self._GetMachineUuid(profile)
 
 
 class SimianClient(BaseSimianClient, client.SimianClient):

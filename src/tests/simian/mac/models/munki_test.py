@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2012 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Munki models module tests."""
@@ -22,13 +23,15 @@
 
 
 import datetime
-import re
-import types
+
 import tests.appenginesdk
-from google.apputils import app
-from google.apputils import basetest
 import mox
 import stubout
+
+from google.appengine.ext import testbed
+
+from google.apputils import app
+from google.apputils import basetest
 from tests.simian.mac.common import test
 from simian.mac.models import munki as models
 
@@ -90,7 +93,8 @@ class CatalogTest(mox.MoxTestBase):
 
     mock_model = self.mox.CreateMockAnything()
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('catalogs =', name).AndReturn([pkg1, pkg2])
+    mock_model.filter('catalogs =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([pkg1, pkg2])
     pkg1.plist.GetXmlContent(indent_num=1).AndReturn(plist1)
     pkg2.plist.GetXmlContent(indent_num=1).AndReturn(plist2)
 
@@ -113,18 +117,20 @@ class CatalogTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
   def testGenerateWithNoPkgsinfo(self):
-    """Tests Generate() where no coorresponding PackageInfo exist."""
+    """Tests Catalog.Generate() where no coorresponding PackageInfo exist."""
     name = 'badname'
     self._MockObtainLock('catalog_lock_%s' % name)
+
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('catalogs =', name).AndReturn([])
+    mock_model.filter('catalogs =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([])
+
     self._MockReleaseLock('catalog_lock_%s' % name)
 
     self.mox.ReplayAll()
-    self.assertRaises(
-        models.CatalogGenerateError, models.Catalog.Generate, name)
+    models.Catalog.Generate(name)
     self.mox.VerifyAll()
 
   def testGenerateWithPlistParseError(self):
@@ -136,7 +142,8 @@ class CatalogTest(mox.MoxTestBase):
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('catalogs =', name).AndReturn([pkg1])
+    mock_model.filter('catalogs =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([pkg1])
     mock_plist1.GetXmlContent(indent_num=1).AndRaise(models.plist_lib.Error)
     self._MockReleaseLock('catalog_lock_%s' % name)
 
@@ -161,7 +168,8 @@ class CatalogTest(mox.MoxTestBase):
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('catalogs =', name).AndReturn([pkg1, pkg2])
+    mock_model.filter('catalogs =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([pkg1, pkg2])
     mock_plist1.GetXmlContent(indent_num=1).AndReturn(plist1)
     mock_plist2.GetXmlContent(indent_num=1).AndReturn(plist2)
 
@@ -254,7 +262,8 @@ class ManifestTest(mox.MoxTestBase):
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('manifests =', name).AndReturn([pkg1, pkg2])
+    mock_model.filter('manifests =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([pkg1, pkg2])
 
     mock_manifest = self.mox.CreateMockAnything()
     mock_manifest.plist = self.mox.CreateMockAnything()
@@ -280,7 +289,8 @@ class ManifestTest(mox.MoxTestBase):
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('manifests =', name).AndRaise(models.db.Error)
+    mock_model.filter('manifests =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndRaise(models.db.Error)
 
     self._MockReleaseLock('manifest_lock_%s' % name)
 
@@ -296,13 +306,13 @@ class ManifestTest(mox.MoxTestBase):
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
-    mock_model.filter('manifests =', name).AndReturn([])
+    mock_model.filter('manifests =', name).AndReturn(mock_model)
+    mock_model.fetch(None).AndReturn([])
 
     self._MockReleaseLock('manifest_lock_%s' % name)
 
     self.mox.ReplayAll()
-    self.assertRaises(
-        models.ManifestGenerateError, models.Manifest.Generate, name)
+    models.Manifest.Generate(name)
     self.mox.VerifyAll()
 
   def testGenerateLocked(self):
@@ -329,10 +339,20 @@ class PackageInfoTest(mox.MoxTestBase):
   """Test PackageInfo class."""
 
   def setUp(self):
+    self.testbed = testbed.Testbed()
+    self.testbed.setup_env(
+        USER_EMAIL='foo@example.com',
+        USER_ID='1337',
+        USER_IS_ADMIN='0')
+    self.testbed.activate()
+    self.testbed.init_user_stub()
+
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
   def tearDown(self):
+    self.testbed.deactivate()
+
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
@@ -458,6 +478,21 @@ class PackageInfoTest(mox.MoxTestBase):
     self.assertRaises(models.PackageInfoLockError, p.Update)
     self.mox.VerifyAll()
 
+  def testMakeSafeToModifyWithoutProposals(self):
+    """Test MakeSafeToModify() with out proposals and package in catalogs."""
+    p = models.PackageInfo()
+    p.catalogs = ['unstable', 'testing', 'stable']
+    p.manifests = ['unstable', 'testing', 'stable']
+
+    self.mox.StubOutWithMock(models.PackageInfo, 'approval_required')
+    models.PackageInfo.approval_required = False
+    self.mox.StubOutWithMock(models.PackageInfo, 'Update')
+    models.PackageInfo.Update(catalogs=[], manifests=[])
+
+    self.mox.ReplayAll()
+    p.MakeSafeToModify()
+    self.mox.VerifyAll()
+
   def _UpdateTestHelper(
       self, filename, pkginfo, plist_xml=None, create_new=False,
       safe_to_modify=True, unsafe_properties_changed=False,
@@ -475,6 +510,9 @@ class PackageInfoTest(mox.MoxTestBase):
     minimum_os_version = kwargs.get('minimum_os_version')
     maximum_os_version = kwargs.get('maximum_os_version')
     force_install_after_date = kwargs.get('force_install_after_date')
+
+    self.mox.StubOutWithMock(models.PackageInfo, 'approval_required')
+    models.PackageInfo.approval_required = False
 
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     self.mox.StubOutWithMock(models.PackageInfo, 'get_by_key_name')
@@ -546,7 +584,7 @@ class PackageInfoTest(mox.MoxTestBase):
         changed_catalogs = pkginfo.catalogs
 
     for catalog in sorted(changed_catalogs, reverse=True):
-      models.Catalog.Generate(catalog, delay=mox.IsA(int)).AndReturn(None)
+      models.Catalog.Generate(catalog).AndReturn(None)
 
     self.mox.StubOutWithMock(models.users, 'get_current_user')
     mock_user = self.mox.CreateMockAnything()
@@ -789,6 +827,12 @@ class PackageInfoTest(mox.MoxTestBase):
         self._UpdateTestHelper,
         filename, None, plist_xml=xml, create_new=True, filename_exists=True)
     self.mox.VerifyAll()
+
+  def testBuildProposalBodyUrlEncodesFileName(self):
+    p = models.PackageInfo()
+    pip = models.PackageInfoProposal._New(p)
+    body = pip._BuildProposalBody('foo.com', 'file name.dmg')
+    self.assertTrue('https://foo.com/admin/package/file%20name.dmg' in body)
 
 
 def main(unused_argv):

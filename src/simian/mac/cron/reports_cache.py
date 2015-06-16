@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Module containing url handler for report calculation.
 
@@ -241,7 +242,10 @@ def _GenerateInstallCounts():
       #logging.debug('Continuing with cursor: %s', cursor_obj.text_value)
 
     # Loop over new InstallLog entries.
-    installs = query.fetch(1000)
+    try:
+      installs = query.fetch(1000)
+    except:
+      installs = None
     if not installs:
       #logging.debug('No more installs to process.')
       models.ReportsCache.SetInstallCounts(pkgs)
@@ -307,7 +311,7 @@ def _GenerateTrendingInstallsCache(since_hours=None):
   dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=since_hours * 60)
   query = models.InstallLog.all().filter('mtime >', dt)
   for install in gae_util.QueryIterator(query):
-    pkg = str(install.package)
+    pkg = install.package.encode('utf-8')
     if install.IsSuccess():
       trending['success'][pkg] = trending['success'].setdefault(pkg, 0) + 1
       total_success += 1

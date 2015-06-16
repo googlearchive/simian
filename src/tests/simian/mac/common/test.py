@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 
 """Common classes for Simian unit tests.
 
@@ -25,15 +26,19 @@ Contents:
 
 
 import tests.appenginesdk
-from google.apputils import app
-from google.apputils import basetest
+
 import mox
 import stubout
-from tests.simian.mac.common import test_base as test_base
 
+from google.appengine.ext import testbed
+
+from google.apputils import app
+from google.apputils import basetest
+
+from tests.simian.mac.common import test_base as test_base
+from simian import settings
 from simian.mac import models
 from simian.mac.common import auth
-from simian import settings
 
 
 class GenericContainer(test_base.GenericContainer):
@@ -42,6 +47,27 @@ class GenericContainer(test_base.GenericContainer):
 
 class RequestHandlerTest(test_base.RequestHandlerTest):
   """Test class for RequestHandler derived classes."""
+
+  def setUp(self):
+    super(RequestHandlerTest, self).setUp()
+    self.testbed = testbed.Testbed()
+    self.testbed.setup_env(
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
+
+    self.testbed.activate()
+    self.testbed.init_datastore_v3_stub()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_taskqueue_stub()
+    self.testbed.init_user_stub()
+    self.testbed.init_mail_stub()
+    settings.ADMINS = ['admin@example.com']
+
+  def tearDown(self):
+    super(RequestHandlerTest, self).tearDown()
+    self.testbed.deactivate()
 
   def MockDoUserAuth(self, user=None, is_admin=None, fail=False):
     """Mock calling auth.DoUserAuth().
@@ -121,21 +147,6 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
     else:
       auth.DoAnyAuth().AndReturn(and_return)
 
-  def MockDoAdminMachineAuth(self, fail=False, and_return=None, **kwargs):
-    """Mock calling auth.AdminMachineAuth().
-
-    Args:
-      fail: bool, whether to fail or not
-      and_return: any, variable to pass to AndReturn, default None
-    """
-    if not 'authDoAdminMachineAuth' in self._set_mock:
-      self.mox.StubOutWithMock(auth, 'DoAdminMachineAuth')
-      self._set_mock['authDoAdminMachineAuth'] = 1
-    if fail:
-      auth.DoAdminMachineAuth(**kwargs).AndRaise(auth.NotAuthenticated)
-    else:
-      auth.DoAdminMachineAuth(**kwargs).AndReturn(and_return)
-
   def MockModelStaticBase(self, model_name, method_name, *args):
     """Mock a model static method, return a mock setup.
 
@@ -213,10 +224,6 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
         self.GetTestClassModule().models,
         model_name)(*args, **kwargs).AndReturn(model)
     return model
-
-
-# Provide sane settings values
-settings.ADMINS = ['admin@example.com']
 
 
 def main(unused_argv):

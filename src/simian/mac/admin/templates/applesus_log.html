@@ -29,7 +29,7 @@
           </td>
         {% endif %}
         <td>{{ log.action }}</td>
-        <td>{{ log.tracks|tracks_display }}</td>
+        <td>{{ log.tracks|tracks_display_no_proposals }}</td>
         <td>{{ log.user|default_if_none:"(auto)" }}</td>
         <td>{{ log.mtime }}</td>
         <td>{{ log.mtime|timesince }}</td>

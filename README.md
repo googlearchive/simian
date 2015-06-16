@@ -1,6 +1,6 @@
 ### Overview
 
-**Note 2: Simian now supports the recently released Munki2 client!**
+**Note 2: Simian now supports Munki2 categories!**
 
 Simian is an enterprise-class Mac OS X software deployment solution hosted on Google App Engine (why [App Engine](../../wiki/AppEngineAtAGlance)?). It scales to any enterprise fleet size automatically, and offers a future proof client extended from the active [Munki open-source project](https://github.com/munki/munki).
 

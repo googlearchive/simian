@@ -48,14 +48,21 @@
     &#9660;
   </style>
 
-  <div style="margin: 15px 0;">
-    <button class="red upload" onclick="showPackageCreator(); void(0);">New Package</button>
-  </div>
+  {% if report_type == "packages" %}
+    <div style="margin: 15px 0;">
+      <button class="red upload" onclick="showPackageCreator(); void(0);">New Package</button>
+      {% if not all_packages and report_type = 'packages' %}
+        <a class="blue button" href="/admin/packages?all_packages=1">Show Inactive Packages</a>
+      {% else %}
+        <a class="blue button" href="/admin/packages">Show Active Packages Only</a>
+      {% endif %}
+    </div>
+  {% endif %}
 
   <div id="newpackage" class="modaldialog">
   <h2>Create PackageInfo</h2><br/><br/>
   <form action="/admin/package" method="post" enctype="multipart/form-data">
-    <input type="file" name="new_pkginfo_plist"  accept=".plist,text/*" />
+    <input type="file" name="new_pkginfo_plist" accept=".plist,text/*" />
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
     <button type="submit">Upload Plist</button>
   </form>
@@ -78,7 +85,7 @@
         <tr>
           <th class="sortable-column-sortby-alpha">Package</th>
           <th>Logs</th>
-          {% if is_admin or is_support_user %}
+          {% if is_admin or can_upload or is_support_user %}
             <th style="min-width: 120px;">Files</th>
           {% else %}
             <th style="min-width: 70px;">File</th>
@@ -88,8 +95,8 @@
           <th>Avg Secs</th>
           <th>Pending**</th>
           <th class="sortable-column-sortby-alpha">Properties</th>
-          <th class="sortable-column-sortby-alpha" style="min-width: 60px;">Catalogs</th>
-          <th class="sortable-column-sortby-alpha" style="min-width: 60px;">Manifests</th>
+          <th class="sortable-column-sortby-alpha" style="min-width: 80px;">Catalogs</th>
+          <th class="sortable-column-sortby-alpha" style="min-width: 80px;">Manifests</th>
           <th class="sortable-column-sortby-alpha">Manifest Mod Access</th>
         </tr>
       </thead>
@@ -98,7 +105,7 @@
         <tr {% if pkg.filename == active_pkg %} class="activepkg"{% endif %}
             id="package-{{ pkg.filename }}">
           <td>
-            {% if is_admin or is_support_user %}
+            {% if is_admin or can_upload or is_support_user %}
               <a href="/admin/package/{{ pkg.filename }}"
                  title="{{ pkg.description|escape }}">{{ pkg.munki_name }}</a>
             {% else %}
@@ -106,15 +113,22 @@
                 {{ pkg.munki_name }}
               </span>
             {% endif %}
+            <a class="anchor" href="#package-{{ pkg.filename|urlencode }}" title="Link to this package">&para;</a>
           </td>
           <td><a href="/admin/packages/logs?filename={{ pkg.filename }}">logs</a></td>
-            {% if is_admin or is_support_user %}
+            {% if is_admin or can_upload or is_support_user %}
             <td>
               <a href="/admin/package/{{ pkg.filename }}?plist_xml=1"
                  title="View pkginfo"><img src="/admin/static/file.png"
                                            alt="View pkginfo" /></a>
-              <a href="/pkgs/{{ pkg.filename }}" title="{{ pkg.filename }}"
-                 class="downloadpkg">{{ pkg.file_size|filesizeformat }}</a>
+              {% if is_admin or is_support_user %}
+                <a href="/pkgs-userauth/{{ pkg.filename }}" title="{{ pkg.filename }}"
+                   class="downloadpkg">{{ pkg.file_size|filesizeformat }}</a>
+              {% else %}
+                <span title="{{ pkg.filename }}">
+                  {{ pkg.file_size|filesizeformat }}
+                </span>
+              {% endif %}
             {% else %}
             <td style="text-align: right;">
               <span title="{{ pkg.filename }}">
@@ -123,22 +137,24 @@
             {% endif %}
           </td>
           <td style="text-align: right;">
-            <a href="/admin/installs?pkg={{ pkg.munki_name }}"
+            <a href="/admin/installs?pkg={{ pkg.munki_name|urlencode }}"
                title="Successful Installs">{{ pkg.count }}</a>
           </td>
           <td style="text-align: right;">
-            <a href="/admin/installs?pkg={{ pkg.munki_name }}&failures=1"
+            <a href="/admin/installs?pkg={{ pkg.munki_name|urlencode }}&failures=1"
                title="Failed Installs">{{ pkg.fail_count }}</a>
           </td>
           <td style="text-align: right;">{{ pkg.duration_seconds_avg }}</td>
           <td style="text-align: right;">
-            <a href="/admin/installs?pkg={{ pkg.munki_name }}&pending=1"
+            <a href="/admin/installs?pkg={{ pkg.munki_name|urlencode }}&pending=1"
                title="Pending Installs">{{ pkg.pending_count }}</a>
           </td>
           <td>
             {% spaceless %}
               {{ pkg.install_types|munki_properties }}
-              {% if pkg.unattended %}{{ 'unattended_install'|munki_property }}{% endif %}
+              {% if pkg.unattended %}
+                {{ 'unattended_install'|munki_property }}
+              {% endif %}
               {{ pkg.force_install_after_date|munki_property_forcedate }}
             {% endspaceless %}
           </td>

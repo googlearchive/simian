@@ -7,6 +7,7 @@
 
 
 
+import collections
 import datetime
 import logging
 import os
@@ -22,91 +23,115 @@ from simian.mac.admin import xsrf
 from simian.mac.common import auth
 
 
+
 QUERY_LIMITS = [25, 50, 100, 250, 500, 1000, 2000]
 
 DEFAULT_COMPUTER_FETCH_LIMIT = 25
 
-MENU = [
-    {'type': 'summary', 'url': '/admin', 'name': 'Summary'},
-
-    {'type': 'search', 'url': 'javascript:simian.showSearch(); void(0);',
-     'name': 'Search'},
-
-    {'type': 'munki_packages', 'name': 'Munki Packages', 'subitems': [
-        {'type': 'packages', 'url': '/admin/packages', 'name': 'Package Admin'},
-        {'type': 'package_logs', 'url': '/admin/packages/logs', 'name': 'Logs'},
-        {'type': 'packages_historical', 'url': '/admin/packages?historical=1',
-         'name': 'Historical List'},
-        {'type': 'packages_installs', 'url': '/admin/installs',
-         'name': 'Installs'},
-        {'type': 'packages_failures',
-         'url': '/admin/installs?failures=1', 'name': 'Failures'},
-        {'type': 'packages_problems', 'url': '/admin/installproblems',
-         'name': 'Other Install Problems'}
-    ]},
-
-    {'type': 'apple_updates', 'name': 'Apple Updates', 'subitems': [
-        {'type': 'apple_applesus', 'url': '/admin/applesus',
-         'name': 'Catalog Admin'},
-        {'type': 'apple_logs', 'url': '/admin/applesus/logs',
-         'name': 'Logs'},
-        {'type': 'apple_historical', 'url': '/admin/packages?applesus=1',
-         'name': 'Historical List'},
-        {'type': 'apple_installs', 'url': '/admin/installs?applesus=1',
-         'name': 'Installs'},
-        {'type': 'apple_failures',
-         'url': '/admin/installs?applesus=1&failures=1',
-         'name': 'Failures'}
-    ]},
-
-    {'type': 'manifests', 'name': 'Manifests', 'subitems': [
-        {'type': 'manifests_admin', 'url': '/admin/manifest_modifications',
-         'name': 'Modification Admin'},
-        {'type': 'manifests_aliases', 'url': '/admin/package_alias',
-         'name': 'Package Aliases'},
-        {'type': 'manifest_stable', 'url': '/admin/manifest/stable',
-         'name': 'View Stable'},
-        {'type': 'manifest_testing', 'url': '/admin/manifest/testing',
-         'name': 'View Testing'},
-        {'type': 'manifest_unstable', 'url': '/admin/manifest/unstable',
-         'name': 'View Unstable'}
-    ]},
-
-    {'type': 'admin_tools', 'name': 'Admin Tools', 'admin_only': True,
-     'subitems': [
-         {'type': 'acl_groups', 'url': '/admin/acl_groups',
-          'name': 'ACL Groups'},
-         {'type': 'config', 'url': '/admin/config',
-          'name': 'Configuration'},
-         {'type': 'ip_blacklist', 'url': '/admin/ip_blacklist',
-          'name': 'IP Blacklist'},
-         {'type': 'lock_admin', 'url': '/admin/lock_admin',
-          'name': 'Lock Admin'},
-         {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'},
-    ]},
-
-    {'type': 'tags', 'url': '/admin/tags', 'name': 'Tags'},
-
-    {'title': 'Client Reports'},
-
-    {'type': 'broken_clients', 'url': '/admin/brokenclients',
-     'name': 'Broken Clients'},
-    {'type': 'diskfree', 'url': '/admin/diskfree', 'name': 'Low Disk Space'},
-    {'type': 'uptime', 'url': '/admin/uptime', 'name': 'Long Uptime'},
-    {'type': 'offcorp', 'url': '/admin/offcorp', 'name': 'Longest Off Corp'},
-    {'type': 'loststolen', 'url': '/admin/loststolen',
-     'name': 'Lost/Stolen Computers'},
-    {'type': 'msu_gui_logs', 'url': '/admin/msulogsummary',
-     'name': 'MSU GUI Logs'},
-    {'type': 'preflight_exits', 'url': '/admin/preflightexits',
-     'name': 'Preflight Exits'},
-    {'type': 'usersettings_knobs', 'url': '/admin/user_settings',
-     'name': 'UserSettings Knobs'}
-]
-
 
 class Error(Exception):
   """Base Error."""
+
+
+def GetMenu():
+  """Returns an OrderedDict with menu contents."""
+  menu = collections.OrderedDict()
+  menu_items = [
+      {'type': 'summary', 'url': '/admin', 'name': 'Summary'},
+
+      {'type': 'search', 'url': 'javascript:simian.showSearch(); void(0);',
+       'name': 'Search'},
+
+      {'type': 'munki_packages', 'name': 'Munki Packages', 'subitems': [
+          {'type': 'packages', 'url': '/admin/packages',
+           'name': 'Package Admin'},
+          {'type': 'proposals', 'url': '/admin/proposals',
+           'name': 'Pending Proposals'},
+          {'type': 'package_logs', 'url': '/admin/packages/logs',
+           'name': 'Package Logs'},
+          {'type': 'proposal_logs', 'url': '/admin/proposals/logs',
+           'name': 'Proposal Logs'},
+          {'type': 'packages_historical',
+           'url': '/admin/packages?historical=1', 'name': 'Historical List'},
+          {'type': 'packages_installs', 'url': '/admin/installs',
+           'name': 'Installs'},
+          {'type': 'packages_failures',
+           'url': '/admin/installs?failures=1', 'name': 'Failures'},
+          {'type': 'packages_problems', 'url': '/admin/installproblems',
+           'name': 'Other Install Problems'}
+      ]},
+
+      {'type': 'apple_updates', 'name': 'Apple Updates', 'subitems': [
+          {'type': 'apple_applesus', 'url': '/admin/applesus',
+           'name': 'Catalog Admin'},
+          {'type': 'apple_logs', 'url': '/admin/applesus/logs',
+           'name': 'Logs'},
+          {'type': 'apple_historical', 'url': '/admin/packages?applesus=1',
+           'name': 'Historical List'},
+          {'type': 'apple_installs', 'url': '/admin/installs?applesus=1',
+           'name': 'Installs'},
+          {'type': 'apple_failures',
+           'url': '/admin/installs?applesus=1&failures=1',
+           'name': 'Failures'}
+      ]},
+
+      {'type': 'manifests', 'name': 'Manifests', 'subitems': [
+          {'type': 'manifests_admin', 'url': '/admin/manifest_modifications',
+           'name': 'Modification Admin'},
+          {'type': 'manifests_aliases', 'url': '/admin/package_alias',
+           'name': 'Package Aliases'},
+          {'type': 'manifest_stable', 'url': '/admin/manifest/stable',
+           'name': 'View Stable'},
+          {'type': 'manifest_testing', 'url': '/admin/manifest/testing',
+           'name': 'View Testing'},
+          {'type': 'manifest_unstable', 'url': '/admin/manifest/unstable',
+           'name': 'View Unstable'}
+      ]},
+
+      {'type': 'admin_tools', 'name': 'Admin Tools', 'admin_only': True,
+       'subitems': [
+           {'type': 'acl_groups', 'url': '/admin/acl_groups',
+            'name': 'ACL Groups'},
+           {'type': 'config', 'url': '/admin/config',
+            'name': 'Configuration'},
+           {'type': 'ip_blacklist', 'url': '/admin/ip_blacklist',
+            'name': 'IP Blacklist'},
+           {'type': 'lock_admin', 'url': '/admin/lock_admin',
+            'name': 'Lock Admin'},
+           {'type': 'release_report', 'url': '/admin/release_report',
+            'name': 'Release Report'},
+           {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'}
+      ]},
+
+      {'type': 'tags', 'url': '/admin/tags', 'name': 'Tags'},
+
+      {'title': 'Client Reports'},
+
+      {'type': 'broken_clients', 'url': '/admin/brokenclients',
+       'name': 'Broken Clients'},
+      {'type': 'diskfree', 'url': '/admin/diskfree', 'name': 'Low Disk Space'},
+      {'type': 'uptime', 'url': '/admin/uptime', 'name': 'Long Uptime'},
+      {'type': 'offcorp', 'url': '/admin/offcorp', 'name': 'Longest Off Corp'},
+      {'type': 'msu_gui_logs', 'url': '/admin/msulogsummary',
+       'name': 'MSU GUI Logs'},
+      {'type': 'preflight_exits', 'url': '/admin/preflightexits',
+       'name': 'Preflight Exits'},
+      {'type': 'usersettings_knobs', 'url': '/admin/user_settings',
+       'name': 'UserSettings Knobs'}
+  ]
+  for item in menu_items:
+    if 'type' in item:
+      if 'subitems' in item:
+        menu[item['type']] = {}
+        menu[item['type']]['name'] = item['name']
+        menu[item['type']]['subitems'] = collections.OrderedDict()
+        for subitem in item['subitems']:
+          menu[item['type']]['subitems'][subitem['type']] = subitem
+      else:
+        menu[item['type']] = item
+    elif 'title' in item:
+      menu[item['title']] = item
+  return menu
 
 
 class AdminHandler(webapp2.RequestHandler):
@@ -114,15 +139,18 @@ class AdminHandler(webapp2.RequestHandler):
 
   XSRF_PROTECT = False
 
-  def handle_exception(self, *args, **kwargs):
+  def handle_exception(self, exception, debug_mode):
     """Handle an exception.
 
     Args:
       exception: exception that was thrown
       debug_mode: True if the application is running in debug mode
     """
-    # TODO(user): this could notify us...
-    super(AdminHandler, self).handle_exception(*args, **kwargs)
+    if issubclass(exception.__class__, auth.NotAuthenticated):
+      self.error(403)
+      return
+    else:
+      super(AdminHandler, self).handle_exception(exception, debug_mode)
 
   def IsAdminUser(self):
     """Returns True if the current user is an admin, False otherwise."""
@@ -177,7 +205,14 @@ class AdminHandler(webapp2.RequestHandler):
 
     values['is_admin'] = self.IsAdminUser()
 
-    values['menu'] = MENU
+    if not hasattr(self, '_menu'):
+      self._menu = GetMenu()
+
+    values['menu'] = self._menu
+
+    if not settings.APPROVAL_REQUIRED:
+      if 'proposals' in values['menu']['munki_packages']['subitems']:
+        del values['menu']['munki_packages']['subitems']['proposals']
 
     if 'msg' not in values:
       values['msg'] = self.request.GET.get('msg')
@@ -241,7 +276,7 @@ def AddTimezoneToComputerDatetimes(computer):
 
 
 def XmlToHtml(xml):
-  """Convert an XML string into an HTML DOM with styles"""
+  """Convert an XML string into an HTML DOM with styles."""
   tags = re.compile(r'\<(\/?)(\w*)([^<>]*)\>')
   html = tags.sub((r'<span class="xml_tag \2">&lt;\1<span class="xml_key">\2'
                    r'</span><span class="xml_attributes">\3</span>&gt;</span>'),

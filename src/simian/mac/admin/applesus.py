@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# 
+#
 # Copyright 2011 Google Inc. All Rights Reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
+#
+#
 #
 
 """Apple SUS admin handler."""
@@ -21,11 +22,12 @@
 
 
 import calendar
+import datetime
 import json
-import logging
-import os
 
+from google.appengine.api import memcache
 from google.appengine.api import users
+from google.appengine.ext import deferred
 
 from simian import settings
 from simian.mac import admin
@@ -33,6 +35,14 @@ from simian.mac import common
 from simian.mac import models
 from simian.mac.common import applesus
 from simian.mac.common import auth
+from simian.mac.common import gae_util
+
+# pylint: disable=g-import-not-at-top
+try:
+  from simian.mac.common import mail
+except ImportError:
+  mail = None
+# pylint: enable=g-import-not-at-top
 
 
 DEFAULT_APPLESUS_LOG_FETCH = 25
@@ -43,7 +53,6 @@ class AppleSUSAdmin(admin.AdminHandler):
 
   def post(self, report=None, product_id=None):
     """POST handler."""
-    #logging.debug('POST called: report=%s, product_id=%s', report, product_id)
     if not self.IsAdminUser():
       self.response.set_status(403)
       return
@@ -58,7 +67,6 @@ class AppleSUSAdmin(admin.AdminHandler):
   def _RegenerateCatalogs(self):
     """Regenerates specified Apple SUS catalogs."""
     tracks = self.request.get_all('tracks')
-    #logging.info('Admin requested catalog regeneration for tracks: %s', tracks)
     if tracks:
       applesus.GenerateAppleSUSCatalogs(tracks=tracks, delay=1)
       self.redirect('/admin/applesus?msg=Catalog regeneration in progress.')
@@ -78,39 +86,47 @@ class AppleSUSAdmin(admin.AdminHandler):
 
     product = models.AppleSUSProduct.get_by_key_name(product_id)
     if not product:
-      #logging.warning('POST to unknown applesus product_id: %s', product_id)
       self.response.set_status(404)
       return
 
-    log_args = {}
     data = {
         'product_id': product_id,
     }
+
+    changed_tracks = set()
 
     # set/unset manual_override property
     if manual_override is not None:
       manual_override = bool(int(manual_override))
       product.manual_override = manual_override
       product.put()
-      #logging.info(
-      #    'Manual override on Apple SUS %s: %s',
-      #    product_id, manual_override)
       log_action = 'manual_override=%s' % manual_override
       for track in common.TRACKS:
         if track not in product.tracks:
-           prom_date = applesus.GetAutoPromoteDate(track, product)
-           if prom_date:
-             data['%s_promote_date' % track] = prom_date.strftime('%b. %d, %Y')
+          prom_date = applesus.GetAutoPromoteDate(track, product)
+          if prom_date:
+            data['%s_promote_date' % track] = prom_date.strftime('%b. %d, %Y')
       data['manual_override'] = manual_override
     # set/unset force_install_after_date property
     elif force_install_after_date is not None:
       if force_install_after_date:
-        product.force_install_after_date_str = force_install_after_date
+        try:
+          tomorrow = datetime.datetime.utcnow() + datetime.timedelta(hours=12)
+          if datetime.datetime.strptime(  # only allow future force install date
+              force_install_after_date, '%Y-%m-%d %H:%M') > tomorrow:
+            product.force_install_after_date_str = force_install_after_date
+          else:
+            self.error(400)
+            return
+        except ValueError:
+          self.error(400)
+          return
       else:
         product.force_install_after_date = None
       product.put()
       data['force_install_after_date'] = force_install_after_date
       log_action = 'force_install_after_date=%s' % force_install_after_date
+      changed_tracks.update(product.tracks)
     # set/unset unattended property
     elif unattended is not None:
       unattended = bool(int(unattended))
@@ -118,22 +134,21 @@ class AppleSUSAdmin(admin.AdminHandler):
       product.put()
       data['unattended'] = unattended
       log_action = 'unattended=%s' % unattended
+      changed_tracks.update(product.tracks)
     # add/remove track to product
     elif enabled is not None:
       enabled = bool(int(enabled))
       if enabled:
         if track not in product.tracks:
-          #logging.info('Adding %s to Apple SUS %s catalog', product_id, track)
           product.tracks.append(track)
           product.put()
       else:
         if track in product.tracks:
-          #logging.info(
-          #    'Removing %s from Apple SUS %s catalog', product_id, track)
           product.tracks.remove(track)
           product.put()
       log_action = '%s=%s' % (track, enabled)
       data.update({'track': track, 'enabled': enabled})
+      changed_tracks.add(track)
 
     log = models.AdminAppleSUSProductLog(
         product_id=product_id,
@@ -141,6 +156,26 @@ class AppleSUSAdmin(admin.AdminHandler):
         tracks=product.tracks,
         user=user.email())
     log.put()
+
+    # Send email notification to admins
+    if mail and settings.EMAIL_ON_EVERY_CHANGE:
+      display_name = '%s - %s' % (product.name, product.version)
+
+      subject = 'Apple SUS Update by %s - %s (%s)' % (
+          user, display_name, product_id)
+      body = '%s has set \'%s\' on %s.\n' % (
+          user, log_action, display_name)
+      body += '%s is now in %s track(s).\n' % (
+          product_id, ', '.join(map(str, product.tracks)))
+      mail.SendMail(settings.EMAIL_ADMIN_LIST, subject, body)
+
+    # Regenerate catalogs for any changed tracks, if a task isn't already
+    # queued to do so.
+    for track in changed_tracks:
+      if gae_util.ObtainLock(applesus.CATALOG_REGENERATION_LOCK_NAME % track):
+        deferred.defer(
+            applesus.GenerateAppleSUSCatalogs, track=track, delay=180)
+    # TODO(user): add a visual cue to UI so admins know a generation is pending.
 
     self.response.headers['Content-Type'] = 'application/json'
     self.response.out.write(json.dumps(data))
@@ -176,13 +211,26 @@ class AppleSUSAdmin(admin.AdminHandler):
 
     catalogs = []
     for os_version in applesus.OS_VERSIONS:
-      c = models.AppleSUSCatalog.MemcacheWrappedGet('%s_untouched' % os_version)
-      if c:
-        catalogs.append({'version': os_version, 'download_datetime': c.mtime})
+      os_catalogs = {'os_version': os_version}
+      for track in ['untouched'] + common.TRACKS:
+        catalog_key = '%s_%s' % (os_version, track)
+        c = models.AppleSUSCatalog.MemcacheWrappedGet(catalog_key)
+        os_catalogs[track] = c.mtime if c else None
+      catalogs.append(os_catalogs)
 
+    catalogs_pending = {}
+    for track in common.TRACKS:
+      lock_name = applesus.CATALOG_REGENERATION_LOCK_NAME % track
+      catalogs_pending[track] = memcache.get(
+          gae_util.LOCK_NAME % lock_name) is not None
+
+    install_counts, counts_mtime = models.ReportsCache.GetInstallCounts()
     data = {
         'catalogs': catalogs,
+        'catalogs_pending': catalogs_pending,
         'products': products,
+        'install_counts': install_counts,
+        'install_counts_mtime': counts_mtime,
         'tracks': common.TRACKS,
         'auto_promote_enabled': settings.APPLE_AUTO_PROMOTE_ENABLED,
         'auto_promote_stable_weekday': calendar.day_name[
@@ -195,7 +243,8 @@ class AppleSUSAdmin(admin.AdminHandler):
 
   def _DisplayProductDescription(self, product):
     product = models.AppleSUSProduct.get_by_key_name(product)
-    self.response.out.write(product.description)
+    # replace escaped single-quotes, which may exist due to dist file structure.
+    self.response.out.write(product.description.replace('\\\'', '\''))
 
   def _DisplayUpdateLogs(self, product_id=None):
     display_name = None

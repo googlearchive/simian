@@ -1,20 +1,19 @@
 #!/usr/bin/env python
-# 
-# Copyright 2010 Google Inc. All Rights Reserved.
-# 
+#
+# Copyright 2015 Google Inc. All Rights Reserved.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS-IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# #
-
+#
 """Module with code to handle X509 certificates.
 
 Classes:
@@ -361,6 +360,23 @@ class X509Certificate(BaseDataObject):
       elif oid == OID_X509V3_SUBJECT_ALT_NAME:
         octet_strings = self._FindOctetStrings(values)
         # NOTE(user): this is a Sequence inside an OctetString
+        # However this field is not used a lot at Google or externally
+        # so it is not well tested.
+        #
+        # It is suspected that this code is brittle at the point of calling
+        # the DER decoder. The structure looks like this, ASN1-parsed:
+        #
+        #  0   52: SEQUENCE {
+        #  2   23:   [2] 'puppethosta.example.com'
+        # 27    6:   [2] 'puppet'
+        # 35   17:   [2] 'pupha.example.com'
+        #        :   }
+        #
+        # The [2] is the tag number which is an integer, which causes
+        # decoding to fail because the values are strings.
+        #
+        # Special code will be required to handle this field properly.
+
         if octet_strings[0][0] != '\x30':   # ASN1 type for Sequence
           raise CertificateParseError('X509V3 Subject Alt Name encoding')
 

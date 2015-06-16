@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head-content %}
+  <style type="text/css">
+    #content { bottom: 5px !important; }
+  </style>
+{% endblock %}
+
+{% block page-content %}
+
+<p><b>Subject:</b></p>
+<p>{{ title }} {{ report_date }}
+{% if contains_forced_install %}
+  {{ subject_line_flag }}
+{% endif %}
+</p>
+<p><b>Body:</b></p>
+<p>{{ salutation }}</p>
+<p>{{ introduction }}</p>
+{% if contains_forced_install %}
+  <p>{{ introduction_warning }}</p>
+{% endif %}
+{% for item in report_items %}
+{% spaceless %}
+  <p>{{ item.package_name }} {{ item.version }}
+  {% if item.managed_install %}
+    {{ managed_install_text }}{{ item.osx_version_string }}
+  {% else %}
+    {% if item.optional_install and item.managed_update %}
+      {{ managed_update_and_optional_text }}{{ item.osx_version_string }}
+    {% else %}
+      {% if item.optional_install %}
+        {{ optional_install_text }}{{ item.osx_version_string }}
+      {% else %}
+        {% if item.managed_update %}
+          {{ managed_update_text }}{{ item.osx_version_string }}
+        {% else %}
+          PLEASE SPECIFY INSTALL SCENARIO.
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {% if item.is_forced_install and item.is_unattended %}
+    {{ unattended_and_forced_text }} {{ item.forced_on_date }}.
+  {% else %}
+    {% if item.is_forced_install %}
+      {{ forced_text }} {{ item.forced_on_date }}.
+    {% endif %}
+  {% endif %}
+  {% if item.restart_required %}
+    {{ restart_required_text }}
+  {% endif %}
+  </p>
+{% endspaceless %}
+{% endfor %}
+<p>{{ signature }}</p>
+<p>{{ admin_username }}</p>
+{% endblock %}
