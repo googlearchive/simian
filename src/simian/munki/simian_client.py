@@ -23,7 +23,7 @@ import sys
 # TODO(user): This import hack is ugly; make it more elegant, not tied to 2.6.
 import os
 sys.path.append('/usr/local/munki')
-PYTHON_VERSION = '%s.%s' % (sys.version_info.major, sys.version_info.minor)
+PYTHON_VERSION = '%s.%s' % (sys.version_info[0], sys.version_info[1])
 PYTHON_LIB_ROOT = (
     '/System/Library/Frameworks/Python.framework/Versions/%s/Extras/lib/python/' % PYTHON_VERSION)
 sys.path.append(PYTHON_LIB_ROOT)
