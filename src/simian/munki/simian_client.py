@@ -16,6 +16,7 @@
 #
 """Wrapper for Simian preflight and postflight functionality."""
 
+import getopt
 import logging
 import sys
 
@@ -36,37 +37,51 @@ from simian.mac.client import report_broken_client
 from simian.mac.client import version
 
 
-# TODO(user): use an option parser and turn this into a --debug flag.
-DEBUG = False
+ACTIONS = ['preflight', 'postflight', 'report_broken_client', 'version']
+
+
+def PrintOptions():
+  print 'One of the following actions is required: '
+  print '  ', ', '.join(ACTIONS)
 
 
 def main(args):
-  if DEBUG:
-    logging.getLogger().setLevel(logging.DEBUG)
-  else:
-    logging.getLogger().setLevel(logging.WARN)
+  opts, args = getopt.gnu_getopt(args, '', ['debug', 'server='])
 
+  action = args[0] if args else None
+  if action not in ACTIONS:
+    PrintOptions()
+    return 1
+
+  logging.getLogger().setLevel(logging.WARNING)
   server_url = None
-  if len(args) > 3:
-    server_url = args[3]
-  if len(args) > 2:
-    runtype = args[2]
-  else:
-    runtype = 'custom'
 
-  if len(args) == 1:
-    logging.error('Syntax is: flight_common flight_type')
-  elif args[1] == 'preflight':
+  for option, value in opts:
+    if option == '--debug':
+      logging.getLogger().setLevel(logging.DEBUG)
+      # override logging.exception to print helpful tracebacks.
+      def NewLoggingException(msg, *args):
+        logging.debug(msg, exc_info=sys.exc_info(), *args)
+      logging.exception = NewLoggingException
+    elif option == '--server':
+      server_url = value
+
+  # munki passes a "runtype" to preflight/postflight; i.e. auto, manual, etc.
+  runtype = args[1] if len(args) > 1 else 'custom'
+
+  if action == 'preflight':
     preflight.RunPreflight(runtype, server_url=server_url)
-  elif args[1] == 'postflight':
+  elif action == 'postflight':
     postflight.RunPostflight(runtype)
-  elif args[1] == 'report_broken_client':
+  elif action == 'report_broken_client':
     report_broken_client.main()
-  elif args[1] == 'version':
+  elif action == 'version':
     print version.Version(args)
   else:
-    logging.error('Unknown flight type %s', args[1])
+    PrintOptions()
+    return 1
+  return 0
 
 
 if __name__ == '__main__':
-  main(sys.argv)
+  sys.exit(main(sys.argv[1:]))

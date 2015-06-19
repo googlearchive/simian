@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/local/munki/simian/bin/python /usr/local/munki/simian_client.py postflight $1
+exec /usr/local/munki/simian/bin/python /usr/local/munki/simian_client.py postflight "$@"
