@@ -489,3 +489,5 @@ def RunPreflight(runtype, server_url=None):
 
   # Delete the temp dir that munkicommon creates on import.
   munkicommon.cleanUpTmpDir()
+
+  logging.debug('Preflight completed successfully.')

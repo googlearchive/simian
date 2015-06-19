@@ -105,3 +105,5 @@ def RunPostflight(runtype):
 
   # Mark successful run by writing to last success file.
   NoteLastSuccess()
+
+  logging.debug('Postflight completed successfully.')
