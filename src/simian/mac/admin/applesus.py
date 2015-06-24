@@ -202,7 +202,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     products = []
     # NOTE(user): the following adds about 700ms onto the request, so we may
     #             want to pre-calculate this in a cron in the future.
-    for p in query:
+    for p in gae_util.QueryIterator(query):
       if common.STABLE not in p.tracks:
         p.stable_promote_date = applesus.GetAutoPromoteDate(common.STABLE, p)
       if common.TESTING not in p.tracks:
