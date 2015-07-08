@@ -64,6 +64,13 @@ handlers:
   script: simian.mac.urls.app
   secure: always
 
+- url: /client_resources
+  static_dir: client_resources
+  secure: always
+
+- url: /icons
+  static_dir: icons
+  secure: always
 ### Apple SUS integration, client repair, Munki log uploads, etc.
 
 - url: /applesus/.*

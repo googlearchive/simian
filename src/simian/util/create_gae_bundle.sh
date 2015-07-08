@@ -13,6 +13,8 @@ SIMIAN_REL_PATH=../src/simian/
 # Create Google App Engine bundle directory.
 rm -rf $BUNDLE_ROOT
 mkdir -p $BUNDLE_ROOT/simian
+mkdir -p $BUNDLE_ROOT/icons
+mkdir -p $BUNDLE_ROOT/client_resources
 touch $BUNDLE_ROOT/__init__.py
 touch $BUNDLE_ROOT/simian/__init__.py
 
