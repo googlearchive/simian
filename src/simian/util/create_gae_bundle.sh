@@ -9,12 +9,11 @@ set -e
 SIMIAN_ROOT=$1
 BUNDLE_ROOT=$SIMIAN_ROOT/gae_bundle/
 SIMIAN_REL_PATH=../src/simian/
+SIMIAN_REL_ROOT=../src/
 
 # Create Google App Engine bundle directory.
 rm -rf $BUNDLE_ROOT
 mkdir -p $BUNDLE_ROOT/simian
-mkdir -p $BUNDLE_ROOT/icons
-mkdir -p $BUNDLE_ROOT/client_resources
 touch $BUNDLE_ROOT/__init__.py
 touch $BUNDLE_ROOT/simian/__init__.py
 
@@ -22,7 +21,8 @@ touch $BUNDLE_ROOT/simian/__init__.py
 ln -s ../$SIMIAN_REL_PATH/auth $BUNDLE_ROOT/simian/auth
 ln -s ../$SIMIAN_REL_PATH/mac $BUNDLE_ROOT/simian/mac
 ln -s ../$SIMIAN_REL_PATH/settings.py $BUNDLE_ROOT/simian/settings.py
-
+ln -s ../$SIMIAN_REL_ROOT/icons $BUNDLE_ROOT/icons
+ln -s ../$SIMIAN_REL_ROOT/client_resources $BUNDLE_ROOT/client_resources
 # Symlink necessary files at the root of the bundle.
 ln -s $SIMIAN_REL_PATH/mac/app.yaml $BUNDLE_ROOT/app.yaml
 ln -s $SIMIAN_REL_PATH/mac/index.yaml $BUNDLE_ROOT/index.yaml
