@@ -390,7 +390,8 @@ class PackageInfo(BaseMunkiModel):
       PackageInfoUpdateError: a new catalog contains a pkg with the same name.
     """
     for catalog in new_catalogs:
-      if self.name in Catalog.get_by_key_name(catalog).package_names:
+      catalog_obj = Catalog.get_by_key_name(catalog)
+      if catalog_obj and self.name in catalog_obj.package_names:
         raise PackageInfoUpdateError(
             '%r already exists in %r catalog' % (self.name, catalog))
 
