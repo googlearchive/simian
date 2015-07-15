@@ -66,15 +66,15 @@ handlers:
 
 ### Uncomment the following lines to enable client customization.  
 ### -=WARNING=-
-### The .zip files stored here is a widely known resource. 
-### only enable client_resources if you need it and are 
+### The .zip files stored here is a publicly accessible, widely known resource.
+### Only enable client_resources if you need it and are 
 ### prepared to mitigate abuse. See https://github.com/munki/munki/wiki/Client-Customization
 # - url: /client_resources
 #   static_dir: client_resources
 #   secure: always
 
-### The icons directory has potential for abuse, but less than client_resources
-### static icons stored in gae_resources/icons will be served from here.
+### The icons directory has potential for abuse, but less than client_resources.
+### Static icons stored in gae_resources/icons will be served from here.
 ### See https://github.com/munki/munki/wiki/Product-Icons 
 - url: /icons
   static_dir: icons

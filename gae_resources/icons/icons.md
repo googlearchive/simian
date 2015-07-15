@@ -1,3 +1,3 @@
-Place custom icons for apps in this directory.
-More info on icons here:
-https://github.com/munki/munki/wiki/Product-Icons
+The icons directory has potential for abuse.
+Static icons stored in gae_resources/icons will be served from here.
+See https://github.com/munki/munki/wiki/Product-Icons 
