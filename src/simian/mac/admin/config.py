@@ -105,9 +105,15 @@ class Config(admin.AdminHandler):
 
   def NotifyAdminsOfChange(self, setting, value):
     """Notify Admins of changes to Settings."""
+    try:
+      recipients = settings_module.EMAIL_ADMIN_LIST
+    except AttributeError:
+      logging.info(
+          'email_admin_list unset, skipping change notification: %s', setting)
+      return
     subject_line = 'Simian Settings Change by %s' % (users.get_current_user())
     main_body = '%s set to: %s' % (setting, value)
-    mail.SendMail(settings_module.EMAIL_ADMIN_LIST, subject_line, main_body)
+    mail.SendMail(recipients, subject_line, main_body)
 
   def _UpdateSettingValue(self):
     self.response.headers['Content-Type'] = 'application/json'
