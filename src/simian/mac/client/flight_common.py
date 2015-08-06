@@ -64,9 +64,6 @@ DEFAULT_SECURE_MANAGED_INSTALLS_PLIST_PATH = (
 DEFAULT_MANAGED_INSTALLS_PLIST_PATH = (
     '/Library/Preferences/ManagedInstalls.plist')
 DEFAULT_ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
-DEFAULT_FACTER_CACHE_PATH = (
-    '/Library/Managed Installs/facter.cache')
-DEFAULT_FACTER_CACHE_TIME = datetime.timedelta(hours=3)
 # Global for holding the auth token to be used to communicate with the server.
 AUTH1_TOKEN = None
 HUNG_MSU_TIMEOUT = datetime.timedelta(hours=2)
@@ -322,80 +319,27 @@ def GetUserSettings():
   return {}
 
 
-def CacheFacterContents():
-  """Run facter -p to cache its contents, and also return them.
-
-  Returns:
-    dict, facter contents (which have now also been cached)
-  """
-  return_code, stdout, unused_stderr = Exec(
-      FACTER_CMD, timeout=300, waitfor=0.5)
-
-  # If execution of factor was successful build the client identifier
-  if return_code != 0:
-    return {}
-
-  facts = {}
-
-  # Iterate over the facter output and create a dictionary of the output
-  lines = stdout.splitlines()
-  for line in lines:
-    try:
-      (key, unused_sep, value) = line.split(' ', 2)
-      value = value.strip()
-      facts[key] = value
-    except ValueError:
-      logging.warning('Ignoring invalid facter output line: %s', line)
-
-  try:
-    f = open(DEFAULT_FACTER_CACHE_PATH, 'w')
-    print >>f, '\n'.join(lines)   # Use same facter format.
-    f.close()
-  except IOError:
-    pass
-  return facts
-
-
-def GetMachineInfoFromFacter():
+def GetFacterFacts():
   """Return facter contents.
 
   Returns:
     dict, facter contents
   """
-  now = datetime.datetime.now()
-  facter = {}
+  return_code, stdout, unused_stderr = Exec(
+      FACTER_CMD, timeout=300, waitfor=0.5)
+  if return_code != 0:
+    return {}
 
-  try:
-    st = os.stat(DEFAULT_FACTER_CACHE_PATH)
-    if (os.geteuid() == 0 and st.st_uid != 0) or (
-        os.geteuid() != 0 and st.st_uid != 0 and os.geteuid() != st.st_uid):
-      # don't trust this file.  be paranoid.
-      cache_mtime = datetime.datetime.fromtimestamp(0)
-    else:
-      cache_mtime = datetime.datetime.fromtimestamp(st.st_mtime)
-  except OSError:
-    cache_mtime = datetime.datetime.fromtimestamp(0)
-
-  if now - cache_mtime < DEFAULT_FACTER_CACHE_TIME:
+  # Iterate over the facter output and create a dictionary of the contents.
+  facts = {}
+  for line in stdout.splitlines():
     try:
-      f = open(DEFAULT_FACTER_CACHE_PATH, 'r')
-      lines = f.readlines()
-      for line in lines:
-        line = line.strip()
-        try:
-          (key, unused_sep, value) = line.split(' ', 2)
-          value = value.strip()
-          facter[key] = value
-        except ValueError:
-          logging.warning('Ignoring invalid facter output line: %s', line)
-      f.close()
-    except (EOFError, IOError):
-      facter = {}
-
-  if not facter:
-    facter = CacheFacterContents()
-
-  return facter
+      key, unused_sep, value = line.split(' ', 2)
+      value = value.strip()
+      facts[key] = value
+    except ValueError:
+      logging.warning('Ignoring invalid facter output line: %s', line)
+  return facts
 
 
 def GetSystemUptime():
@@ -458,7 +402,7 @@ def GetClientIdentifier(runtype=None):
   Returns:
     dict client identifier.
   """
-  facts = GetMachineInfoFromFacter()
+  facts = GetFacterFacts()
 
   uuid = (facts.get('certname', None) or
           facts.get('uuid', None) or _GetMachineInfoPlistValue('MachineUUID') or
@@ -898,6 +842,7 @@ def KillHungManagedSoftwareUpdate():
         logging.warning('OSError on kill(%d, SIGKILL): %s', pid, str(e))
 
   return bool(len(kill))
+
 
 def Pkill(process, sig='-SIGKILL', waitfor=0):
   """Kills a process by exact name with 'pkill'.
