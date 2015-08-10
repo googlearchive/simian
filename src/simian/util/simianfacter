@@ -55,19 +55,17 @@ def GetSerialNumber():
 def GetFacterFacts():
   """Returns a dictionary of facter facts."""
   return_code, stdout, unused_stderr = Exec(['facter', '-p'])
-
-  # If execution of factor was successful build the client identifier
   if return_code != 0:
     return {}
 
   facts = {}
-
-  # Iterate over the facter output and create a dictionary of the output
   lines = stdout.splitlines()
   for line in lines:
-    (key, unused_sep, value) = line.split(' ', 2)
-    value = value.strip()
-    facts[key] = value
+    try:
+      key, value = line.split('=>', 1)
+    except ValueError:
+      continue
+    facts[key.strip()] = value.strip()
   return facts
 
 
