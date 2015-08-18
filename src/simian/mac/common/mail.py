@@ -22,7 +22,6 @@
 
 
 import logging
-import webapp2
 
 from google.appengine.api import mail as mail_tool
 from google.appengine.api import taskqueue
@@ -32,9 +31,13 @@ from simian import settings
 
 
 def SendMail(recipient, subject, body):
-  message = mail_tool.EmailMessage(to=recipient, sender=settings.EMAIL_SENDER,
-                                   subject=subject, body=body)
+  try:
+    message = mail_tool.EmailMessage(to=recipient, sender=settings.EMAIL_SENDER,
+                                     subject=subject, body=body)
+  except mail_tool.InvalidEmailError:
+    logging.exception(
+        'Error sendinge email; verify email related configurations.')
   try:
     deferred.defer(message.send)
   except (deferred.Error, taskqueue.Error, apiproxy_errors.Error):
-    logging.exception()
+    logging.exception('Error deferring email.')

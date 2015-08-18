@@ -71,6 +71,7 @@ SETTINGS = {
         'type': 'string',
         'title': 'Admin List Email',
         'comment': 'Server notifications are emailed to this address',
+        'default': '',
     },
     'email_domain': {
         'type': 'string',
@@ -80,11 +81,13 @@ SETTINGS = {
         'type': 'string',
         'title': 'Email Sender',
         'comment': 'e.g. Simian Team <admin@example.com>',
+        'default': '',
     },
     'email_reply_to': {
         'type': 'string',
         'title': 'Email reply-to',
         'comment': 'e.g. Simian Team <admin@example.com>',
+        'default': '',
     },
     'email_on_every_change': {
         'type': 'bool',
