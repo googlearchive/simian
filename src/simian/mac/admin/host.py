@@ -126,7 +126,7 @@ class Host(admin.AdminHandler):
       for tag in models.Tag.GetAllTagNames():
         if tag not in tags:
           tags[tag] = False
-      tags = json.dumps(tags)
+      tags = json.dumps(tags, sort_keys=True)
 
       admin.AddTimezoneToComputerDatetimes(computer)
       computer.connection_dates.reverse()
