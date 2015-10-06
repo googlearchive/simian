@@ -44,7 +44,7 @@ ORIGPWD="$PWD"
 ID="com.google.code.simian"
 VERSION="1"
 PKGONLY=""
-PKGMAKER=$(find_packagemaker)
+PKGBUILD=$(which pkgbuild)
 
 if [[ "$#" -lt 2 ]]; then
   echo usage: $0 tgz_input_file dmg\|pkg_output_file [options...]
@@ -57,8 +57,9 @@ if [[ "$#" -lt 2 ]]; then
   echo -version version     set package version to version
   echo -id id               set package id, default $ID
   echo -s script_file       add script to package
-  echo -r resource_file     add resource file to package
-  echo -R resource_dir      add a file OR dir into resources
+  echo -r resource_file     add resource file to package resources
+  echo -R resource_dir      add a file OR dir into package resources
+  echo                      NOTE: IF YOU USE GLOBS PUT THE PATTERN IN QUOTES\!
   echo -c src dst           copy a file into the installation tree of package
   echo                      e.g. -c /tmp/foo.py Library/Foo/Bar/foo.py
   echo
@@ -67,11 +68,11 @@ fi
 
 shift ; shift
 
-if [[ -z "$PKGMAKER" ]]; then
-  echo "cannot find executable Apple packagemaker tool, looking for pkgbuild."
-  PKGBUILD=$(which pkgbuild)
-  if [[ -z "$PKGBUILD" ]]; then
-      echo "cannot find executable Apple pkgbuild tool, exit."
+if [[ -z "$PKGBUILD" ]]; then
+  echo "cannot find executable Apple pkgbuild tool, looking for packagemaker."
+  PKGMAKER=$(find_packagemaker)
+  if [[ -z "$PKGMAKER" ]]; then
+      echo "cannot find executable Apple pkgmaker tool, exit."
       exit 1
   fi
 fi
@@ -113,6 +114,8 @@ while [[ "$#" -gt 0 ]]; do
       next="pyver"
     elif [[ "$1" = "-vep" ]]; then
       next="vep"
+    else
+      echo Unknown argument "$1"
     fi
   else
     if [[ "$next" = "script" ]]; then
@@ -125,8 +128,20 @@ while [[ "$#" -gt 0 ]]; do
     elif [[ "$next" = "rsrc" ]]; then
       cp "$1" "${TMPDIR}/resources"
     elif [[ "$next" = "rsrcdir" ]]; then
-      [[ -f "$1" ]] && cp "$1" "${TMPDIR}/resources"
-      [[ -d "$1" ]] && cp -R "$1" "${TMPDIR}/resources"
+      # try to helpfully warn the user if they supplied the arguments
+      # as -R *.foo (which the shell has already expanded) versus
+      # hiding the glob inside quotes as -R '*.foo'.
+      defensive_next="$2"
+      if [[ "$#" -gt 1 && "${defensive_next:0:1}" != "-" ]]; then
+        echo "warning: did you mean -R '*.pattern' (quote glob patterns)"
+      fi
+      r="$1"
+      declare -a rsrcdirs
+      rsrcdirs=($1)
+      for dirent in "${rsrcdirs[@]}"; do
+        [[ -f "${dirent}" ]] && cp "${dirent}" "${TMPDIR}/resources"
+        [[ -d "${dirent}" ]] && cp -R "${dirent}" "${TMPDIR}/resources"
+      done
     elif [[ "$next" = "id" ]]; then
       ID="$1"
     elif [[ "$next" = "version" ]]; then
@@ -140,6 +155,8 @@ while [[ "$#" -gt 0 ]]; do
       echo "$1" > "${TMPDIR}/resources/python_version"
     elif [[ "$next" = "vep" ]]; then
       cp "$1" "${TMPDIR}/resources/vep"
+    else
+      echo Unknown argument "$1"
     fi
     next=""
   fi
@@ -160,7 +177,15 @@ else
   pkgout="$OUT"
 fi
 
-if [[ ${PKGMAKER} != "" ]]; then
+if [[ ${PKGBUILD} != "" ]]; then
+    echo "Using pkgbuild"
+    cp -R "${TMPDIR}/resources" "${TMPDIR}/scripts/Resources"
+    ${PKGBUILD} --root "${TMPDIR}/contents" \
+        --identifier "$ID" \
+        --scripts "${TMPDIR}/scripts" \
+        --version "${VERSION}" \
+        "${pkgout}"
+else
     echo "Using packagemaker"
     ${PKGMAKER} \
     --root "${TMPDIR}/contents" \
@@ -169,14 +194,6 @@ if [[ ${PKGMAKER} != "" ]]; then
     --resources "${TMPDIR}/resources" \
     --scripts "${TMPDIR}/scripts" \
     --version "$VERSION"
-else
-    echo "Using pkgbuild"
-    cp -R "${TMPDIR}/resources" "${TMPDIR}/scripts/Resources"
-    ${PKGBUILD} --root "${TMPDIR}/contents" \
-        --identifier "$ID" \
-        --scripts "${TMPDIR}/scripts" \
-        --version "${VERSION}" \
-        "${pkgout}"
 fi
 
 if [[ -z "$PKGONLY" ]]; then
