@@ -34,10 +34,9 @@ from munkilib import munkicommon
 
 from simian.mac.client import client as mac_client
 from simian.mac.client import flight_common
+from simian.mac.client import network_detect
 
 
-IFCONFIG = '/sbin/ifconfig'
-NETWORK_INTERFACES = ['en0', 'en1', 'en2']
 # Start exit codes
 STATUS_SUCCESS = (0, 'SUCCESS')
 STATUS_FAIL_AUTH = (10, 'failure obtaining auth token')
@@ -157,75 +156,6 @@ def LoginToServer(secure_config, client_id, user_settings, client_exit=None):
   secure_config[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
 
   return client, feedback
-
-
-def IsOnWwan():
-  """"Checks WWAN device connection status.
-
-  Note: this may produce false-positives, and may not catch all WWAN devices.
-    Several Sprint and Verizon devices were tested, all of which create ppp0
-    upon connection. However, L2TP VPN also creates ppp0 (Google no longer uses
-    this as of Q2-2010 in favor of SSLVPN). A stronger check is probably needed
-    at some point.
-
-  Returns:
-    Boolean. True if WWAN device is active, False otherwise.
-  """
-  wwan_iface = 'ppp0'
-  try:
-    return_code, unused_out, unused_err = flight_common.Exec(
-        [IFCONFIG, wwan_iface])
-  except OSError, e:
-    logging.error('Exec(%s) error: %s', IFCONFIG, e)
-    return_code = -1
-
-  return return_code == 0  # ifconfig exits with 1 if interface doesn't exist.
-
-
-def IsOnAndroidWap():
-  """Checks if connected to Android WAP tether, WiFi or Bluetooth.
-
-  Returns:
-    Booelan. True if WAP is providing connection, False otherwise.
-  """
-  iface_regex = re.compile(
-      r'inet\s+192\.168\.(43|44)\.\d{1,3}\s+netmask\s+0xffffff00\s+')
-  # Android tethering uses very specific subnets (192.168.43.0/24 for WiFi and
-  # 192.168.44.0/24 for Bluetooth) as well as dnsmasq.
-  for iface in NETWORK_INTERFACES:
-    try:
-      return_code, stdout, unused_err = flight_common.Exec([IFCONFIG, iface])
-    except OSError, e:
-      logging.error('Exec(%s) error: %s %s', IFCONFIG, iface, e)
-      return_code = -1
-
-    if return_code != 0:  # interface was likely not found.
-      continue
-
-    # 0xffffff00 is a hex representation of /24.
-    android_wap_match = iface_regex.search(stdout)
-    if android_wap_match is not None:
-      default_gateway = '192.168.%s.1' % android_wap_match.group(1)
-      # IP and netmask look like Android WAP, so check dnsmasq.
-      cmd = ['host', '-W', '5', '-c', 'CHAOS', '-t', 'txt', 'VERSION.BIND',
-             default_gateway]
-      try:
-        return_code, stdout, unused_err = flight_common.Exec(cmd)
-      except OSError, e:
-        logging.error('Exec(%s) error: %s', cmd, e)
-        return_code = -1
-
-      if return_code != 0:
-        continue
-      dnsmasq_match = re.search(
-          r'VERSION\.BIND descriptive text "dnsmasq-.*"', stdout)
-      if dnsmasq_match is not None:
-        # IP, netmask and dnsmasq all match Android WAP tethering.
-        return True
-
-  return False
-
-
 
 
 def CreateEmptyDirectory(attempt=0):
@@ -421,10 +351,14 @@ def RunPreflight(runtype, server_url=None):
   # If the munki exec is an auto run (launchd), exit if on WWAN or Android WAP.
   client_exit = None
   if runtype == 'auto':
-    if IsOnWwan():
+    if network_detect.IsOnWwan():
       client_exit = 'WWAN device ppp0 is active'
-    elif IsOnAndroidWap():
+    elif network_detect.IsOnAndroidWap():
       client_exit = 'Android WAP tether is active'
+    elif network_detect.IsOnIosWap():
+      client_exit = 'iOS WAP tether is active'
+    elif network_detect.IsOnMifi():
+      client_exit = 'MiFi tether is active'
 
   # get a client auth token/cookie from the server, and post connection data.
   client, feedback = LoginToServer(
@@ -439,6 +373,10 @@ def RunPreflight(runtype, server_url=None):
   if feedback.get('pkill_installd'):
     # terminate any pending installations, like misbehaving Apple updates.
     flight_common.Pkill(process='installd', waitfor=2)
+
+  if feedback.get('pkill_softwareupdated'):
+    # terminate potentially hung softareupdated processes.
+    flight_common.Pkill(process='softwareupdated', waitfor=2)
 
   if feedback.get('repair'):
     # write new token/client_id headers to secure plist and repair client.
