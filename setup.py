@@ -43,6 +43,7 @@ REQUIRE_BASE = [
     'pyasn1==0.1.2',
     'tlslite==0.3.8',
     'pyyaml>=3.10',
+    'requests',
 ]
 
 REQUIRE_SETUP = REQUIRE_BASE + [
