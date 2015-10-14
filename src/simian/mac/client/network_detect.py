@@ -382,10 +382,11 @@ def IsOnMifi():
   """Checks if the wireless connection is to a MiFi-like device.
 
   These devices are available from Verizon, Sprint, others, and usually
-  offer some kind of web access portal that says MiFi or Jetpack as a text string.
+  offer some kind of web access portal that says MiFi or Jetpack as a text
+  string.
 
   Returns:
-    Bool, True if the connection is a likely MiFi device, False if not.
+    Bool, True if the connection is a likely MiFi-like device, False if not.
   """
   ip = GetDefaultGateway()
   if not ip:
@@ -393,13 +394,13 @@ def IsOnMifi():
 
   if ip.startswith('192.168.1.'):  # Verizon and Sprint devices
     http_status, body = GetHttpResource(ip, redir=True)
-    # MiFi devices usually run a http interface. It returns a long http
-    # response with various easily found "MiFi" or "Jetpack" strings in it when loaded.
-    # No http auth challenge is issued.
+    # MiFi-like devices usually run a http interface. It returns a long http
+    # response with various easily found "MiFi" or "Jetpack" strings in it
+    # when loaded. No http auth challenge is issued.
     if http_status == 200 and body and ('MiFi' in body or 'Jetpack' in body):
       return True
   elif ip == '192.168.8.1':  # common Huawei gateway
-    result = GetHttpResource(ip, redir=False)
-    return result[0] == 307
+    http_status, _ = GetHttpResource(ip, redir=False)
+    return http_status == 307
 
   return False
