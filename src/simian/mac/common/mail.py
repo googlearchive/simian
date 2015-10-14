@@ -37,7 +37,8 @@ def SendMail(recipient, subject, body):
   except mail_tool.InvalidEmailError:
     logging.exception(
         'Error sendinge email; verify email related configurations.')
-  try:
-    deferred.defer(message.send)
-  except (deferred.Error, taskqueue.Error, apiproxy_errors.Error):
-    logging.exception('Error deferring email.')
+  else:
+    try:
+      deferred.defer(message.send)
+    except (deferred.Error, taskqueue.Error, apiproxy_errors.Error):
+      logging.exception('Error deferring email.')
