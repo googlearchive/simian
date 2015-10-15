@@ -850,9 +850,13 @@ class PackageInfoProposal(PackageInfo):
       logging.warning('Unknown action in ProposalMailer: %s', action)
       return
 
+    recipient_list = [self.user]
     recipient, _ = settings.Settings.GetItem('email_admin_list')
-    recipient_list = [recipient, self.user]
+    if recipient:
+      recipient_list.append(recipient)
     return_address, _ = settings.Settings.GetItem('email_sender')
+    if not return_address:
+      return_address = self.user
     message = mail_tool.EmailMessage(to=recipient_list, sender=return_address,
                                      subject=subject, body=body)
     try:

@@ -19,8 +19,6 @@
 
 """Module for sending e-mails."""
 
-
-
 import logging
 
 from google.appengine.api import mail as mail_tool
@@ -34,7 +32,7 @@ def SendMail(recipient, subject, body):
   try:
     message = mail_tool.EmailMessage(to=recipient, sender=settings.EMAIL_SENDER,
                                      subject=subject, body=body)
-  except mail_tool.InvalidEmailError:
+  except (mail_tool.InvalidEmailError, mail_tool.InvalidSenderError):
     logging.exception(
         'Error sendinge email; verify email related configurations.')
   else:
