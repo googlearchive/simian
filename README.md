@@ -26,10 +26,18 @@ Please refer to the [Wiki documentation](../../wiki/AdminSetup) for instructions
 
 For screenshots and an overview of Simian features, please see the [SimianAtAGlance wiki](../../wiki/SimianAtAGlance).
 
+### License
+
+  The work done under Simian has been licensed under Apache License 2.0.  The license file can be found
+  [here](https://github.com/google/simian/blob/master/COPYING).  You can find out more about the license, at
+  
+    http://www.apache.org/licenses/LICENSE-2.0
+    
 ### Contact
 
-If you have an issue or question which isn't covered in the Wiki documentation, we recommend you search and then post to the [simian-discuss@googlegroups.com Google Group](https://groups.google.com/forum/#!forum/simian-discuss).
+If you have any issue or question which isn't covered in the Wiki documentation, we recommend you search and then post to the [simian-discuss@googlegroups.com Google Group](https://groups.google.com/forum/#!forum/simian-discuss).
 
 If your question is sensitive in nature, feel free to reach direct to the engineering team at simian-eng@googlegroups.com.
 
 Finally, if you'd like to stay aware of future Simian news, please subscribe to [simian-announce@googlegroups.com Google Group](https://groups.google.com/forum/#!forum/simian-announce)
+
