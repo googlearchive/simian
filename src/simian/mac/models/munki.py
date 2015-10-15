@@ -124,10 +124,7 @@ class Catalog(BaseMunkiModel):
       pkgsinfo_dicts = []
       package_infos = PackageInfo.all().filter('catalogs =', name).fetch(None)
       if not package_infos:
-        # TODO(user): if this happens we probably want to notify admins...
-        logging.error('No pkgsinfo found with catalog: %s', name)
-        return
-
+        logging.warning('No PackageInfo entities with catalog: %s', name)
       for p in package_infos:
         package_names.append(p.name)
         pkgsinfo_dicts.append(p.plist.GetXmlContent(indent_num=1))
@@ -184,13 +181,10 @@ class Manifest(BaseMunkiModel):
       return
 
     try:
+      install_types = {}
       package_infos = PackageInfo.all().filter('manifests =', name).fetch(None)
       if not package_infos:
-        # TODO(user): if this happens we probably want to notify admins...
-        logging.error('No PackageInfo entities found for: %s', name)
-        return
-
-      install_types = {}
+        logging.warning('No PackageInfo entities with manifest: %s', name)
       for p in package_infos:
         # Add all installs to their appropriate install type containers.
         for install_type in p.install_types:

@@ -59,7 +59,7 @@ class CatalogTest(mox.MoxTestBase):
       self._mock_release_lock = True
     models.gae_util.ReleaseLock(name).AndReturn(None)
 
-  def testGeneratesync(self):
+  def testGenerateAsync(self):
     """Tests calling Generate(delay=2)."""
     name = 'catalogname'
     utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
@@ -118,19 +118,34 @@ class CatalogTest(mox.MoxTestBase):
 
   def testGenerateWithNoPkgsinfo(self):
     """Tests Catalog.Generate() where no coorresponding PackageInfo exist."""
-    name = 'badname'
+    name = 'emptyname'
+    self.mox.StubOutWithMock(models.Manifest, 'Generate')
+    self.mox.StubOutWithMock(models.PackageInfo, 'all')
+    self.mox.StubOutWithMock(models.Catalog, 'get_or_insert')
+    self.mox.StubOutWithMock(models.Catalog, 'DeleteMemcacheWrap')
+
     self._MockObtainLock('catalog_lock_%s' % name)
 
     mock_model = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
     mock_model.filter('catalogs =', name).AndReturn(mock_model)
     mock_model.fetch(None).AndReturn([])
 
+    mock_catalog = self.mox.CreateMockAnything()
+    models.Catalog.get_or_insert(name).AndReturn(mock_catalog)
+    mock_catalog.put().AndReturn(None)
+
+    models.Catalog.DeleteMemcacheWrap(
+        name, prop_name='plist_xml').AndReturn(None)
+    models.Manifest.Generate(name, delay=1).AndReturn(None)
     self._MockReleaseLock('catalog_lock_%s' % name)
 
     self.mox.ReplayAll()
     models.Catalog.Generate(name)
+    self.assertEqual(mock_catalog.name, name)
+    expected_plist = models.constants.CATALOG_PLIST_XML % '\n'.join([])
+    self.assertEqual(expected_plist, mock_catalog.plist)
+    self.assertEqual(mock_catalog.package_names, [])
     self.mox.VerifyAll()
 
   def testGenerateWithPlistParseError(self):
@@ -300,14 +315,31 @@ class ManifestTest(mox.MoxTestBase):
 
   def testGenerateWithNoPkgsinfo(self):
     """Tests Manifest.Generate() where no coorresponding PackageInfo exist."""
-    name = 'badname'
+    name = 'emptyname'
+    manifest_dict = {
+        'catalogs': [name, 'apple_update_metadata'],
+    }
     self._MockObtainLock('manifest_lock_%s' % name)
+    self.stubs.Set(
+        models.plist_lib,
+        'MunkiManifestPlist',
+        self.mox.CreateMock(models.plist_lib.MunkiManifestPlist))
 
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
     mock_model.filter('manifests =', name).AndReturn(mock_model)
     mock_model.fetch(None).AndReturn([])
+
+    mock_manifest = self.mox.CreateMockAnything()
+    mock_manifest.plist = self.mox.CreateMockAnything()
+
+    self.mox.StubOutWithMock(models.Manifest, 'get_or_insert')
+    models.Manifest.get_or_insert(name).AndReturn(mock_manifest)
+    mock_manifest.plist.SetContents(manifest_dict)
+    mock_manifest.put().AndReturn(None)
+    self.mox.StubOutWithMock(models.Manifest, 'DeleteMemcacheWrap')
+    models.Manifest.DeleteMemcacheWrap(name).AndReturn(None)
 
     self._MockReleaseLock('manifest_lock_%s' % name)
 
