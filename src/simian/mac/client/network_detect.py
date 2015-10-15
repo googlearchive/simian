@@ -16,13 +16,12 @@
 #
 """Simian network backoff detection module."""
 
-
 import logging
 import platform
 import re
 import urlparse
 import requests
-
+import socket
 
 from simian.mac.client import flight_common
 
@@ -163,45 +162,6 @@ def GetDefaultGateway():
     logging.error('Unknown platform %s', _GetPlatform())
 
   return GetNetworkGateway(default)
-
-
-def GetMacAddress(ip):
-  """Returns the mac address in the arp table for an ip.
-
-  Args:
-    ip: str, like "1.2.3.4"
-  Returns:
-    a string like "00:01:02:0a:0b:cd" or None if the mac is unknown.
-    Note that the padding of mac address digits might vary on each platform.
-  """
-  arp = ARP.get(_GetPlatform(), None)
-  if not arp:
-    return
-
-  try:
-    return_code, stdout, stderr = flight_common.Exec([arp, '-an'])
-  except OSError:
-    return_code = None
-
-  if return_code != 0 or stderr or not stdout:
-    return
-
-  # Darwin:
-  # ? (172.26.112.25) at 70:cd:60:aa:f9:80 on en0 ifscope [ethernet]
-  # Linux:
-  # ? (172.26.113.162) at 10:9a:dd:60:fb:46 [ether] on eth0
-  #
-  # one partial match will suffice for both.
-
-  ip = ip.replace('.', '\\.')
-
-  arp_entry = re.search(
-      r'^\?\s+\(%s\)\s+at\s+([0-9a-f:]+)\s+' % ip, stdout, re.MULTILINE)
-
-  if arp_entry:
-    return arp_entry.group(1)
-
-  return
 
 
 def GetHttpResource(host, path='/', port=80, redir=False):
@@ -359,20 +319,18 @@ def IsOnIosWap():
     Boolean. True if iOS WAP is connected, False otherwise.
   """
   # iOS WAP looks like a 172.20.10/28 network. Gateway is
-  # 172.20.10.1 with mac address ac:de:48:*.
+  # 172.20.10.1 with tcp port 62078 open.
   gateway = GetNetworkGateway('172.20.10/28')
   if not gateway:
     return False
 
   ip = GetDefaultGateway()
-  if not ip:
+  if ip != '172.20.10.1':
     return False
 
-  mac = GetMacAddress(ip)
-  if not mac:
-    return False
-
-  if mac.startswith('ac:de:48:'):
+  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  result = sock.connect_ex((ip, 62078))
+  if result == 0:
     return True
 
   return False
