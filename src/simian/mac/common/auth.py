@@ -37,7 +37,7 @@ from simian.mac.common import util
 
 
 ACL_GROUPS = {
-    # 'admins': 'Admins',
+    'admins': 'Admins',
     'support_users': 'Support Users',
     'security_users': 'Security Users',
     'physical_security_users': 'Physical Security Users',
