@@ -1,24 +1,10 @@
 #!/bin/bash
-simian_files=("/etc/simian/" "/usr/local/munki" "/Library/Managed Installs" "/Applications/Managed Software Center.app" "/private/var/root/Library/Preferences/ByHost/ManagedInstalls*")
+simian_files=("/Applications/Managed Software Center.app")
 
-for file in "${simian_files[@]}";
-do
-if [ -e "$file" ]
-then
-echo "Attempting to remove " "$file"
+for file in "${simian_files[@]}"; do
+
+if [ -e "$file" ]; then
 rm -rf "$file"
-
 fi
-done
 
-for plist in $(sudo pkgutil --pkgs | grep munki);
-do
-$(sudo pkgutil --forget "$plist")
 done
-
-for plist in $(sudo pkgutil --pkgs | grep simian);
-do
-$(sudo pkgutil --forget "$plist")
-done
-
-exit 0
