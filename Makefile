@@ -77,7 +77,7 @@ install: swig_check client_config build
 	mkdir -p /etc/simian/ && cp -Rf etc/simian /etc && chmod 644 /etc/simian/*.cfg
 
 clean_contents:
-	rm -rf contents.tar contents.tar.gz tmpcontents
+	rm -rf contents.tar contents.tar.gz tmpcontents swig.tgz
 
 clean_pkgs:
 	rm -rf tmppkgs
