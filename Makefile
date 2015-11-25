@@ -58,8 +58,9 @@ VE: virtualenv python_check
 	[ -d VE ] || \
 	${PYTHON} $(shell type -p virtualenv) --no-site-packages VE
 
-test: swig_check VE
+test: swig_check m2crypto VE
 	[ -f test ] || \
+	VE/bin/python VE/bin/easy_install-${PYTHON_VERSION} ${PWD}/simian_M2Crypto-*-py${PYTHON_VERSION}-macosx-${OSX_VERSION}*.egg && \
 	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" \
 	VE/bin/python setup.py google_test && touch test && \
 	echo ALL TESTS COMPLETED SUCCESSFULLY

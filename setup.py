@@ -58,7 +58,6 @@ REQUIRE_TEST = REQUIRE_BASE + [
     'unittest2==0.5.1',
     'webapp2',
     'webtest',
-    'M2Crypto==0.22.3',
     'WebOb>=1.2',  # webtest requires >=1.2.
 ]
 
