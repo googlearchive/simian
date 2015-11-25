@@ -3,7 +3,6 @@
 #
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
-SWIG=$(shell type -p swig 2>/dev/null)
 SIMIAN_VERSION=2.4
 SIMIAN=simian-${SIMIAN_VERSION}
 SDIST_TAR=dist/simian-${SIMIAN_VERSION}.tar
@@ -14,9 +13,6 @@ MUNKIFILE=${MUNKI}.pkg
 PYTHON_VERSION=2.6
 PYTHON=$(shell type -p python${PYTHON_VERSION})
 TS=$(shell date '+%s')
-# This is the version that opensource.apple.com offers
-SWIG_VERSION=1.3.40
-SWIG_URL=http://downloads.sourceforge.net/project/swig/swig/swig-${SWIG_VERSION}/swig-${SWIG_VERSION}.tar.gz?r=&ts=${TS}
 BUILD_VERSION=$(shell (git rev-parse HEAD 2>/dev/null || echo ${SIMIAN_VERSION} | tr '.' '-') | cut -c1-12)
 
 os_check:
@@ -24,31 +20,6 @@ os_check:
 
 python_check:
 	@if [ ! -x "${PYTHON}" ]; then echo Cannot find ${PYTHON} ; exit 1 ; fi
-
-swig_check:
-	@if [ -z "${SWIG}" -o ! -x "${SWIG}" ]; then \
-	echo swig must be installed. type: ; \
-	echo ; \
-	echo "       make swig" ; \
-	echo ; \
-	echo and it will be done automatically for you. ; \
-	exit 1 ; \
-	fi
-
-swig.tgz:
-	curl -L -o swig.tgz "${SWIG_URL}"
-
-swig: os_check swig.tgz
-	rm -rf tmpswig
-	mkdir -p tmpswig
-	tar -zxf swig.tgz -C tmpswig
-	cd tmpswig/swig-${SWIG_VERSION} ; \
-	./configure --prefix=/usr/local ; \
-	make ; \
-	echo Type your password to exec sudo make install. ; \
-	sudo make install
-	rm -rf tmpswig
-	@echo Success building and installing swig.
 
 virtualenv: python_check
 	${PYTHON} -c 'import virtualenv' || \
@@ -58,9 +29,9 @@ VE: virtualenv python_check
 	[ -d VE ] || \
 	${PYTHON} $(shell type -p virtualenv) --no-site-packages VE
 
-test: swig_check m2crypto VE
+test: m2crypto VE
 	[ -f test ] || \
-	VE/bin/python VE/bin/easy_install-${PYTHON_VERSION} ${PWD}/simian_M2Crypto-*-py${PYTHON_VERSION}-macosx-${OSX_VERSION}*.egg && \
+	VE/bin/python VE/bin/easy_install-${PYTHON_VERSION} "${PWD}"/simian_M2Crypto-*-py${PYTHON_VERSION}-macosx-${OSX_VERSION}*.egg && \
 	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" \
 	VE/bin/python setup.py google_test && touch test && \
 	echo ALL TESTS COMPLETED SUCCESSFULLY
@@ -70,10 +41,10 @@ settings_check: test
 	src/simian/util/validate_settings.py etc/simian/ \
 	src/ ./pyasn1*.egg ./tlslite*.egg
 
-build: swig_check VE
+build: VE
 	VE/bin/python setup.py build
 
-install: swig_check client_config build
+install: client_config build
 	VE/bin/python setup.py install
 	mkdir -p /etc/simian/ && cp -Rf etc/simian /etc && chmod 644 /etc/simian/*.cfg
 
