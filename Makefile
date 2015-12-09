@@ -148,6 +148,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R python_dateutil-*.egg \
 	-R python_gflags-*.egg \
 	-R pytz-*.egg \
+	-R requests-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
@@ -177,6 +178,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R python_dateutil-*.egg \
 	-R python_gflags-*.egg \
 	-R pytz-*.egg \
+	-R requests-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
@@ -206,6 +208,7 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R python_dateutil-*.egg \
 	-R python_gflags-*.egg \
 	-R pytz-*.egg \
+	-R requests-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
@@ -233,6 +236,7 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R python_dateutil-*.egg \
 	-R python_gflags-*.egg \
 	-R pytz-*.egg \
+	-R requests-*.egg \
 	-R tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
