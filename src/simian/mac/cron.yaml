@@ -1,57 +1,79 @@
-cron:
-- description: auth session cleanup
-  url: /cron/maintenance/authsession_cleanup
-  schedule: every 10 minutes
+# This YAML contains App Engine Scheduled Tasks / Cron Service configuration.
+#
+# Before making modifications, familiarize yourself with the following
+# documentation.
+#
+# Simian crons download Apple Updates, auto-promote packages, generate and cache
+# reports for the web UI, maintain the Datastore (i.e. remove cruft), and more.
+#
+# Default cron job execution frequency is tailored for small to medium sized
+# deployments (100s to 1000s of clients).  In many cases, increased frequency
+# will keep the web UI reports/etc. more up to date. Increased frequency
+# may come at a greater cost, such as Datastore operations and potentially
+# instance hours if clients aren't otherwise keeping instance running 24/7.
+# For medium to large deployments, where clients are keeping instance warm 24/7,
+# extra costs are likely to be minimal and unnoticed, thus max frequency is
+# suggested. Max and min frequency suggestions are present in parenthesis
+# suffixed to each cron description.
+#
+# For more, see:
+# - Simian Docs: https://github.com/google/simian/wiki/Cron-Configuration
+# - App Engine Docs: https://cloud.google.com/appengine/docs/python/config/cron
 
-- description: Mark Computers inactive after X days without a connection.
+cron:
+- description: Expired Auth Token Cleanup (10m-1h)
+  url: /cron/maintenance/authsession_cleanup
+  schedule: every 1 hours
+
+- description: Inactivate Computer records after X days (1h-24h)
   url: /cron/maintenance/mark_computers_inactive
   schedule: every 9 hours
 
-- description: Update Average Install Durations
+- description: Update Average Install Durations used in pkg descriptions (1h-6h)
   url: /cron/maintenance/update_avg_install_durations
-  schedule: every 1 hours
+  schedule: every 6 hours
 
-- description: PackageInfo and Blobstore integrity verification
+- description: PackageInfo and Blobstore integrity verification (1h-24h)
   url: /cron/maintenance/verify_packages
-  schedule: every 9 hours
+  schedule: every 12 hours
 
-- description: Apple SUS Catalog Auto-Promote
+- description: Apple Software Update Catalog Auto-Promotion (1h-8h)
   url: /cron/applesus/autopromote
   schedule: every 3 hours
 
-- description: Apple SUS Catalog Sync
+- description: Apple Software Update Catalog Sync (6h-24h)
   url: /cron/applesus/catalogsync
-  schedule: every 12 hours
+  schedule: every 24 hours
 
-- description: Stats Summary Cache
+- description: Stats Summary Cache for main web UI page (30m-24h)
   url: /cron/reports_cache/summary
-  schedule: every 30 minutes
+  schedule: every 4 hours
 
-- description: Install Counts Cache
+- description: Install Counts Cache for Package Admin UI (15m-3h)
   url: /cron/reports_cache/installcounts
-  schedule: every 15 minutes
+  schedule: every 1 hours
 
-- description: Pending Counts Cache
+- description: Pending Counts Cache for Package Admin UI (15m-3h)
   url: /cron/reports_cache/pendingcounts
-  schedule: every 15 minutes
+  schedule: every 1 hours
 
-- description: Trending Installs - 24 hours
+- description: Trending Installs - 24 hours (2h-6h)
   url: /cron/reports_cache/trendinginstalls/24
-  schedule: every 2 hours
+  schedule: every 4 hours
 
-- description: Trending Installs - 1 hour
+- description: Trending Installs - 1 hour (15m-1h)
   url: /cron/reports_cache/trendinginstalls/1
-  schedule: every 15 minutes
+  schedule: every 1 hours
 
-- description: MSU User Logs Summary - all
+- description: MSU User Logs Summary - all (15m-1h)
   url: /cron/reports_cache/msu_user_summary
   schedule: every 24 hours
 
-- description: MSU User Logs Summary - 1 days
+- description: MSU User Logs Summary - 1 day (1h-24h)
   url: /cron/reports_cache/msu_user_summary/1
   schedule: every 2 hours
 
-- description: MSU User Logs Summary - 7 days
+- description: MSU User Logs Summary - 7 days (12h-48h)
   url: /cron/reports_cache/msu_user_summary/7
   schedule: every 24 hours
 
