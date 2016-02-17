@@ -90,7 +90,7 @@ add_munkicontents: os_check ${MUNKIFILE}
 	pkgutil --expand ${MUNKIFILE} tmpcontents/
 	cd tmpcontents/ && \
 	for pkg in *.pkg ; do \
-	gzip -dc "$$pkg/Payload" | pax -r ; done
+	gzip -dc "$$pkg/Payload" | pax -r | rm -r $$pkg; done
 
 contents.tar.gz: client_config
 	mkdir -p tmpcontents/etc/simian/ssl/certs
