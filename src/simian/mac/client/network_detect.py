@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,14 @@
 #
 """Simian network backoff detection module."""
 
+
 import logging
 import platform
 import re
+import socket
 import urlparse
 import requests
-import socket
+
 
 from simian.mac.client import flight_common
 
@@ -33,9 +35,21 @@ ROUTE = {LINUX: ['/sbin/ip', 'route'], DARWIN: ['/usr/sbin/netstat', '-nr']}
 ARP = {LINUX: '/usr/sbin/arp', DARWIN: '/usr/sbin/arp'}
 HOST = '/usr/bin/host'
 IFCONFIG = '/sbin/ifconfig'
+
+IOS_WAP_DEFAULT_GATEWAY_IP = '172.20.10.1'
+IOS_WAP_NETWORK_GATEWAY_SUBNET = '172.20.10/28'
+
 INTERFACE_ANDROID_WAP = 'android_wap'
 INTERFACE_WWAN = 'wwan'
 INTERFACE_VPN = 'vpn'
+
+BACKOFF_WLANS = frozenset([
+    'Fly-Fi',
+    'gogoinflight',
+    'Telekom_FlyNet',
+    'United_WiFi',
+    'United_Wi-Fi',
+])
 
 
 def _GetPlatform():
@@ -220,31 +234,46 @@ def IsOnWwan():
   return False
 
 
-def GetNetworkName(dev):
-  """Return network name (SSID for WLANs) seen by nmcli.
+def GetNetworkName():
+  """Return network name (SSID for WLANs) a device is connected to.
 
-  If dev is set: Find network name (SSID) associated with device dev.
-  Otherwise return first connected network name.
-
-  Args:
-    dev: network device name as seen by NetworkManager.
   Returns:
     name of the matching network name if possible, None otherwise.
   """
-  cmdline = '/usr/bin/nmcli -t -f NAME,DEVICES conn status'
-  # Ignore "Auto " prefix on automatically connecting networks.
-  ssid_re = re.compile(r'^(Auto )?([^:]*):(.*)$')
-  try:
-    return_code, out, _ = flight_common.Exec(cmdline)
-  except OSError:
-    return_code = -1
-  if out and not return_code:
-    for l in out.splitlines():
-      res = ssid_re.match(l)
-      if res:
-        if not dev or res.groups()[2] == dev:
+  this_platform = _GetPlatform()
+  if this_platform == LINUX:
+    cmdline = '/usr/bin/nmcli -t -f NAME,DEVICES conn status'
+    # Ignore "Auto " prefix on automatically connecting networks.
+    ssid_re = re.compile(r'^(Auto )?([^:]*):.*$')
+    try:
+      return_code, out, _ = flight_common.Exec(cmdline)
+    except OSError:
+      logging.exception('Error executing nmcli')
+      return
+
+    if out and not return_code:
+      for l in out.splitlines():
+        res = ssid_re.match(l)
+        if res:
           return res.groups()[1]
-  return None
+
+  elif this_platform == DARWIN:
+    cmdline = (
+        '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/'
+        'Current/Resources/airport -I | '
+        'awk \'/ SSID/ {print substr($0, index($0, $2))}\'')
+    try:
+      return_code, out, _ = flight_common.Exec(cmdline)
+    except OSError:
+      logging.exception('Error executing airport')
+      return
+    if out and not return_code:
+      return out.strip() or None
+
+
+def IsOnBackoffWLAN():
+  """Returns True if on a Backoff WLAN, such as gogoinflight WiFi."""
+  return GetNetworkName() in BACKOFF_WLANS
 
 
 def IsOnAndroidWap():
@@ -319,13 +348,16 @@ def IsOnIosWap():
     Boolean. True if iOS WAP is connected, False otherwise.
   """
   # iOS WAP looks like a 172.20.10/28 network. Gateway is
-  # 172.20.10.1 with tcp port 62078 open.
-  gateway = GetNetworkGateway('172.20.10/28')
+  # 172.20.10.1 with TCP port 62078 open.
+  gateway = GetNetworkGateway(IOS_WAP_NETWORK_GATEWAY_SUBNET)
   if not gateway:
     return False
 
   ip = GetDefaultGateway()
-  if ip != '172.20.10.1':
+  if not ip:
+    return False
+
+  if ip != IOS_WAP_DEFAULT_GATEWAY_IP:
     return False
 
   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

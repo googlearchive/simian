@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -359,6 +359,8 @@ def RunPreflight(runtype, server_url=None):
       client_exit = 'iOS WAP tether is active'
     elif network_detect.IsOnMifi():
       client_exit = 'MiFi tether is active'
+    elif network_detect.IsOnBackoffWLAN():
+      client_exit = 'Backoff WLAN SSID detected'
 
   # get a client auth token/cookie from the server, and post connection data.
   client, feedback = LoginToServer(
