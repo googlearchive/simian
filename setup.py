@@ -49,6 +49,7 @@ REQUIRE_BASE = [
 REQUIRE_SETUP = REQUIRE_BASE + [
     'google_apputils==0.4',  # 0.4.1: ezsetup broken, 0.4.2: testbase broken
     'python-dateutil>=1.4,<2',  # because of google_apputils
+    'python-gflags==2.0'  # gflags 3.0+ requires python2.7
 ]
 
 REQUIRE_TEST = REQUIRE_BASE + [
