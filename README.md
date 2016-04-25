@@ -1,6 +1,8 @@
+![ci](https://travis-ci.org/google/simian.svg?branch=master)
 ### Overview
 
-**Note 1: OS X 10.6, 10.7, 10.8 support dropped (22 April 2016) **
+**Note 1: OS X 10.6, 10.7, 10.8 support dropped (22 April 2016)**
+
 **Note 2: Simian now supports Munki2 categories!**
 
 Simian is an enterprise-class Mac OS X software deployment solution hosted on Google App Engine (why [App Engine](../../wiki/AppEngineAtAGlance)?). It scales to any enterprise fleet size automatically, and offers a future proof client extended from the active [Munki open-source project](https://github.com/munki/munki).
