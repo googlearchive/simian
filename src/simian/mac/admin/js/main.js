@@ -13,15 +13,17 @@ goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.dom.classes');
 goog.require('goog.positioning.AnchoredPosition');
+goog.require('goog.ui.AnimatedZippy');
 goog.require('goog.ui.HoverCard');
 goog.require('goog.ui.KeyboardShortcutHandler');
-goog.require('goog.ui.AnimatedZippy');
+goog.require('goog.ui.TableSorter');
 goog.require('goog.ui.Zippy');
 goog.require('simian.menu');
-goog.require('goog.ui.TableSorter');
 
 
-// Global shortcutHandler for Keyboard Shortcuts.
+/**
+ * Global shortcutHandler for Keyboard Shortcuts.
+ */
 simian.shortcutHandler = new goog.ui.KeyboardShortcutHandler(document);
 
 
@@ -68,7 +70,7 @@ simian.renderCharts = function(opt_el) {
       });
       if (table.getAttribute('title')) {
         var th = goog.dom.createDom('tr', null,
-          goog.dom.createDom('th', {'colspan':'2'},
+          goog.dom.createDom('th', {'colspan': '2'},
             goog.dom.createTextNode(table.getAttribute('title'))
         ));
         goog.dom.insertSiblingBefore(th, goog.dom.getFirstElementChild(table));
@@ -151,7 +153,7 @@ simian.makeUUIDHover = function() {
     return true;
   };
   goog.events.listen(hc, goog.ui.HoverCard.EventType.BEFORE_SHOW, onBeforeShow);
-}
+};
 
 
 /**
@@ -189,7 +191,9 @@ simian.registerEscListener = function(callback) {
 goog.exportSymbol('simian.registerEscListener', simian.registerEscListener);
 
 
-// Extend window.onload to register keyboard shortcuts.
+/**
+ * Extend window.onload to register keyboard shortcuts
+ */
 window.onload = function() {
   // When "/" is pressed, focused on the search box.
   simian.shortcutHandler.registerShortcut(
@@ -235,12 +239,11 @@ simian.makeTableSortable = function(sortableTableClass, alphaSortClass) {
     alphaSortClass = 'sortable-column-sortby-alpha';
   }
 
-  var tableToSort, headers;
   var sortableTables = goog.dom.getElementsByClass(sortableTableClass);
   for (var i = 0, tableToSort; tableToSort = sortableTables[i]; i++) {
     var tableSorter = new goog.ui.TableSorter();
     tableSorter.decorate(tableToSort);
-    headers = simian.getTableHeaders(tableToSort);
+    var headers = simian.getTableHeaders(tableToSort);
     // If a header's class is tagged to sort by alpha, use its index to set sort
     for (var index = 0, node; node = headers[index]; index++) {
       if (node.className) {
@@ -295,5 +298,51 @@ simian.getTableHeaders = function(table) {
 };
 
 
+/**
+ * Read first file content.
+ * Can be called only in user event handler.
+ * @param {string} inputId id of input with type="file".
+ * @param {Function} callback Callback function called
+ *     with file content on success.
+ */
+simian.getFileContent = function(inputId, callback) {
+  var input = goog.dom.$(inputId);
+  input.value = '';
+  input.onchange = function(evt) {
+    if (!evt.target.files.length) {
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      callback(e.target.result);
+    };
+    reader.readAsText(evt.target.files[0]);
+  };
+
+  // can be triggered only in user event handler
+  input.click();
+};
+
+/**
+ * Replace TextArea content with content of first file.
+ * Can be called only in user event handler.
+ * @param {string} inputId id of input with type="file".
+ * @param {string} areaId TextArea's id.
+ */
+simian.populateTextAreaFromFile = function(inputId, areaId) {
+  simian.getFileContent(inputId, function(content) {
+    var textArea = goog.dom.$(areaId);
+    textArea.value = content;
+    if (textArea.oninput) {
+      textArea.oninput(null);
+    }
+  });
+};
+goog.exportSymbol(
+    'simian.populateTextAreaFromFile', simian.populateTextAreaFromFile);
+
+
 goog.exportSymbol('simian.addClass', goog.dom.classes.add);
 goog.exportSymbol('simian.removeClass', goog.dom.classes.remove);
+goog.exportSymbol('simian.setLocationHref', goog.dom.safe.setLocationHref);
+goog.exportSymbol('simian.setTextContent', goog.dom.setTextContent);

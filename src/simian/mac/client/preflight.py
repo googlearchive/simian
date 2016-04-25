@@ -19,6 +19,7 @@
 Exit codes: see constants below.
 """
 
+import datetime
 import errno
 import json
 import logging
@@ -81,7 +82,7 @@ def WriteRootCaCerts(client):
 
   try:
     os.link(tmpfile.name, cert_file_path)
-  except OSError, e:
+  except OSError as e:
     tmpfile.close()
     raise client.Error('Error writing root CA certs: %s' % str(e))
 
@@ -195,7 +196,7 @@ def CreateEmptyDirectory(attempt=0):
         shutil.rmtree(path)
       elif remove == 'f':
         os.unlink(path)
-    except OSError, e:
+    except OSError as e:
       if e.args[0] == errno.ENOENT:
         # it went missing after we just found it.  try to regain control.
         logging.critical('%s went missing after it existed', path)
@@ -207,7 +208,7 @@ def CreateEmptyDirectory(attempt=0):
   if remove or create:
     try:
       os.mkdir(path)
-    except OSError, e:
+    except OSError as e:
       if e.args[0] == errno.EEXIST:
         # it already exists.  try to regain control of it.
         return CreateEmptyDirectory(attempt + 1)
@@ -267,7 +268,7 @@ def GetManagedSoftwareUpdateLogFile(logfile=MSULOGFILE):
       r = fd.readline()
 
     fd.close()
-  except IOError, e:
+  except IOError as e:
     # some error parsing the logs, logs may have been lost now.
     # returning the symlink is possible to put the log file back, but
     # problematic if new log files were written during processing.
@@ -320,8 +321,11 @@ def NoteLastRun(open_=open):
   output_file.write('Run')
 
 
+
+
 def RunPreflight(runtype, server_url=None):
   """Run the full Preflight script."""
+
   NoteLastRun()
   # support enterprise/802.1x user-context wifi auth.
   # don't bother to perform preflight and exit OK immediately since there's no
@@ -344,7 +348,7 @@ def RunPreflight(runtype, server_url=None):
   # load user settings
   try:
     user_settings = flight_common.GetUserSettings()
-  except ValueError, e:
+  except ValueError as e:
     logging.warning('User settings are malformed: %s', str(e))
     user_settings = {'__malformed': True}
 
@@ -386,8 +390,8 @@ def RunPreflight(runtype, server_url=None):
       logging.info('Reinstalling Munki client....')
       flight_common.RepairClient()
       logging.info('Client successfully reinstalled.')
-    except flight_common.RepairClientError, e:
-      logging.exception('RepairClientError: %s', str(e))
+    except flight_common.RepairClientError as e:
+      logging.exception(u'RepairClientError: %s', e)
 
   if feedback.get('logging_level'):
     regular_config['LoggingLevel'] = feedback.get('logging_level')

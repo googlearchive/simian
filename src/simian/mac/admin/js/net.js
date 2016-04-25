@@ -66,6 +66,7 @@ simian.ajaxToggle = function(url, enable, disable, button, opt_responseField,
  * Submit a form via Ajax
  * @param {Element} form The form with the actions values and submit.
  * @param {Function} opt_successCallback Callback function called after success.
+ * @return {boolean} Always return false.
  */
 simian.ajaxSubmit = function(form, opt_successCallback) {
   var success = function(e) {
@@ -123,7 +124,7 @@ simian.deleteClientLogFile = function(deleteButton) {
   var failure = function(e) {
     alert('Failure deleting the client log; please try again');
   };
-  var params = 'action=delete_client_log'
+  var params = 'action=delete_client_log';
   simian.xhr('/admin/clientlog/' + key, params, 'POST', success, failure);
 };
 goog.exportSymbol('simian.deleteClientLogFile', simian.deleteClientLogFile);
@@ -143,17 +144,20 @@ simian.deleteManifestModification = function(deleteButton) {
   var failure = function(e) {
     alert('Failure deleting the manifest mod; please try again');
   };
-  var params = 'delete=1&key=' + key
+  var params = 'delete=1&key=' + key;
   simian.xhr('/admin/manifest_modifications', params, 'POST', success, failure);
 };
-goog.exportSymbol('simian.deleteManifestModification', simian.deleteManifestModification);
+goog.exportSymbol(
+    'simian.deleteManifestModification', simian.deleteManifestModification);
 
 
 /**
  * Toggles a manifest modification between enabled/disabled.
+ * @param {string} key Manifestmodifications key.
+ * @param {Element} button The HTML element thats controls the state.
  */
 simian.toggleManifestModification = function(key, button) {
-  var enable =  'key=' + key + '&enabled=1';
+  var enable = 'key=' + key + '&enabled=1';
   var disable = 'key=' + key + '&enabled=0';
   simian.ajaxToggle('/admin/manifest_modifications/', enable, disable, button);
 };
@@ -163,9 +167,11 @@ goog.exportSymbol(
 
 /**
  * Toggles a package alias between enabled/disabled.
+ * @param {string} key Package alias key name.
+ * @param {Element} button The HTML element thats controls the state.
  */
 simian.togglePackageAlias = function(key, button) {
-  var enable =  'key_name=' + key + '&enabled=1';
+  var enable = 'key_name=' + key + '&enabled=1';
   var disable = 'key_name=' + key + '&enabled=0';
   simian.ajaxToggle('/admin/package_alias/', enable, disable, button);
 };
@@ -179,7 +185,7 @@ goog.exportSymbol('simian.togglePackageAlias', simian.togglePackageAlias);
  * @param {Element} button The button that sets the state.
  */
 applesus.toggleProductTrack = function(productId, track, button) {
-  var enable =  'track=' + track + '&enabled=1';
+  var enable = 'track=' + track + '&enabled=1';
   var disable = 'track=' + track + '&enabled=0';
   simian.ajaxToggle(
     '/admin/applesus/product/' + productId, enable, disable, button);
@@ -227,13 +233,13 @@ goog.exportSymbol('applesus.toggleProductUnattended',
  * @param {Element} button The button that sets the state.
  */
 applesus.toggleProductManualOverride = function(productId, button) {
-  var enable =  'manual_override=1';
+  var enable = 'manual_override=1';
   var disable = 'manual_override=0';
   var callback = function(json) {
-    goog.dom.$(productId + '-testing-promote-date').innerHTML =
-        json['testing_promote_date'] || '';
-    goog.dom.$(productId + '-stable-promote-date').innerHTML =
-        json['stable_promote_date'] || '';
+    goog.dom.setTextContent(goog.dom.$(productId + '-testing-promote-date'),
+        json['testing_promote_date'] || '');
+    goog.dom.setTextContent(goog.dom.$(productId + '-stable-promote-date'),
+        json['stable_promote_date'] || '');
   };
   simian.ajaxToggle('/admin/applesus/product/' + productId,
                    enable, disable, button, 'manual_override', callback);

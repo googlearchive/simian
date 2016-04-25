@@ -20,11 +20,13 @@ touch $BUNDLE_ROOT/simian/__init__.py
 ln -s ../$SIMIAN_REL_PATH/auth $BUNDLE_ROOT/simian/auth
 ln -s ../$SIMIAN_REL_PATH/mac $BUNDLE_ROOT/simian/mac
 ln -s ../$SIMIAN_REL_PATH/settings.py $BUNDLE_ROOT/simian/settings.py
-ln -s $SIMIAN_ROOT/gae_resources/icons $BUNDLE_ROOT
-ln -s $SIMIAN_ROOT/gae_resources/client_resources $BUNDLE_ROOT
+
+# Symlink gae_resources.
+ln -s ../$SIMIAN_ROOT/gae_resources/icons $BUNDLE_ROOT/icons
+ln -s ../$SIMIAN_ROOT/gae_resources/client_resources $BUNDLE_ROOT/client_resources
+
 # Symlink necessary files at the root of the bundle.
 ln -s $SIMIAN_REL_PATH/mac/app.yaml $BUNDLE_ROOT/app.yaml
 ln -s $SIMIAN_REL_PATH/mac/index.yaml $BUNDLE_ROOT/index.yaml
 ln -s $SIMIAN_REL_PATH/mac/queue.yaml $BUNDLE_ROOT/queue.yaml
 ln -s $SIMIAN_REL_PATH/mac/cron.yaml $BUNDLE_ROOT/cron.yaml
-ln -s $SIMIAN_REL_PATH/mac/main.py $BUNDLE_ROOT/main.py

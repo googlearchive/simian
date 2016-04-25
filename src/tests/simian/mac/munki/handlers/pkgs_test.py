@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki pkgs module tests."""
-
-
 
 import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -76,7 +71,6 @@ class PackagesHandlerTest(PackagesTest):
     self.mox.StubOutWithMock(pkgs.handlers, 'IsClientResourceExpired')
     self.mox.StubOutWithMock(pkgs.memcache, 'get')
     self.mox.StubOutWithMock(pkgs.memcache, 'set')
-    self.MockSelf('send_blob')
 
     self.request.headers.get('If-Modified-Since', '').AndReturn(mod_since_date)
     self.request.headers.get('If-None-Match', 0).AndReturn(0)
@@ -126,7 +120,6 @@ class PackagesHandlerTest(PackagesTest):
     self.mox.StubOutWithMock(pkgs.handlers, 'IsClientResourceExpired')
     self.mox.StubOutWithMock(pkgs.memcache, 'get')
     self.mox.StubOutWithMock(pkgs.memcache, 'set')
-    self.MockSelf('send_blob')
 
     self.request.headers.get('If-Modified-Since', '').AndReturn(mod_since_date)
     self.request.headers.get('If-None-Match', 0).AndReturn(nomatch_etag)
@@ -225,6 +218,7 @@ class PackagesHandlerTest(PackagesTest):
     """Tests Packages.get() where an admin user is requesting a pkg."""
     self.mox.StubOutWithMock(pkgs.auth, 'DoAnyAuth')
     self.mox.StubOutWithMock(pkgs.auth, 'IsAdminUser')
+    self.mox.StubOutWithMock(pkgs.auth, 'IsSupportUser')
     self.mox.StubOutWithMock(pkgs.urllib, 'unquote')
 
     mock_user = self.mox.CreateMockAnything()
@@ -232,8 +226,11 @@ class PackagesHandlerTest(PackagesTest):
     pkgs.auth.DoAnyAuth().AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     pkgs.auth.IsAdminUser(email).AndReturn(True)
+    pkgs.auth.IsSupportUser(email).AndReturn(False)
+
     class StopTesting(Exception):
       """Class for only testing to a specific point in the code."""
+
     pkgs.urllib.unquote('anything').AndRaise(StopTesting)
 
     self.mox.ReplayAll()
@@ -253,8 +250,10 @@ class PackagesHandlerTest(PackagesTest):
     mock_user.email().AndReturn(email)
     pkgs.auth.IsAdminUser(email).AndReturn(False)
     pkgs.auth.IsSupportUser(email).AndReturn(True)
+
     class StopTesting(Exception):
       """Class for only testing to a specific point in the code."""
+
     pkgs.urllib.unquote('anything').AndRaise(StopTesting)
 
     self.mox.ReplayAll()
@@ -344,6 +343,9 @@ class PkgsModuleTest(PackagesTest):
     self.mox.ReplayAll()
     self.assertFalse(pkgs.PackageExists(filename))
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

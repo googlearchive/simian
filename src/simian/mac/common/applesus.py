@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Apple SUS shared functions."""
-
-
-
 
 import datetime
 import logging
@@ -112,7 +106,7 @@ class DistFileDocument(object):
 
     kv_split = re.compile(
         (r'(?:^//[^\n]*$)|'
-          '(?:^"(\w+)"\s*=\s*([\"\'])([^\\2]*?)\\2;$)'),
+         '(?:^"(\w+)"\s*=\s*([\"\'])([^\\2]*?)\\2;$)'),
         re.MULTILINE | re.DOTALL)
 
     for i in re.finditer(kv_split, istr):
@@ -367,4 +361,3 @@ def _GetNextWeekdayDate(weekday, min_date=None):
     next_date += datetime.timedelta(weekday - min_date.weekday())
 
   return next_date
-

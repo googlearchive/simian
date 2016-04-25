@@ -39,9 +39,9 @@ except ImportError:
 
 
 REQUIRE_BASE = [
-    'setuptools>=0.6c9',     # fix bugs with old version on Leopard
-    'pyasn1==0.1.2',
-    'tlslite==0.3.8',
+    'setuptools>=18.2',
+    'pyasn1>=0.1.2',
+    'tlslite==0.4.1',
     'pyyaml>=3.10',
     'requests',
 ]
@@ -49,14 +49,16 @@ REQUIRE_BASE = [
 REQUIRE_SETUP = REQUIRE_BASE + [
     'google_apputils==0.4',  # 0.4.1: ezsetup broken, 0.4.2: testbase broken
     'python-dateutil>=1.4,<2',  # because of google_apputils
-    'python-gflags==2.0'  # gflags 3.0+ requires python2.7
+    'python-gflags==2.0',  # gflags 3.0+ requires python2.7
 ]
 
 REQUIRE_TEST = REQUIRE_BASE + [
     'django==1.6',
-    'icalendar==1.2',
+    'icalendar>=1.2',
+    'mock',
     'mox>=0.5.3',
-    'unittest2==0.5.1',
+    'Pillow',  # needed for google_apputils init_all_stubs() (for imging stub)
+    'unittest2',
     'webapp2',
     'webtest',
     'WebOb>=1.2',  # webtest requires >=1.2.

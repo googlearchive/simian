@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """applesus module tests."""
-
-
 
 import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 import urlparse
 
 import mox
@@ -34,6 +29,7 @@ from simian.mac.cron import applesus
 
 
 class AppleSusModuleTest(mox.MoxTestBase):
+
   def testCatalogsDictionary(self):
     """Test global CATALOGS value."""
     self.assertTrue(hasattr(applesus, 'CATALOGS'))
@@ -501,6 +497,9 @@ class AppleSUSAutoPromoteTest(test.RequestHandlerTest):
         applesus.common.STABLE in mock_product_promote_stable.tracks)
 
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

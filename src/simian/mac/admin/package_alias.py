@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,26 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Package Alias admin handler."""
 
-
-
-
 import json
-import logging
-import os
-
-from google.appengine.api import users
-from google.appengine.ext import db
 
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import auth
-from simian.mac.common import util
 
 
 class PackageAlias(admin.AdminHandler):
@@ -106,8 +94,8 @@ class PackageAlias(admin.AdminHandler):
       munki_pkg_names = None
 
     data = {
-      'package_aliases': package_aliases,
-      'munki_pkg_names': munki_pkg_names,
-      'report_type': 'manifests_aliases',
+        'package_aliases': package_aliases,
+        'munki_pkg_names': munki_pkg_names,
+        'report_type': 'manifests_aliases',
     }
     self.Render('package_alias.html', data)

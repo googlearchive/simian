@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Package admin handler."""
-
-
-
 
 import datetime
 import urllib
@@ -32,7 +27,6 @@ from simian.mac import common
 from simian.mac import models
 from simian.mac.admin import xsrf
 from simian.mac.common import auth
-from simian.mac.munki import plist as plist_lib
 
 try:
   from simian.mac.common import mail
@@ -65,6 +59,7 @@ class Package(admin.AdminHandler):
     p.name = p.plist['name']
     p.display_name = p.plist.get('display_name', '')
     p.unattended = p.plist.get('unattended_install')
+    p.unattended_uninstall = p.plist.get('unattended_uninstall')
     p.version = p.plist['version']
     force_install_after_date = p.plist.get('force_install_after_date', None)
     if force_install_after_date:
@@ -269,20 +264,16 @@ class Package(admin.AdminHandler):
       mail.SendMail(
           settings.EMAIL_ADMIN_LIST, subject_line, '\n'.join(main_body))
 
-  def NotifyAdminsOfPackageChangeFromPlist(self, plist_xml):
+  def NotifyAdminsOfPackageChangeFromPlist(self, log, defer=True):
     """Notifies admins of changes to packages."""
-    plist = plist_lib.MunkiPackageInfoPlist(plist_xml)
-    plist.EncodeXml()
-    try:
-      plist.Parse()
-    except plist_lib.PlistError as e:
-      raise models.PackageInfoUpdateError(
-          'plist_lib.PlistError parsing plist XML: %s', str(e))
     subject_line = 'MSU Package Update by %s - %s' % (
-        users.get_current_user(), plist['installer_item_location'])
-    main_body = str(plist.GetXml(indent_num=2))
+        users.get_current_user(), log.filename)
+
+    plist_diff = log.plist_diff
+    main_body = 'Diff:\n' + '\n'.join([x['line'] for x in plist_diff])
     if mail:
-      mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, main_body)
+      mail.SendMail(
+          settings.EMAIL_ADMIN_LIST, subject_line, main_body, defer=defer)
 
   def NotifyAdminsOfPackageDeletion(self, pkginfo):
     """Notifies admins of packages deletions."""
@@ -305,6 +296,10 @@ class Package(admin.AdminHandler):
     unattended_install = self.request.get('unattended_install', None)
     if unattended_install is not None:
       unattended_install = unattended_install == 'on'
+
+    unattended_uninstall = self.request.get('unattended_uninstall', None)
+    if unattended_uninstall is not None:
+      unattended_uninstall = unattended_uninstall == 'on'
 
     # Parse any force_install_after_date str into a datetime object.
     force_install_after_date_str = self.request.get(
@@ -329,6 +324,7 @@ class Package(admin.AdminHandler):
 
     kwargs = {
         'unattended_install': unattended_install,
+        'unattended_uninstall': unattended_uninstall,
         # get_all() returns an empty array if set, and has no default value opt.
         'catalogs': self.request.get_all('catalogs'),
         'manifests': self.request.get_all('manifests'),
@@ -368,7 +364,7 @@ class Package(admin.AdminHandler):
     """Updates or creates a new PackageInfo entity from plist XML."""
     plist_xml = self.request.get('new_pkginfo_plist').encode('utf-8').strip()
     try:
-      pkginfo = models.PackageInfo.UpdateFromPlist(
+      pkginfo, log = models.PackageInfo.UpdateFromPlist(
           plist_xml, create_new=create_new)
     except models.PackageInfoUpdateError as e:
       self.error(400)
@@ -377,7 +373,7 @@ class Package(admin.AdminHandler):
       return
     else:
       if settings.email_on_every_change:
-        self.NotifyAdminsOfPackageChangeFromPlist(plist_xml)
+        self.NotifyAdminsOfPackageChangeFromPlist(log)
 
     self.redirect('/admin/package/%s?msg=PackageInfo saved#package-%s' % (
         pkginfo.filename, pkginfo.filename))

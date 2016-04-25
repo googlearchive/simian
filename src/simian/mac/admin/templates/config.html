@@ -69,7 +69,7 @@
             <form action="/admin/config" method="post">
           {% else %}
             <form action="/admin/config" method="post"
-                  onsubmit="return simian.ajaxSubmit(this, function(json) {document.getElementById('setting_{{ name }}').innerHTML = json['values'][0]['value'];});">
+                  onsubmit="return simian.ajaxSubmit(this, function(json) {simian.setTextContent(document.getElementById('setting_{{ name }}'), json['values'][0]['value']);});">
           {% endifequal %}
             <input type="hidden" name="setting" value="{{ name }}"/>
             <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>

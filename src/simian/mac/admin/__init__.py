@@ -1,11 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2010 Google Inc. All Rights Reserved.
-#
-
 """Top level __init__ for admin package."""
-
-
-
 
 import collections
 import datetime
@@ -101,8 +95,7 @@ def GetMenu():
            {'type': 'release_report', 'url': '/admin/release_report',
             'name': 'Release Report'},
            {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'}
-      ]},
-
+       ]},
       {'type': 'tags', 'url': '/admin/tags', 'name': 'Tags'},
 
       {'title': 'Client Reports'},
@@ -154,7 +147,6 @@ class AdminHandler(webapp2.RequestHandler):
 
   def IsAdminUser(self):
     """Returns True if the current user is an admin, False otherwise."""
-    # NOTE(user): this is definitely not threadsafe.
     if not hasattr(self, '_is_admin'):
       self._is_admin = auth.IsAdminUser()
     return self._is_admin

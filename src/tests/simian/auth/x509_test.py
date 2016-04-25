@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -158,9 +158,9 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
     self.mox.StubOutWithMock(
-        x509.tlslite.utils.keyfactory, 'parsePEMKey')
+        x509.tlslite_api, 'parsePEMKey')
     x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
-    x509.tlslite.utils.keyfactory.parsePEMKey(
+    x509.tlslite_api.parsePEMKey(
         '\n'.join(pem_output)).AndReturn('ok')
 
     self.mox.ReplayAll()
@@ -177,9 +177,9 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
     self.mox.StubOutWithMock(
-        x509.tlslite.utils.keyfactory, 'parsePEMKey')
+        x509.tlslite_api, 'parsePEMKey')
     x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
-    x509.tlslite.utils.keyfactory.parsePEMKey(
+    x509.tlslite_api.parsePEMKey(
         '\n'.join(pem_output)).AndRaise(SyntaxError)
 
     self.mox.ReplayAll()
@@ -588,36 +588,104 @@ class X509CertificateTest(mox.MoxTestBase):
         seq)
     self.mox.VerifyAll()
 
+  def testAttributeValueToString(self):
+    """Test _AttributeValueToString()."""
+    value = 'newyork'
+    expected = 'newyork'
+    self.assertEqual(value, expected)
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenLeadingBadCharsSpace(self):
+    """Test _AttributeValueToString()."""
+    value = ' new york'
+    expected = '\\ new york'
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenLeadingBadCharsHash(self):
+    """Test _AttributeValueToString()."""
+    value = '#new york'
+    expected = '\\#new york'
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenTrailingBadCharsSpace(self):
+    """Test _AttributeValueToString()."""
+    value = 'new york '
+    expected = 'new york\\ '
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenContainsNull(self):
+    """Test _AttributeValueToString()."""
+    value = 'new%syork' % chr(00)
+    expected = 'new\\00york'
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringPreventIndexRegression(self):
+    """Test _AttributeValueToString()."""
+    value = ',newyork'
+    expected = '\\,newyork'
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenCharsNeedingEscaping(self):
+    """Test _AttributeValueToString()."""
+    chars = ['"', '+', ',', ';', '<', '>', '\\']
+    for c in chars:
+      value = 'new%syork' % c
+      expected = 'new\\%syork' % c
+      result = self.x._AttributeValueToString(value)
+      self.assertEqual(expected, result)
+
+  def testAttributeValueToStringWhenMultipleAdjacentTransformsNeeded(self):
+    """Test _AttributeValueToString()."""
+    value = ' new,york;; '
+    expected = '\\ new\\,york\\;\\;\\ '
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+    value = '#new,york;\x00, '
+    expected = '\\#new\\,york\\;\\00\\,\\ '
+    result = self.x._AttributeValueToString(value)
+    self.assertEqual(expected, result)
+
   def testAssembleDNSequence(self):
     """Test _AssembleDNSequence()."""
-    input = (
+    value = (
       ((x509.OID_ID['CN'], 'foo'),),
       ((x509.OID_ID['OU'], 'bar'),),
     )
-    self.assertEqual(self.x._AssembleDNSequence(input), 'CN=foo,OU=bar')
+    self.mox.StubOutWithMock(self.x, '_AttributeValueToString')
+    self.x._AttributeValueToString('foo').AndReturn('foo')
+    self.x._AttributeValueToString('bar').AndReturn('bar')
+    self.mox.ReplayAll()
+    self.assertEqual(self.x._AssembleDNSequence(value), 'CN=foo,OU=bar')
+    self.mox.VerifyAll()
 
   def testAssembleDNSequenceWhenUnknownOID(self):
     """Test _AssembleDNSequence()."""
     bad_oid = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-    input = (
+    value = (
       ((bad_oid, 'foo'),),
       ((x509.OID_ID['OU'], 'bar'),),
     )
     self.assertRaises(
         x509.CertificateParseError,
         self.x._AssembleDNSequence,
-        input)
+        value)
 
   def testAssembleDNSequenceWhenBadStructure(self):
     """Test _AssembleDNSequence()."""
-    input = (
+    value = (
       (x509.OID_ID['CN'], 'foo'),     # bad structure
       ((x509.OID_ID['OU'], 'bar'),),
     )
     self.assertRaises(
         x509.CertificateParseError,
         self.x._AssembleDNSequence,
-        input)
+        value)
 
   def testGetFieldsFromSequence(self):
     """Test _GetFieldsFromSequence()."""
@@ -959,11 +1027,8 @@ class X509CertificateTest(mox.MoxTestBase):
     bytes = 'bytes'
     publickey = 'publickey'
 
-    self.stubs.Set(
-        x509.tlslite, 'X509',
-        self.mox.CreateMock(x509.tlslite.X509))
-    mock_tls509 = self.mox.CreateMockAnything()
-    x509.tlslite.X509.X509().AndReturn(mock_tls509)
+    self.mox.StubOutClassWithMocks(x509.tlslite_api, 'X509')
+    mock_tls509 = x509.tlslite_api.X509()
     mock_tls509.parseBinary(bytes).AndReturn(None)
     mock_tls509.publicKey = publickey
 

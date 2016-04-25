@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,20 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Apple SUS module tests."""
 
-
-
+import datetime
 import plistlib
 
 import mox
 import stubout
 
 import tests.appenginesdk
-import datetime
 from google.apputils import app
 from google.apputils import basetest
 from simian.mac.common import applesus
@@ -48,7 +43,7 @@ class AppleModuleTest(mox.MoxTestBase):
     buf = []
     while 1:
       s = f.read()
-      if s == '':
+      if not s:
         break
       else:
         buf.append(s)
@@ -90,7 +85,6 @@ class AppleModuleTest(mox.MoxTestBase):
     mock_catalog_obj = self.mox.CreateMockAnything()
     mock_catalog_obj.plist = catalog_xml
     mock_query = self.mox.CreateMockAnything()
-    mock_plist = self.mox.CreateMockAnything()
     mock_new_catalog_obj = self.mox.CreateMockAnything()
 
     self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
@@ -121,7 +115,7 @@ class AppleModuleTest(mox.MoxTestBase):
     mock_new_catalog_obj.put().AndReturn(None)
 
     self.mox.ReplayAll()
-    catalog, new_plist = applesus.GenerateAppleSUSCatalog(
+    _, new_plist = applesus.GenerateAppleSUSCatalog(
         os_version, track, mock_datetime)
     self.assertTrue('ID1' in new_plist['Products'])
     self.assertTrue('ID2' not in new_plist['Products'])
@@ -224,7 +218,6 @@ class AppleModuleTest(mox.MoxTestBase):
 
     Tested dates are in the past, current day, days and even weeks in future.
     """
-    current_datetime = datetime.datetime(2011, 07, 22, 12, 30, 00)
     dates = [
         (datetime.date(2011, 7, 21), datetime.date(2011, 7, 27)),
         (datetime.date(2011, 7, 22), datetime.date(2011, 7, 27)),
@@ -262,14 +255,14 @@ class DistFileDocumentTest(mox.MoxTestBase):
   def testParseInstallerScriptString(self):
     """Test _ParseInstallerScriptString()."""
     t = [
-            ['"K"="V";\n', {'K': 'V'}],
-            ['"K"=\'V\';\n', {'K': 'V'}],
-            ['"K"="V";\n\n\n"K2"="V2";\n', {'K': 'V', 'K2': 'V2'}],
-            ['"K"="V";\n\n\n"K2"="V2\nV3";\n', {'K': 'V', 'K2': 'V2\nV3'}],
-            # an invalid line disrupts the parser
-            ['"K"=;\n"K2"="V2"\n', {}],
-            # nested quotes
-            ['"K"=\'Hello "there"\';', {'K': 'Hello "there"'}],
+        ['"K"="V";\n', {'K': 'V'}],
+        ['"K"=\'V\';\n', {'K': 'V'}],
+        ['"K"="V";\n\n\n"K2"="V2";\n', {'K': 'V', 'K2': 'V2'}],
+        ['"K"="V";\n\n\n"K2"="V2\nV3";\n', {'K': 'V', 'K2': 'V2\nV3'}],
+        # an invalid line disrupts the parser
+        ['"K"=;\n"K2"="V2"\n', {}],
+        # nested quotes
+        ['"K"=\'Hello "there"\';', {'K': 'Hello "there"'}],
         ]
 
     for i, o in t:

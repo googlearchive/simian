@@ -343,6 +343,10 @@ class AuthSessionDataTest(mox.MoxTestBase):
     asd2 = base.AuthSessionData(other='2')
     self.assertNotEqual(self.asd, asd2)
 
+  def testNotEq(self):
+    other = base.AuthSessionData(foo='1')
+    self.assertFalse(self.asd != other)
+
 
 class AuthSessionDictTest(mox.MoxTestBase):
   """Test AuthSessionDict class."""
@@ -599,70 +603,6 @@ class Auth1Test(AuthTestingBase):
   def GetTestClass(self):
     return base.Auth1()
 
-  def testPatchTlslite(self):
-    """Test _PatchTlslite()."""
-    class DummyPublicKey(object):
-      """dummy public key object for this test, mock objects too heavy."""
-
-    pk = DummyPublicKey()
-    func = lambda: x
-    pk._rawPublicKeyOp = func
-
-    hasattr_ = self.mox.CreateMockAnything()
-    hasattr_(base.tlslite.utils, 'Python_RSAKey').AndReturn(False)
-
-    self.mox.ReplayAll()
-    self.ba._PatchTlslite(pk, hasattr_=hasattr_)
-    self.assertTrue(hasattr(pk, '_patch_auth1'))
-    self.assertEqual(pk._patch_auth1, 1)
-    self.assertTrue(type(pk._rawPublicKeyOp) is base.types.MethodType)
-    self.assertFalse(pk._rawPublicKeyOp is func)
-    self.mox.VerifyAll()
-
-  def testPatchTlsliteWhenAlreadyPatched(self):
-    """Test _PatchTlslite()."""
-    class DummyPublicKey(object):
-      """dummy public key object for this test, mock objects too heavy."""
-
-    pk = DummyPublicKey()
-    pk._patch_auth1 = 1
-    pk._rawPublicKeyOp = 'untouched'
-
-    self.mox.ReplayAll()
-    self.ba._PatchTlslite(pk)
-    self.assertEqual(pk._rawPublicKeyOp, 'untouched')
-    self.mox.VerifyAll()
-
-  def testPatchTlsliteWhenNoPatchRequired(self):
-    """Test _PatchTlslite()."""
-    class DummyPublicKey(object):
-      """dummy public key object for this test, mock objects too heavy."""
-
-    pk = DummyPublicKey()
-    pk._rawPublicKeyOp = 'untouched'
-
-    hasattr_ = self.mox.CreateMockAnything()
-    hasattr_(base.tlslite.utils, 'Python_RSAKey').AndReturn(True)
-    hasattr_(base.tlslite.utils, 'PyCrypto_RSAKey').AndReturn(False)
-    hasattr_(base.tlslite.utils, 'OpenSSL_RSAKey').AndReturn(False)
-
-    self.mox.ReplayAll()
-    self.ba._PatchTlslite(pk, hasattr_=hasattr_)
-    self.assertEqual(pk._rawPublicKeyOp, 'untouched')
-    self.mox.VerifyAll()
-
-  def testPatchTlsliteWhenMissingMethod(self):
-    """Test _PatchTlslite()."""
-    class DummyPublicKey(object):
-      """dummy public key object for this test, mock objects too heavy."""
-
-    pk = DummyPublicKey()
-
-    self.mox.ReplayAll()
-    self.ba._PatchTlslite(pk)
-    self.assertFalse(hasattr(pk, '_patch_auth1'))
-    self.mox.VerifyAll()
-
   def testNonce(self):
     """Test Nonce()."""
     random_bytes = 'a' * 16
@@ -725,17 +665,15 @@ class Auth1Test(AuthTestingBase):
     """Test _LoadKey()."""
     keystr='pemkey'
     self.stubs.Set(
-        base.tlslite.utils.keyfactory,
+        base.tlslite_api,
         'parsePEMKey',
         self.mox.CreateMockAnything())
 
     mock_key = self.mox.CreateMockAnything()
 
-    base.tlslite.utils.keyfactory.parsePEMKey(keystr).AndRaise(
-        SyntaxError)
+    base.tlslite_api.parsePEMKey(keystr).AndRaise(SyntaxError)
 
-    base.tlslite.utils.keyfactory.parsePEMKey(keystr).AndReturn(
-        mock_key)
+    base.tlslite_api.parsePEMKey(keystr).AndReturn(mock_key)
 
     self.mox.ReplayAll()
     self.assertRaises(ValueError, self.ba._LoadKey, keystr)
@@ -797,15 +735,11 @@ class Auth1Test(AuthTestingBase):
 
   def testVerifyCertSignedByCA(self):
     """Test VerifyCertSignedByCA()."""
-    pk = 'public key'
     self.mox.StubOutWithMock(self.ba, 'LoadOtherCert')
-    self.mox.StubOutWithMock(self.ba, '_PatchTlslite')
     self.ba._ca_pem = 'ca pem'
     mock_ca_cert = self.mox.CreateMockAnything()
     mock_cert = self.mox.CreateMockAnything()
     self.ba.LoadOtherCert(self.ba._ca_pem).AndReturn(mock_ca_cert)
-    mock_ca_cert.GetPublicKey().AndReturn(pk)
-    self.ba._PatchTlslite(pk).AndReturn(None)
     mock_cert.IsSignedBy(mock_ca_cert).AndReturn(True)
     self.mox.ReplayAll()
     self.assertTrue(self.ba.VerifyCertSignedByCA(mock_cert))
@@ -820,19 +754,12 @@ class Auth1Test(AuthTestingBase):
     mock_publickey = self.mox.CreateMockAnything()
     mock_publickey.n = 'modulus'
 
-    self.mox.StubOutWithMock(
-        base.tlslite.utils.cryptomath, 'numBytes')
-
     mock_cert.GetPublicKey().AndReturn(mock_publickey)
-    base.tlslite.utils.cryptomath.numBytes(
-        mock_publickey.n).AndReturn(len(signature))
     mock_publickey.hashAndVerify(
         base.array.array('B', signature),
         base.array.array('B', data)).AndReturn(-1)
 
     mock_cert.GetPublicKey().AndReturn(mock_publickey)
-    base.tlslite.utils.cryptomath.numBytes(
-        mock_publickey.n).AndReturn(len(signature))
 
     mock_publickey.hashAndVerify(
         base.array.array('B', signature),
@@ -855,23 +782,14 @@ class Auth1Test(AuthTestingBase):
 
     mock_cert = self.mox.CreateMockAnything()
     mock_publickey = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(self.ba, '_PatchTlslite')
     mock_publickey.n = 'modulus'
-    self.mox.StubOutWithMock(
-        base.tlslite.utils.cryptomath, 'numBytes')
 
     mock_cert.GetPublicKey().AndReturn(mock_publickey)
-    base.tlslite.utils.cryptomath.numBytes(
-        mock_publickey.n).AndReturn(modulus_len)
-    self.ba._PatchTlslite(mock_publickey).AndReturn(True)
     mock_publickey.hashAndVerify(
         base.array.array('B', signature),
         base.array.array('B', data)).AndReturn(-1)
 
     mock_cert.GetPublicKey().AndReturn(mock_publickey)
-    base.tlslite.utils.cryptomath.numBytes(
-        mock_publickey.n).AndReturn(modulus_len)
-    self.ba._PatchTlslite(mock_publickey).AndReturn(True)
     mock_publickey.hashAndVerify(
         base.array.array('B', signature),
         base.array.array('B', data)).AndReturn(-1)
@@ -898,11 +816,6 @@ class Auth1Test(AuthTestingBase):
         base.array.array('B', signature),
         base.array.array('B', data)).AndRaise(AssertionError)
     mock_publickey.n = 1000
-
-    self.mox.StubOutWithMock(
-        base.tlslite.utils.cryptomath, 'numBytes')
-    base.tlslite.utils.cryptomath.numBytes(
-        mock_publickey.n).AndReturn(len(signature)/2)
 
     self.mox.ReplayAll()
     self.ba._cert = mock_cert

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki manifests module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 
 from simian.mac import models
 from tests.simian.mac.common import test
+from simian.mac.munki import plist
 from simian.mac.munki.handlers import manifests
 
 
@@ -134,7 +130,7 @@ class HandlersTest(test.RequestHandlerTest):
         (('tag_key_name =', 'footag2'),)).AndReturn(tag_mods)
 
     # Setup dict of expected output xml.
-    tmp_plist_exp = manifests.plist_module.MunkiManifestPlist(plist_xml)
+    tmp_plist_exp = plist.MunkiManifestPlist(plist_xml)
     tmp_plist_exp.Parse()
     expected_out_dict = tmp_plist_exp.GetContents()
     expected_out_dict[install_type_optional_installs] = [site_mod_one.value]
@@ -151,11 +147,14 @@ class HandlersTest(test.RequestHandlerTest):
     # Generate the dynamic manifest, then get dict output to compare to the
     # expected output.
     out_xml = manifests.common.GenerateDynamicManifest(plist_xml, client_id)
-    tmp_plist_out = manifests.plist_module.MunkiManifestPlist(out_xml)
+    tmp_plist_out = plist.MunkiManifestPlist(out_xml)
     tmp_plist_out.Parse()
     out_dict = tmp_plist_out.GetContents()
     self.assertEqual(out_dict, expected_out_dict)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

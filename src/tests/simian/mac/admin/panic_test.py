@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """panic module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
-import mox
-import stubout
 
 from django.conf import settings
 settings.configure()
@@ -157,6 +150,9 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

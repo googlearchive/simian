@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Shared resources for App Engine."""
-
-
-
 
 import logging
 import time
@@ -54,8 +49,8 @@ def SafeBlobDel(blobstore_key):
     blobstore.delete_async(blobstore_key)
   except blobstore.Error, e:
     logging.warning((
-      'blobstore.delete(%s) failed: %s. '
-      'this key is now probably orphaned.'), blobstore_key, str(e))
+        'blobstore.delete(%s) failed: %s. '
+        'this key is now probably orphaned.'), blobstore_key, str(e))
 
 
 def SafeEntityDel(entity):
@@ -68,8 +63,8 @@ def SafeEntityDel(entity):
     entity.delete_async()
   except db.Error, e:
     logging.warning((
-      'Model.delete(%s) failed: %s. '
-      'this entity is now probably empty.'), entity.key().name(), str(e))
+        'Model.delete(%s) failed: %s. '
+        'this entity is now probably empty.'), entity.key().name(), str(e))
 
 
 def GetBlobAndDel(blobstore_key):
@@ -87,7 +82,6 @@ def GetBlobAndDel(blobstore_key):
   blob_reader.close()
   SafeBlobDel(blobstore_key)
   return blob_str
-
 
 
 class QueryIterator(object):
@@ -109,7 +103,6 @@ class QueryIterator(object):
       for entity in entities:
         yield entity
       self._query.with_cursor(self._query.cursor())
-
 
 
 def LockExists(name):

@@ -144,17 +144,3 @@ def GetCaParameters(settings, ca_id=0, omit_server_private_key=False):
 
   ca_params.ca_id = ca_id
   return ca_params
-
-
-def GetCaParametersDefault(settings, omit_server_private_key=False):
-  """Easy to remember function frontend for getting CA default parameters.
-
-  Same as calling GetCaParameters(settings, None) currently.
-
-  Returns:
-    CaParameters instance as GetCaParameters() returns.
-  Raises:
-    CaIdError: as GetCaParameters() would.
-  """
-  return GetCaParameters(
-      settings, None, omit_server_private_key=omit_server_private_key)

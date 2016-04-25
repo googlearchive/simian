@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module to handle /admin/uploadpkg."""
-
-
 
 import logging
 
@@ -31,6 +27,7 @@ from simian.mac import admin
 from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.common import gae_util
+from simian.mac.common import util
 from simian.mac.munki import handlers
 
 
@@ -96,7 +93,8 @@ class UploadPackage(
         return
 
       values = {
-          'upload_url': blobstore.create_upload_url('/admin/uploadpkg'),
+          'upload_url': blobstore.create_upload_url(
+              '/admin/uploadpkg', gs_bucket_name=util.GetBlobstoreGSBucket()),
           'filename': filename,
           'file_size_kbytes': p.plist['installer_item_size'],
       }
@@ -198,6 +196,7 @@ class UploadPackage(
     admin_log = models.AdminPackageLog(
         user=user, action='uploadpkg', filename=blob_info.filename)
     admin_log.put()
+
 
     self.redirect(
         '/admin/uploadpkg?mode=success&filename=%s' % blob_info.filename)

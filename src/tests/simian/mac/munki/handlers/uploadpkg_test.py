@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """uploadpkg module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -72,7 +67,8 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.request.get('mode').AndReturn('')
     self.request.get('msg', None).AndReturn(None)
     self.mox.StubOutWithMock(uploadpkg.blobstore, 'create_upload_url')
-    uploadpkg.blobstore.create_upload_url('/uploadpkg').AndReturn('/url')
+    uploadpkg.blobstore.create_upload_url(
+        '/uploadpkg', gs_bucket_name=None).AndReturn('/url')
     self.response.out.write('/url').AndReturn(None)
 
     self.mox.ReplayAll()
@@ -86,7 +82,6 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
     self.MockSelf('get_uploads')
     upload_files = []
-    name = 'fooname'
     filename = 'fooname.dmg'
     pkginfo = 'anything'
     install_types = ['managed_installs', 'managed_updates']
@@ -114,7 +109,6 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.MockSelf('get_uploads')
     upload_files = ['some file']
     pkginfo_files = []
-    name = 'fooname'
     filename = 'fooname.dmg'
     pkginfo = 'anything'
     install_types = ['managed_installs', 'managed_updates']
@@ -147,7 +141,6 @@ class UploadPackageTest(test.RequestHandlerTest):
     blob2_key = 'pkginfokey'
     upload_files = [mock_blob1]
     pkginfo_files = [mock_blob2]
-    name = 'good'
     filename = 'good.dmg'
     pkginfo = 'BADBADBAD'
     install_types = ['managed_installs', 'managed_updates']
@@ -274,7 +267,6 @@ class UploadPackageTest(test.RequestHandlerTest):
     """Test uploading an entirely new package."""
     self.mox.StubOutWithMock(uploadpkg.handlers, 'IsBlobstore')
     uploadpkg.handlers.IsBlobstore().AndReturn(True)
-    mock_user = self.mox.CreateMockAnything()
     self.MockDoMunkiAuth(require_level=uploadpkg.gaeserver.LEVEL_UPLOADPKG)
     self.MockSelf('get_uploads')
     self.mox.StubOutWithMock(uploadpkg.gae_util, 'GetBlobAndDel')
@@ -628,6 +620,9 @@ class UploadPackageTest(test.RequestHandlerTest):
     self.c.post()
     self.c.post()
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

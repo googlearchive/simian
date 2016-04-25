@@ -190,30 +190,6 @@ class SettingsModuleTest(mox.MoxTestBase):
     self.assertRaises(
         util.CaParametersError, util.GetCaParameters, self.settings, '_what')
 
-  def testGetCaParametersDefault(self):
-    """Test GetCaParametersDefault()."""
-    self.mox.StubOutWithMock(util, 'GetCaParameters')
-    settings = {'whatever': 1}
-    util.GetCaParameters(
-        settings, None, omit_server_private_key=False).AndReturn('ok')
-
-    self.mox.ReplayAll()
-    self.assertEqual('ok', util.GetCaParametersDefault(settings))
-    self.mox.VerifyAll()
-
-  def testGetCaParametersDefaultWithOmitServerPrivateKey(self):
-    """Test GetCaParametersDefault()."""
-    self.mox.StubOutWithMock(util, 'GetCaParameters')
-    settings = {'whatever': 1}
-    util.GetCaParameters(
-        settings, None, omit_server_private_key=True).AndReturn('ok')
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        'ok',
-        util.GetCaParametersDefault(settings, omit_server_private_key=True))
-    self.mox.VerifyAll()
-
 
 def main(unused_argv):
   basetest.main()

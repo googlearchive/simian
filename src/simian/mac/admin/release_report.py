@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,8 @@
 #
 """Generates 'Managed Software Update Update' text for MSU releases."""
 
-
-
 import datetime
+import distutils.version
 
 from google.appengine.api import users
 
@@ -33,8 +32,18 @@ OSX_VERSIONS = {
     '7': 'Lion (OS X 10.7)',
     '8': 'Mountain Lion (OS X 10.8)',
     '9': 'Mavericks (OS X 10.9)',
-    '1': 'Yosemite (OS X 10.10)'
+    '10': 'Yosemite (OS X 10.10)',
+    '11': 'El Capitan (OS X 10.11)',
     }
+
+
+def GetOSXMajorVersion(os):
+  if os:
+    version = distutils.version.LooseVersion(os).version
+    if len(version) < 2:
+      return None
+    return str(version[1])
+  return None
 
 
 class ReleaseReport(admin.AdminHandler):
@@ -162,18 +171,11 @@ class ReleaseReport(admin.AdminHandler):
     # TODO(user): This should handle minor releases as well.
     # If a minimum or maximum OS is set, this reads only the 4th character,
     # which will correspond with the major OS version.
-    # TODO(user): This should use regex, not string positions.
-    if min_os:
-      if min_os[3:4] == '4' or min_os[3:4] == '5':
-        min_os_major = None
-      else:
-        min_os_major = min_os[3:4]
-    else:
+    min_os_major = GetOSXMajorVersion(min_os)
+    if min_os_major == '4' or min_os_major == '5':
       min_os_major = None
-    if max_os:
-      max_os_major = max_os[3:4]
-    else:
-      max_os_major = None
+
+    max_os_major = GetOSXMajorVersion(max_os)
     if max_os_major or min_os_major:
       if max_os_major == min_os_major:
         result_string = ' %s %s.' % (settings.RELEASE_REPORT_VERSION_VERB,
@@ -225,6 +227,8 @@ class ReleaseReport(admin.AdminHandler):
       item_dict['managed_update'] = False
 
     item_dict['is_unattended'] = p.plist.get('unattended_install', False)
+    item_dict['is_unattended_uninstall'] = p.plist.get(
+        'unattended_uninstall', False)
 
     if p.plist.get('force_install_after_date', None):
       force_date_raw = p.plist.get('force_install_after_date', None)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Tools for manipulating OSX packages with Munki."""
-
-
-
 
 import os
 import subprocess
@@ -28,6 +23,7 @@ from simian.mac.munki import plist
 
 MUNKI_PATH = '/usr/local/munki/'
 MAKEPKGINFO = 'makepkginfo'
+
 
 class Error(Exception):
   """Base Error class."""

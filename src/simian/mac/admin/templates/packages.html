@@ -43,6 +43,14 @@
         simian.removeClass(document.getElementById('newpackage'), 'visible');
       });
     }
+    function onNewPackageTextAreaChanged(textarea) {
+      var button = document.getElementById('newpackage-submit');
+      if (textarea.value) {
+        button.removeAttribute("disabled");
+      } else {
+        button.setAttribute("disabled", "true");
+      }
+    }
   </script>
   <style>
     &#9660;
@@ -60,21 +68,24 @@
   {% endif %}
 
   <div id="newpackage" class="modaldialog">
-  <h2>Create PackageInfo</h2><br/><br/>
-  <form action="/admin/package" method="post" enctype="multipart/form-data">
-    <input type="file" name="new_pkginfo_plist" accept=".plist,text/*" />
-    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
-    <button type="submit">Upload Plist</button>
-  </form>
-  <br />
   <form action="/admin/package" method="post">
-    <label for="new_pkginfo_plist" style="text-align:left">Copy/Paste PackageInfo Plist (XML)</label>
-    <textarea name="new_pkginfo_plist" style="width:450px"></textarea><br/><br/>
+    <h2>
+      Create PackageInfo
+      <input type="button" style="position:relative; float:right;" value="From File"
+             onclick="simian.populateTextAreaFromFile('newpackage-fileinput', 'newpackage-content')" />
+    </h2>
+    <br/>
+    <input id="newpackage-fileinput" type="file" style="display:none;"accept=".plist,text/*" />
+    <br />
+    <label for="new_pkginfo_plist" style="text-align:left"><b>OR</b> Copy/Paste PackageInfo Plist (XML)</label>
+    <textarea name="new_pkginfo_plist" style="width:450px" oninput="onNewPackageTextAreaChanged(this);"
+              id="newpackage-content"></textarea>
+    <br/><br/>
     <div style="text-align:right">
     <input type="button" class="button" value="Close"
            onclick="simian.removeClass(document.getElementById('newpackage'), 'visible'); void(0);"/>
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
-    <button type="submit">Create</button>
+    <button id="newpackage-submit" type="submit" disabled>Create</button>
     </div>
   </form>
   </div>
@@ -154,6 +165,9 @@
               {{ pkg.install_types|munki_properties }}
               {% if pkg.unattended %}
                 {{ 'unattended_install'|munki_property }}
+              {% endif %}
+              {% if pkg.unattended_uninstall %}
+                {{ 'unattended_uninstall'|munki_property }}
               {% endif %}
               {{ pkg.force_install_after_date|munki_property_forcedate }}
             {% endspaceless %}

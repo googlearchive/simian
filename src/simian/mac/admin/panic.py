@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Panic mode handler."""
-
 
 
 from google.appengine.api import users
@@ -39,8 +36,8 @@ class AdminPanic(admin.AdminHandler):
     modes = []
     for mode in common.PANIC_MODES:
       d = {
-        'name': mode,
-        'enabled': common.IsPanicMode(mode),
+          'name': mode,
+          'enabled': common.IsPanicMode(mode),
       }
       modes.append(d)
 

@@ -1,10 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2010 Google Inc. All Rights Reserved.
-#
-
 """Top level __init__ for handlers package."""
-
-
 
 import datetime
 import logging
@@ -155,11 +150,11 @@ class AuthenticationHandler(webapp2.RequestHandler):
       client_id = self.request.headers.get('X-munki-client-id', '')
       if client_id:
         client_id = urllib.unquote(client_id)
-        logging.warning('Client ID: %s', client_id)
+        logging.info('Client ID: %s', client_id)
       # Log the traceback of the exception, then gracefully return 403.
       exc_type, exc_value, exc_tb = sys.exc_info()
       tb = traceback.format_exception(exc_type, exc_value, exc_tb)
-      logging.warning('handle_exception: %s', ''.join(tb))
+      logging.info('NotAuthenticated exception: %s', ''.join(tb))
       self.error(403)
       return
 

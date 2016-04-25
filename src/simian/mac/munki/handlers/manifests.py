@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,23 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Manifest URL handlers."""
 
-
-
 import logging
-import re
-import urllib
 
-from google.appengine.api import users
-
-from simian.auth import gaeserver
 from simian.mac.common import auth
 from simian.mac.munki import common
 from simian.mac.munki import handlers
-from simian.mac.munki import plist as plist_module
 
 
 class Manifests(handlers.AuthenticationHandler):
@@ -40,7 +30,7 @@ class Manifests(handlers.AuthenticationHandler):
     """Manifest get handler.
 
     Args:
-      client_id: optional str client_id; only needed for user requests.
+      client_id_str: optional str client_id; only needed for user requests.
 
     Returns:
       A webapp.Response() response.

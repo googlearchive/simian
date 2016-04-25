@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """util module tests."""
 
-
+import datetime
+import time
 
 
 import mox
@@ -42,19 +41,19 @@ class DatetimeTest(mox.MoxTestBase):
 
   def testUtcFromTimestampInt(self):
     """Tests utcfromtimestamp()."""
-    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    expected_datetime = datetime.datetime(2011, 8, 8, 15, 42, 59)
     epoch = 1312818179
     self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
 
   def testUtcFromTimestampFloat(self):
     """Tests utcfromtimestamp()."""
-    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    expected_datetime = datetime.datetime(2011, 8, 8, 15, 42, 59)
     epoch = 1312818179.1415989
     self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
 
   def testUtcFromTimestampString(self):
     """Tests utcfromtimestamp()."""
-    expected_datetime = util.datetime.datetime(2011, 8, 8, 15, 42, 59)
+    expected_datetime = datetime.datetime(2011, 8, 8, 15, 42, 59)
     epoch = '1312818179.1415989'
     self.assertEqual(expected_datetime, self.dt.utcfromtimestamp(epoch))
 
@@ -68,13 +67,13 @@ class DatetimeTest(mox.MoxTestBase):
 
   def testUtcFromTimestampUnderOneHourInFuture(self):
     """Tests utcfromtimestamp() with epoch under one hour in the future."""
-    epoch = util.time.time() + 600.0  # add ten minutes
+    epoch = time.time() + 600.0  # add ten minutes
     self.assertRaises(
         util.EpochFutureValueError, self.dt.utcfromtimestamp, epoch)
 
   def testUtcFromTimestampOverOneHourInFuture(self):
     """Tests utcfromtimestamp() with epoch over one hour in the future."""
-    epoch = util.time.time() + 4000.0  # add a bit more than 1 hour
+    epoch = time.time() + 4000.0  # add a bit more than 1 hour
     self.assertRaises(
         util.EpochExtremeFutureValueError,
         self.dt.utcfromtimestamp, epoch)

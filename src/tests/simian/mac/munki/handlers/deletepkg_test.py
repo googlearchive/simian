@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """deletepkg module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -86,6 +81,9 @@ class DeletePackageTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

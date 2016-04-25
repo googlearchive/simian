@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ def main(args):
   elif action == 'report_broken_client':
     report_broken_client.main()
   elif action == 'version':
-    print version.Version(args)
+    print version.VERSION
   else:
     PrintOptions()
     return 1

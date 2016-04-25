@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Munki models module tests."""
-
-
-
 
 import datetime
 
@@ -170,7 +164,6 @@ class CatalogTest(mox.MoxTestBase):
   def testGenerateWithDbError(self):
     """Tests Generate() where put() raises db.Error."""
     name = 'goodname'
-    catalog = self.mox.CreateMockAnything()
     plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist1 = self.mox.CreateMockAnything()
     pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
@@ -537,6 +530,7 @@ class PackageInfoTest(mox.MoxTestBase):
     name = kwargs.get('name')
     display_name = kwargs.get('display_name')
     unattended_install = kwargs.get('unattended_install')
+    unattended_uninstall = kwargs.get('unattended_uninstall')
     description = kwargs.get('description')
     version = kwargs.get('version')
     minimum_os_version = kwargs.get('minimum_os_version')
@@ -653,7 +647,8 @@ class PackageInfoTest(mox.MoxTestBase):
           unattended_install=unattended_install, description=description,
           version=version, minimum_os_version=minimum_os_version,
           maximum_os_version=maximum_os_version,
-          force_install_after_date=force_install_after_date)
+          force_install_after_date=force_install_after_date,
+          unattended_uninstall=unattended_uninstall)
     # Verify that the pkginfo.plist property was set.
     self.assertEqual(mock_log.plist, pkginfo.plist)
 
@@ -663,7 +658,7 @@ class PackageInfoTest(mox.MoxTestBase):
     """Test Update() when promoting a package to stable."""
     p = models.PackageInfo()
     p.plist = self._GetTestPackageInfoPlist({'desc': 'foodesc'})
-    p.catalogs = ['unstable', 'testing', ]
+    p.catalogs = ['unstable', 'testing']
     p.manifests = ['unstable', 'testing']
 
     catalogs = ['unstable', 'testing', 'stable']
@@ -747,6 +742,7 @@ class PackageInfoTest(mox.MoxTestBase):
     p.catalogs = ['unstable', 'testing', 'stable']
     p.manifests = ['unstable', 'testing', 'stable']
     p.plist['unattended_install'] = True
+    p.plist['unattended_uninstall'] = True
     p.plist['install_types'] = orig_install_types
 
     manifests = ['unstable']
@@ -759,6 +755,7 @@ class PackageInfoTest(mox.MoxTestBase):
     self.assertEqual(manifests, pkginfo.manifests)
     self.assertEqual(orig_desc, pkginfo.description)
     self.assertEqual(True, pkginfo.plist['unattended_install'])
+    self.assertEqual(True, pkginfo.plist['unattended_uninstall'])
     self.assertEqual(orig_install_types, pkginfo.plist['install_types'])
     self.mox.VerifyAll()
 

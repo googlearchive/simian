@@ -8,7 +8,9 @@
   <h2>Apple Update Logs: {{ product_id }} {{ display_name|default_if_none:"" }}</h2>
 {% endif %}
 
-{% include "results_pagination.html" %}
+<div style="margin-bottom:5px;">
+  {% include "results_pagination.html" %}
+</div>
 
 {% if logs %}
   <table class="stats-table">
@@ -42,5 +44,3 @@
 {% endif %}
 
 {% endblock %}
-
-

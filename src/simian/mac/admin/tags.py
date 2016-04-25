@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Tags admin handler."""
-
-
-
-
 
 import urllib
 
@@ -40,7 +34,7 @@ class Tags(admin.AdminHandler):
         self.IsAdminUser() or auth.IsSupportUser or auth.IsSecurityUser())
     tags = models.Tag.all()
     tags = sorted(tags, key=lambda t: unicode.lower(t.key().name()))
-    d = {'tags': tags, 'can_mod_tags': self.IsAdminUser(),
+    d = {'tags': tags, 'can_mod_tags': can_mod_tags,
          'report_type': 'tags'}
     self.Render('tags.html', d)
 
@@ -66,7 +60,7 @@ class Tags(admin.AdminHandler):
       tag_manifest_mods = models.TagManifestModification.all().filter(
           'tag_key_name =', tag).get()
       if tag_manifest_mods:
-         msg = 'Tag not deleted as it\'s being used for Manifest Modifications.'
+        msg = 'Tag not deleted as it\'s being used for Manifest Modifications.'
       else:
         t = models.Tag.get_by_key_name(tag)
         if t:

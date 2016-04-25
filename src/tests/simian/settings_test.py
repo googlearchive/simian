@@ -132,14 +132,12 @@ class BaseSettingsTest(BaseSettingsTestBase):
     }
 
     self.mox.StubOutWithMock(self.settings, '_Set')
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
     globals_ = self.mox.CreateMockAnything()
 
     globals_().AndReturn(global_vars)
     globals_().AndReturn(global_vars)
     globals_().AndReturn(global_vars)
     self.settings._Set('foo', 1)
-    self.settings._Calculate('foo')
 
     self.mox.ReplayAll()
     self.settings._PopulateGlobals(globals_=globals_)
@@ -152,7 +150,6 @@ class BaseSettingsTest(BaseSettingsTestBase):
         'bar': 2,
     }
 
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
     set_func = self.mox.CreateMockAnything()
     globals_ = self.mox.CreateMockAnything()
 
@@ -160,7 +157,6 @@ class BaseSettingsTest(BaseSettingsTestBase):
     globals_().AndReturn(global_vars)
     globals_().AndReturn(global_vars)
     set_func('foo', 1)
-    self.settings._Calculate('foo')
 
     self.mox.ReplayAll()
     self.settings._PopulateGlobals(set_func=set_func, globals_=globals_)
@@ -169,23 +165,6 @@ class BaseSettingsTest(BaseSettingsTestBase):
   def testGet(self):
     """Test _Get()."""
     self._TestNotImplemented('_Get', 'k')
-
-  def testResolveIfCalculatedSetting(self):
-    """Test _ResolveIfCalculatedSetting()."""
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
-    self.mox.StubOutWithMock(self.settings, '_Get')
-
-    self.settings._Get('a').AndReturn(None)
-    self.settings._Calculate('a')
-    self.settings._Get('b').AndReturn(None)
-    self.settings._Calculate('b')
-    self.settings._Calculate('x')
-
-    self.mox.ReplayAll()
-    self.assertTrue(self.settings._ResolveIfCalculatedSetting('x') is None)
-    self.settings._SetCalculatedSetting('x', ['a', 'b'])
-    self.assertTrue(self.settings._ResolveIfCalculatedSetting('x') is None)
-    self.mox.VerifyAll()
 
   def testSet(self):
     """Test _Set()."""
@@ -283,14 +262,6 @@ class BaseSettingsTest(BaseSettingsTestBase):
     self.settings._CheckValidation('foo', 'bar')
     self.mox.VerifyAll()
 
-  def testSetCalculatedSetting(self):
-    """Test SetCalculatedSetting()."""
-    k = 'k'
-    v = ['other_k']
-    self.settings._calculated_settings = {}
-    self.settings._SetCalculatedSetting(k, v)
-    self.assertEqual(self.settings._calculated_settings, {k: v})
-
   def testSetValidation(self):
     """Test SetValidation()."""
     k = 'foo'
@@ -322,13 +293,9 @@ class BaseSettingsTest(BaseSettingsTestBase):
   def testGetattr(self):
     """Test __getattr__()."""
     self.mox.StubOutWithMock(self.settings, '_Get')
-    self.mox.StubOutWithMock(self.settings, '_ResolveIfCalculatedSetting')
 
-    self.settings._ResolveIfCalculatedSetting('foo')
     self.settings._Get('foo').AndReturn(2)
-    self.settings._ResolveIfCalculatedSetting('dne')
     self.settings._Get('dne').AndRaise(AttributeError('DNE'))
-    self.settings._ResolveIfCalculatedSetting('dne')
     self.settings._Get('dne').AndRaise(AttributeError('non conform'))
 
     self.mox.ReplayAll()
@@ -349,18 +316,6 @@ class BaseSettingsTest(BaseSettingsTestBase):
         getattr,
         self.settings,
         '_foobar')
-    self.mox.VerifyAll()
-
-  def testGetattrWhenCalculatedSetting(self):
-    """Test __getattr__()."""
-    self.mox.StubOutWithMock(self.settings, '_Get')
-    self.mox.StubOutWithMock(self.settings, '_ResolveIfCalculatedSetting')
-    self.settings._SetCalculatedSetting('foo', ['bar'])
-    self.settings._ResolveIfCalculatedSetting('foo')
-    self.settings._Get('foo').AndReturn(2)
-
-    self.mox.ReplayAll()
-    self.assertEqual(self.settings.foo, 2)
     self.mox.VerifyAll()
 
   def testSetattr(self):
@@ -399,9 +354,6 @@ class ModuleSettingsTest(BaseSettingsTestBase):
         sys.modules[self.module_name] = self.module
         return self.module_name
 
-      def _Calculate(self, k=None):
-        self._calculate = 1
-
     return ModuleSettingsTestModule
 
   def testLoadSettingsModule(self):
@@ -414,7 +366,6 @@ class ModuleSettingsTest(BaseSettingsTestBase):
   def testInitialize(self):
     """Test _Initialize()."""
     self.assertEqual(self.settings._module_name, self.module_name)
-    self.assertEqual(self.settings._calculate, 1)
 
   def testGet(self):
     """Test _Get()."""
@@ -466,8 +417,6 @@ class DictSettingsTest(BaseSettingsTestBase):
 
   def testSet(self):
     """Test _Set()."""
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
-    self.settings._Calculate('bar')
     self.mox.ReplayAll()
     self.settings._Set('bar', 2)
     self.assertEqual(self.settings._settings['bar'], 2)
@@ -485,12 +434,7 @@ class SimianDictSettingsTest(BaseSettingsTestBase):
 
   def _Globals(self):
     """Returns globals dict like globals()."""
-    return {'SUBDOMAIN': 'example', 'DOMAIN': 'appspot.com'}
-
-  def testCalculate(self):
-    """Test _Calculate()."""
-    self.assertEqual(
-        self.settings._Get('server_hostname'), 'example.appspot.com')
+    return {'SERVER_HOSTNAME': 'example.appspot.com'}
 
   def _CheckSetValidation(self, k, t):
     """Helper to set that validation is set for k with type t.
@@ -671,13 +615,11 @@ class FilesystemSettingsTest(BaseSettingsTestBase):
   def testGetExternalPem(self):
     """Test _GetExternalPem()."""
     self.mox.StubOutWithMock(self.settings, '_GetExternalConfiguration')
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
 
     path = os.path.join(self.settings._path, 'ssl')
 
     self.settings._GetExternalConfiguration(
         'new.pem', as_file=True, path=path).AndReturn('new')
-    self.settings._Calculate('new_pem')
 
     self.settings._settings['predefined'] = 'pre'
 
@@ -690,7 +632,6 @@ class FilesystemSettingsTest(BaseSettingsTestBase):
   def testGetExternalPemWhenMissing(self):
     """Test _GetExternalPem()."""
     self.mox.StubOutWithMock(self.settings, '_GetExternalConfiguration')
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
 
     path = os.path.join(self.settings._path, 'ssl')
     self.settings._GetExternalConfiguration(
@@ -704,7 +645,6 @@ class FilesystemSettingsTest(BaseSettingsTestBase):
   def testGetExternalValue(self):
     """Test _GetExternalValue()."""
     self.mox.StubOutWithMock(self.settings, '_GetExternalConfiguration')
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
 
     # 1
     self.settings._settings['predefined'] = 'pre'
@@ -807,8 +747,6 @@ class DatastoreSettingsTest(BaseSettingsTestBase):
     """Test _Set()."""
     k = 'k'
     v = 2
-    self.mox.StubOutWithMock(self.settings, '_Calculate')
-    self.settings._Calculate(k).AndReturn(None)
 
     mock_models = self.mox.CreateMockAnything()
     mock_settings = self.mox.CreateMockAnything()

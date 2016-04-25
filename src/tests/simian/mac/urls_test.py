@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """urls module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 import re
 import types
@@ -75,13 +70,16 @@ class SimianMainModuleTest(mox.MoxTestBase):
     self.assertTrue(type(app.kwargs) is types.DictType)
 
     for (regex, cls) in app.args[0]:
-      unused = re.compile(regex)
+      _ = re.compile(regex)
       self.assertTrue(issubclass(cls, urls.webapp2.RequestHandler))
 
     if 'debug' in app.kwargs:
       self.assertTrue(type(app.kwargs['debug']) is types.BooleanType)
 
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

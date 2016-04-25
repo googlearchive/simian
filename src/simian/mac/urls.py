@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Main module for Simian including wsgi URL mappings."""
-
-
 
 import webapp2
 
 from simian import settings
-from simian.mac.munki.handlers import auth
-from simian.mac.munki.handlers import uauth
 from simian.mac.munki.handlers import applesus
+from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import catalogs
+from simian.mac.munki.handlers import deletepkg
 from simian.mac.munki.handlers import manifests
 from simian.mac.munki.handlers import pkgs
 from simian.mac.munki.handlers import pkgsinfo
 from simian.mac.munki.handlers import reports
-from simian.mac.munki.handlers import deletepkg
 from simian.mac.munki.handlers import uploadfile
 from simian.mac.munki.handlers import uploadpkg
 
@@ -68,8 +63,6 @@ app = webapp2.WSGIApplication([
     (r'/reports$', reports.Reports),
     # PUT uploadfile from munki.
     (r'/uploadfile/([\w\-]+)/([\w\-\.]+)$', uploadfile.UploadFile),
-    # GET or POST user auth.
-    (r'/uauth/?$', uauth.UserAuth),
     # GET auth logout, POST munki auth.
     (r'/auth/?$', auth.Auth),
     (r'/repair/?$', pkgs.ClientRepair),

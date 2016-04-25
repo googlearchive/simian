@@ -10,14 +10,15 @@ goog.require('goog.dom');
 goog.require('goog.dom.classes');
 goog.require('goog.ui.Component.EventType');
 goog.require('goog.ui.Css3MenuButtonRenderer');
-goog.require('goog.ui.FilteredMenu');
 goog.require('goog.ui.FilterObservingMenuItem');
+goog.require('goog.ui.FilteredMenu');
 goog.require('goog.ui.MenuButton');
 goog.require('goog.ui.TriStateMenuItem');
 
 
 /**
  * Event handler for when a new tag in created in the tags filtered menu.
+ * @param {goog.events.Event} e Event.
  */
 simian.createNewTag = function(e) {
   var item = e.target;
@@ -42,6 +43,7 @@ simian.createNewTag = function(e) {
 
 /**
  * Event handler for when an existing tag in the tags filtered menu is toggled.
+ * @param {goog.events.Event} e Event.
  */
 simian.hostTagClicked = function(e) {
   var item = e.target;
@@ -81,7 +83,7 @@ simian.initHostTags = function(tags) {
   }
 
   var cm = new goog.ui.FilterObservingMenuItem('');
-  menu.addItem(cm)
+  menu.addItem(cm);
 
   var button = new goog.ui.MenuButton(
       'Tags', menu, new goog.ui.Css3MenuButtonRenderer());

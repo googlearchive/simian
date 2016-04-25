@@ -1,5 +1,4 @@
 include src/simian/settings.py
-include src/simian/client/gae_client.zip
 recursive-exclude src/simian/mac/admin *
 recursive-exclude src/simian/mac/common *
 include src/simian/mac/common/__init__.py
@@ -7,6 +6,5 @@ include src/simian/mac/common/hw.py
 recursive-exclude src/simian/mac/cron *
 recursive-exclude src/simian/mac/munki/handlers *
 recursive-exclude src/simian/mac/api *
-exclude src/simian/mac/main.py
 exclude src/simian/mac/munki/common.py
 exclude src/simian/mac/urls.py

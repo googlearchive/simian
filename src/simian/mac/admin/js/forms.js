@@ -24,10 +24,11 @@ simian.toggleFormEnabled = function(form, enabled) {
                      function(input) {
                        input.disabled = !enabled;
                      });
-  goog.array.forEach(goog.dom.getElementsByTagNameAndClass('button', null, form),
-                     function(button) {
-                       button.disabled = !enabled;
-                     });
+  goog.array.forEach(
+      goog.dom.getElementsByTagNameAndClass('button', null, form),
+      function(button) {
+        button.disabled = !enabled;
+      });
 };
 
 
@@ -38,7 +39,7 @@ simian.toggleFormEnabled = function(form, enabled) {
 simian.validateSubmit = function(form) {
   form.submit.disabled =
     document.getElementsByClassName('invalid-input').length > 0;
-}
+};
 goog.exportSymbol('simian.validateSubmit', simian.validateSubmit);
 
 
@@ -61,7 +62,7 @@ simian.validateField = function(field, regexp, opt_altValid, opt_callback) {
   if (field.form) {
     simian.validateSubmit(field.form);
   }
-}
+};
 goog.exportSymbol('simian.validateField', simian.validateField);
 
 
@@ -79,5 +80,5 @@ simian.makeDateInput = function(input, opt_callback) {
   if (opt_callback) {
     goog.events.listen(idp, goog.ui.DatePicker.Events.CHANGE, opt_callback);
   }
-}
+};
 goog.exportSymbol('simian.makeDateInput', simian.makeDateInput);

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Plist module.
 
 Utility classes to handle Apple .plist files, which are either
@@ -26,8 +24,6 @@ OR
   http://www.opensource.apple.com/source/CF/CF-476.10/CFBinaryPList.c
   http://www.opensource.apple.com/source/CF/CF-550/ForFoundationOnly.h
 """
-
-
 
 import base64
 import datetime
@@ -1197,6 +1193,9 @@ class ApplePlist(object):
     if not issubclass(other.__class__, self.__class__):
       return False
     return self._plist == other.GetContents()
+
+  def __ne__(self, other):
+    return not self.__eq__(other)
 
   def __str__(self):
     """Returns a utf-8 encoded string representation of the plist XML."""

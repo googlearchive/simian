@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki common module tests."""
-
-
 
 import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 
 import tests.appenginesdk
 from google.apputils import app
@@ -251,8 +246,8 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     # bypass the db.run_in_transaction step
     self.stubs.Set(
-      common.models.db, 'run_in_transaction',
-      lambda fn, *args, **kwargs: fn(*args, **kwargs))
+        common.models.db, 'run_in_transaction',
+        lambda fn, *args, **kwargs: fn(*args, **kwargs))
 
     mock_computer = self.mox.CreateMockAnything()
     mock_computer.connection_datetimes = connection_datetimes
@@ -335,8 +330,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.db, 'run_in_transaction',
         lambda fn, *args, **kwargs: fn(*args, **kwargs))
 
-    ne_mock_computer = self.MockModelStaticNone(
-        'Computer', 'get_by_key_name', uuid)
+    self.MockModelStaticNone('Computer', 'get_by_key_name', uuid)
     mock_computer = self.MockModel('Computer', key_name=uuid)
     self.mox.StubOutWithMock(common.deferred, 'defer')
 
@@ -412,7 +406,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'os_version=10.6.3|client_version=0.6.0.759.0|on_corp=0|'
         'last_notified_datetime=2010-01-01|site=NYC|office=US-NYC-FOO|'
         'uptime=123.0|root_disk_free=456|user_disk_free=789|applesus=false|'
-        'runtype=auto'
+        'runtype=auto|mgmt_enabled=true'
     )
 
     client_id_dict = {
@@ -432,6 +426,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         u'user_disk_free': 789,
         u'applesus': False,
         u'runtype': 'auto',
+        u'mgmt_enabled': True,
     }
     return client_id_str, client_id_dict
 
@@ -527,7 +522,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     # cid with unknown key name
     client_id_dict['ASDFMOOCOW'] = '1'
     self.assertEqual(client_id_dict, common.ParseClientId('ASDFMOOCOW=1'))
-    del(client_id_dict['ASDFMOOCOW'])
+    del client_id_dict['ASDFMOOCOW']
 
   def testParseClientIdWithVeryLongStrValues(self):
     """Tests ParseClientId() with str values that are over 500 characters."""
@@ -1000,8 +995,6 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     # mock manifest reading and package map creation
     mock_package_info = self.mox.CreateMockAnything()
-    mock_manifest_plist.__getitem__('catalogs').AndReturn(
-        {'catalogs': ['catalog1']})
     common.models.PackageInfo.all().AndReturn(mock_package_info)
     iter_return = []
 
@@ -1059,14 +1052,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     computer.connections_off_corp = 1
     computer.user_settings = None
 
-    # PackageInfo entities
-    package_infos = [
-        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
-        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
-    ]
-
     packagemap = {}
 
     self.mox.StubOutWithMock(common.models, 'Computer')
@@ -1120,14 +1105,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     computer.connections_off_corp = 1
     computer.user_settings = None
 
-    # PackageInfo entities
-    package_infos = [
-        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
-        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
-    ]
-
     packagemap = {}
 
     self.mox.StubOutWithMock(common.models, 'Computer')
@@ -1173,16 +1150,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     computer.connections_off_corp = 1
     computer.user_settings = None
 
-    # PackageInfo entities
-    package_infos = [
-        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
-        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
-    ]
-
-    packagemap = {}
-
     self.mox.StubOutWithMock(common.models, 'Computer')
     self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
     self.mox.StubOutWithMock(common.models, 'Manifest')
@@ -1227,16 +1194,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     computer.connections_off_corp = 1
     computer.user_settings = None
 
-    # PackageInfo entities
-    package_infos = [
-        test.GenericContainer(plist='plistOtherPackage', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled1', version='1.0'),
-        test.GenericContainer(plist='plistPackageInstalled2', version='1.0'),
-        test.GenericContainer(plist='plistPackageNotInstalled1', version='1.0'),
-    ]
-
-    packagemap = {}
-
     self.mox.StubOutWithMock(common.models, 'Computer')
     self.mox.StubOutWithMock(common, 'IsPanicModeNoPackages')
 
@@ -1278,6 +1235,9 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.GetComputerManifest,
         uuid=uuid)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

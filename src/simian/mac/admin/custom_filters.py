@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Custom template filters."""
 
-
-
-
-import cgi
 import datetime
 import re
 import time
@@ -101,6 +95,7 @@ def munki_property(tag, tagname=None):
       'managed_uninstalls': 'uninstall',
       'optional_installs': 'optional',
       'unattended_install': 'unattd',
+      'unattended_uninstall': 'unattended_uninstall',
   }
   html = '<span class="tags %s" title="%s">%s</span>'
   abbr = tags.get(tag, tag)
@@ -147,7 +142,7 @@ def download_speed(kbytes_per_second):
 def host_details_link(uri, uuid):
   """Returns a joined URL to host record details page."""
   url = urlparse.urljoin(uri, uuid)
-  return mark_safe('<a href="%s">view</a>' % url)
+  return mark_safe('<a href="%s" class="host_details">view</a>' % url)
 
 
 @register.filter

@@ -17,7 +17,9 @@
   {% endif %}
 {% endif %}
 
-{% include "results_pagination.html" %}
+<div style="margin-bottom:5px;">
+  {% include "results_pagination.html" %}
+</div>
 
 {% if logs %}
   <table class="stats-table" id="logstable">
@@ -106,5 +108,3 @@
 {% endif %}
 
 {% endblock %}
-
-

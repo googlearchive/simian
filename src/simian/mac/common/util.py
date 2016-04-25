@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Utility functions."""
-
-
-
 
 import datetime
 import json
-import re
-import time
+import os
 import urllib
 
 from simian.mac import common
@@ -58,7 +52,7 @@ class Datetime(object):
   """Datetime class for extending utcfromtimestamp()."""
 
   @classmethod
-  def utcfromtimestamp(self, timestamp, allow_future=False):
+  def utcfromtimestamp(cls, timestamp, allow_future=False):
     """Converts a str or int epoch time to datetime.
 
     Note: this method drops ms from timestamps.
@@ -124,7 +118,7 @@ def Deserialize(s, parse_float=float):
 
   Args:
     s: str
-    parse_floats: callable, optional, to translate floating point values
+    parse_float: callable, optional, to translate floating point values
   Returns:
     any object that was serialized
   Raises:
@@ -177,3 +171,13 @@ def MakeTrackMatrix(tracks, proposed_tracks=None):
       else:
         track_matrix[track] = 'not_in'
   return track_matrix
+
+
+def GetBlobstoreGSBucket():
+  """GS Bucket For Blobsore.
+
+  Returns:
+    GS Bucket Name in case we want to use Blobstore API with Google Cloud
+    Storage, None otherwise.
+  """
+  return os.environ.get('BLOBSTORE_GS_BUCKET')

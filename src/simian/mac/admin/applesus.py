@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Apple SUS admin handler."""
-
-
 
 import calendar
 import datetime
@@ -202,7 +197,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     products = []
     # NOTE(user): the following adds about 700ms onto the request, so we may
     #             want to pre-calculate this in a cron in the future.
-    for p in gae_util.QueryIterator(query):
+    for p in gae_util.QueryIterator(query, step=100):
       if common.STABLE not in p.tracks:
         p.stable_promote_date = applesus.GetAutoPromoteDate(common.STABLE, p)
       if common.TESTING not in p.tracks:

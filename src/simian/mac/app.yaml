@@ -14,7 +14,7 @@ builtins:
 
 libraries:
 - name: django
-  version: 1.3
+  version: 1.5
 - name: webapp2
   version: latest
 
@@ -64,21 +64,24 @@ handlers:
   script: simian.mac.urls.app
   secure: always
 
-### Uncomment the following lines to enable client customization.  
+### Uncomment the following lines to enable client customization.
 ### -=WARNING=-
-### The .zip files stored here is a publicly accessible, widely known resource.
-### Only enable client_resources if you need it and are 
-### prepared to mitigate abuse. See https://github.com/munki/munki/wiki/Client-Customization
+### The .zip files stored here are publicly accessible, widely known resources.
+### Only enable client_resources if you refrain from including confidential
+### details, and are prepared to mitigate abuse.
+### For more, see https://github.com/munki/munki/wiki/Client-Customization
 # - url: /client_resources
 #   static_dir: client_resources
 #   secure: always
 
-### The icons directory has potential for abuse, but less than client_resources.
+### The icons directory is publicly accessible, and thus has potential for
+### abuse. Anyone with known filename will be able to view the associated icon.
 ### Static icons stored in gae_resources/icons will be served from here.
-### See https://github.com/munki/munki/wiki/Product-Icons 
+### For more, see https://github.com/munki/munki/wiki/Product-Icons
 - url: /icons
   static_dir: icons
   secure: always
+
 ### Apple SUS integration, client repair, Munki log uploads, etc.
 
 - url: /applesus/.*
@@ -99,11 +102,6 @@ handlers:
 
 - url: /auth
   script: simian.mac.urls.app
-  secure: always
-
-- url: /uauth
-  script: simian.mac.urls.app
-  login: required
   secure: always
 
 - url: /api/.*

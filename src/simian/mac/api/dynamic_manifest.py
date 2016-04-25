@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """DynamicManifest API URL handlers."""
-
-
 
 import json
 import logging
@@ -188,17 +184,21 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self.user = auth.DoOAuthAuth()
     except auth.NotAuthenticated:
+      enable_admin_check = True
       # OAuth was either not used or failed, so perform regular user auth.
-      self.user = auth.DoUserAuth(is_admin=True)
+      self.user = auth.DoUserAuth(is_admin=enable_admin_check)
 
     mod_type = self.request.get('mod_type')
     target = self.request.get('target')
+    mutate = self.request.get('mutate', 'true').lower() == 'true'
+    if not mutate:
+      logging.info('Enabling dry-run mode')
 
     pkg_alias = self.request.get('pkg_alias')
     if pkg_alias:
       pkg_name = models.PackageAlias.ResolvePackageName(pkg_alias)
       if not pkg_name:
-        logging.info('Package Alias not found: %s', pkg_alias)
+        logging.info('Package alias not found: %s', pkg_alias)
         self.error(404)
         return
       logging.debug('Found pkg_name=%s for pkg_alias=%s', pkg_name, pkg_alias)
@@ -213,7 +213,8 @@ class DynamicManifest(handlers.AuthenticationHandler):
 
 
     try:
-      self._PutMod()
+      if mutate:
+        self._PutMod()
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(json.dumps([{'pkg_name': pkg_name}]))
     except ValueError:

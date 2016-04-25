@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """App Engine Models for Simian web application."""
-
-
 
 import datetime
 import difflib
@@ -26,19 +22,13 @@ import gc
 import logging
 import re
 
-from google.appengine import runtime
 from google.appengine.api import memcache
-from google.appengine.api import users
-from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import deferred
-from google.appengine.runtime import apiproxy_errors
 
 from simian.mac.common import ipcalc
-from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.common import util
-from simian.mac.models import constants
 from simian.mac.models import properties
 from simian.mac.munki import plist as plist_lib
 
@@ -66,8 +56,8 @@ class BaseModel(db.Model):
 
     Args:
       func: str, like "MemcacheWrappedSet"
-      args: list, optional, arguments to function
-      kwargs: dict, optional, keyword arguments to function
+      *args: list, optional, arguments to function
+      **kwargs: dict, optional, keyword arguments to function
     Raises:
       ValueError: func is not a function of this class or not callable
     """
@@ -295,8 +285,8 @@ class BaseModel(db.Model):
     """Perform datastore put operation.
 
     Args:
-      args: list, optional, args to superclass put()
-      kwargs: dict, optional, keyword args to superclass put()
+      *args: list, optional, args to superclass put()
+      **kwargs: dict, optional, keyword args to superclass put()
     Returns:
       return value from superclass put()
     """
@@ -463,8 +453,8 @@ class Computer(db.Model):
         c.put()
         count += 1
       cursor = str(query.cursor())
-      del(computers)
-      del(query)
+      del computers
+      del query
       gc.collect()
       query = cls.AllActive().filter(
           'preflight_datetime <', earliest_active_date)
@@ -529,17 +519,7 @@ class Log(db.Model):
   """Base Log class to be extended for Simian logging."""
 
   # UTC datetime when the event occured.
-  mtime = db.DateTimeProperty()
-
-  def put(self):
-    """If a log mtime was not set, automatically set it to now in UTC.
-
-    Note: auto_now_add=True is not ideal as then clients can't report logs that
-          were written in the past.
-    """
-    if not self.mtime:
-      self.mtime = datetime.datetime.utcnow()
-    super(Log, self).put()
+  mtime = db.DateTimeProperty(auto_now_add=True)
 
 
 class ClientLogBase(Log):
@@ -939,6 +919,7 @@ class AppleSUSProduct(BaseModel):
   manual_override = db.BooleanProperty(default=False)
   # If unattended, then unattended installation will proceed.
   unattended = db.BooleanProperty(default=False)
+  unattended_uninstall = db.BooleanProperty(default=False)
   # If deprecated, then the product is entirely hidden and unused.
   deprecated = db.BooleanProperty(default=False)
   # Package download URLs.
@@ -957,6 +938,8 @@ class AppleSUSProduct(BaseModel):
     }
     if self.unattended:
       d['unattended_install'] = self.unattended
+    if self.unattended_uninstall:
+      d['unattended_uninstall'] = self.unattended_uninstall
     if self.force_install_after_date:
       d['force_install_after_date'] = self.force_install_after_date
     d['version'] = '1.0'  # TODO(user): find out if this is needed.
@@ -1080,7 +1063,7 @@ class BaseManifestModification(BaseModel):
       target: str, modification target value, like 'foouser', or 'foouuid'.
       munki_pkg_name: str, name of the munki package to inject, like Firefox.
       remove: if True, will remove package from manifest instead of adding it.
-      kwargs: any other properties to set on the model instance.
+      **kwargs: any other properties to set on the model instance.
     Returns:
       A model instance with key_name, value and the model-specific mod key value
       properties already set.

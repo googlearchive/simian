@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """auth module."""
-
-
-
 
 import logging
 
@@ -144,7 +139,7 @@ def DoUserAuth(is_admin=None):
     raise NotAuthenticated('DoUserAuthFalsy')
   email = user.email()
 
-  if is_admin is not None and not IsAdminUser(email):
+  if is_admin and not IsAdminUser(email):
     raise IsAdminMismatch
 
   if settings.ALLOW_ALL_DOMAIN_USERS_READ_ACCESS:
@@ -160,6 +155,34 @@ def DoUserAuth(is_admin=None):
     return user
   else:
     raise NotAuthenticated('DoUserAuthUnknownUser')
+
+
+def DoUserAuthWithSelfReportFallback(constrain_username=None):
+  """Verify user auth has occured or try fallback to Self Report.
+
+  Args:
+    constrain_username: String. Constrain username.
+  Returns:
+    String, Username in case of fallback, None otherwise.
+  Raises:
+    NotAuthenticated: there is no authenticated user for this request.
+  """
+  try:
+    DoUserAuth()
+  except NotAuthenticated:
+    if not settings.ALLOW_SELF_REPORT:
+      raise
+    user = users.get_current_user()
+    if not user:
+      raise
+    email = user.email()
+    if not email.endswith('@' + settings.AUTH_DOMAIN):
+      raise
+    username = email[:-len(settings.AUTH_DOMAIN) - 1]
+    if constrain_username and constrain_username != username:
+      raise
+    return username
+  return None
 
 
 def DoOAuthAuth(is_admin=None, require_level=None):
@@ -178,8 +201,7 @@ def DoOAuthAuth(is_admin=None, require_level=None):
   # TODO(user): make use of require_level.
   try:
     user = oauth.get_current_user()
-  except oauth.OAuthRequestError as e:
-    logging.warning('OAuthRequestError: %s', e)
+  except oauth.OAuthRequestError:
     raise NotAuthenticated('OAuthRequestError')
 
   email = user.email()
@@ -314,3 +336,5 @@ def IsPhysicalSecurityUser(email=None):
   return IsGroupMember(
       email=email, group_name='physical_security_users',
       remote_group_lookup=True)
+
+

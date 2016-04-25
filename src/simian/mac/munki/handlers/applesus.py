@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,23 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Apple Software Update Service Catalog URL handlers."""
 
-
-
-
 import logging
-import urllib
 
-from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import auth
-from simian.mac.common import gae_util
 from simian.mac.munki import handlers
-from simian.mac.munki import plist
 
 
 
@@ -45,7 +35,7 @@ class AppleSUS(handlers.AuthenticationHandler):
     """
     session = auth.DoAnyAuth()
     client_id = handlers.GetClientIdForRequest(
-            self.request, session=session, client_id_str=client_id_str)
+        self.request, session=session, client_id_str=client_id_str)
 
     # get only major.minor os_version, stripping miniscule versioning.
     # i.e. 10.6.6 becomes 10.6, 10.23.6.x.x becomes 10.23

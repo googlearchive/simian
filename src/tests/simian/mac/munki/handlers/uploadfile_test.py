@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki uploadfile module tests."""
 
-
-
-import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -100,6 +94,9 @@ class UploadFileHandlerTest(test.RequestHandlerTest):
     self.c.put(file_type='log', file_name='')
     self.c.put(file_type='', file_name='fooname')
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

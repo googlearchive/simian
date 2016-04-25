@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,33 +14,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module to handle /uploadpkg."""
-
-
 
 import logging
 
-from google.appengine.ext import db
 from google.appengine.ext import blobstore
+from google.appengine.ext import db
 from google.appengine.ext.webapp import blobstore_handlers
 
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import gae_util
+from simian.mac.common import util
 from simian.mac.munki import handlers
 from simian.mac.munki import plist as plist_lib
-from simian.mac.munki.handlers import pkgs
 
 
 class UploadPackage(
     handlers.AuthenticationHandler,
     blobstore_handlers.BlobstoreUploadHandler):
-  """Handler for /uploadpkg"""
+  """Handler for /uploadpkg."""
 
   def get(self):
-    """GET
+    """GET method.
 
     With no parameters, return the URL to use to submit uploads via
     multipart/form-data.
@@ -70,11 +66,12 @@ class UploadPackage(
       self.response.set_status(400)
       self.response.out.write(msg)
     else:
-      upload_url = blobstore.create_upload_url('/uploadpkg')
+      upload_url = blobstore.create_upload_url(
+          '/uploadpkg', gs_bucket_name=util.GetBlobstoreGSBucket())
       self.response.out.write(upload_url)
 
   def post(self):
-    """POST
+    """POST method.
 
     This method behaves a little strangely.  BlobstoreUploadHandler
     only allows returns statuses of 301, 302, 303 (not even 200), so
@@ -136,7 +133,7 @@ class UploadPackage(
     plist = plist_lib.MunkiPackageInfoPlist(pkginfo_str)
     try:
       plist.Parse()
-    except plist_lib.PlistError, e:
+    except plist_lib.PlistError:
       logging.exception('Invalid pkginfo plist uploaded:\n%s\n', pkginfo_str)
       gae_util.SafeBlobDel(blobstore_key)
       self.redirect('/uploadpkg?mode=error&msg=No%20valid%20pkginfo%20received')
@@ -220,5 +217,6 @@ class UploadPackage(
         manifests=manifests, install_types=install_types,
         plist=pkg.plist.GetXml())
     admin_log.put()
+
 
     self.redirect('/uploadpkg?mode=success&key=%s' % blobstore_key)

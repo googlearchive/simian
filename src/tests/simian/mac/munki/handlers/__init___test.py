@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki handlers __init__ module tests."""
-
-
 
 import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -96,7 +91,6 @@ class HandlersTest(test.RequestHandlerTest):
     """Tests GetClientIdForRequest()."""
     track = 'stable'
     os_version = '10.6.6'
-    client_id = 'client_id'
     client_id_dict = {'track': track, 'os_version': os_version}
     client_id_str = 'track=%s|os_version=%s' % (track, os_version)
     client_id_str_quoted = handlers.urllib.quote(client_id_str)
@@ -111,6 +105,9 @@ class HandlersTest(test.RequestHandlerTest):
         request, session=None, client_id_str=client_id_str_quoted)
     self.assertEqual(r, client_id_dict)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

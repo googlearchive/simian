@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module to help with updating InstallLog schema with new applesus property.
 
 This file is completely unneeded if you're starting with a clean and empty
@@ -34,10 +32,6 @@ This module contains two functions that help with the switch from the InstallLog
 without the applesus or success properties to the newer InstallLog with the
 properties.
 
-  ConvertLegacyAppleUpdateInstallLogEntities:
-    loop through a list of known Apple installs and set any InstallLog entities
-    to applesus=True.
-
   UpdateInstallLogSchema:
     call put() on all entities so the applesus and success properties aren't
     missing, so reports that filter('applesus', bool) or filter('success', bool)
@@ -47,17 +41,12 @@ This module contains other maintenance functions to assist with schema upgrades
 or rebuilding various caches.
 """
 
-
-
-
-
 import logging
 
 from google.appengine.ext import deferred
 
 from simian.mac import models
 from simian.mac.common import gae_util
-from simian.mac.admin import applesus_update_names
 from simian.mac.cron import reports_cache
 
 
@@ -74,37 +63,6 @@ def RebuildInstallCounts():
     cursor_obj.delete()
   models.ReportsCache.SetInstallCounts({})
   deferred.defer(reports_cache._GenerateInstallCounts)
-
-
-def ConvertLegacyAppleUpdateInstallLogEntities():
-  """Sets applesus=True all InstallLog entities that are Apple SUS installs."""
-  # TODO(user): this function needs some love.
-  updates = applesus_update_names.NAMES.keys()
-  updates.sort()
-  for key in updates:
-    logging.debug('Querying for: %s', key)
-    q = models.InstallLog.all().filter(
-        'package =', key).filter('applesus =', False)
-    i = 0
-    cursor = None
-    while True:
-      if cursor:
-        logging.debug('Continuing with cursor: %s', cursor)
-        q.with_cursor(cursor)
-      entities = q.fetch(INSTALL_LOG_MAX_FETCH)
-      if not entities:
-        logging.debug('%s updated. No remaining %s', i, key)
-        break
-      for e in entities:
-        i += 1
-        e.applesus = True
-        e.put()
-
-        if i == MAX:
-          logging.info('%s entities converted', i)
-          break
-      if i > 0:
-        cursor = q.cursor()
 
 
 def UpdateInstallLogSchema(cursor=None, num_updated=0):

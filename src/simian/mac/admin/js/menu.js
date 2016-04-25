@@ -43,7 +43,7 @@ simian.menu.updateMenu = function() {
     goog.dom.classes.remove(goog.dom.getDocument().body, 'menupinned');
     goog.dom.classes.remove(goog.dom.getDocument().body, 'menuopen');
   }
-}
+};
 goog.exportSymbol('simian.menu.updateMenu', simian.menu.updateMenu);
 
 
@@ -78,6 +78,7 @@ goog.exportSymbol('simian.menu.pinMenu', simian.menu.pinMenu);
 
 /**
  * Sets the menu state to closed. Useful for hiding the menu on mouseout, etc.
+ * @param {MouseEvent} e Event.
  */
 simian.menu.hideMenu = function(e) {
   if (simian.menu.menuState == 'open') {
@@ -86,4 +87,3 @@ simian.menu.hideMenu = function(e) {
   }
 };
 goog.exportSymbol('simian.menu.hideMenu', simian.menu.hideMenu);
-

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,29 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Shared resources for handlers."""
-
-
 
 import base64
 import datetime
 import logging
-import os
-import time
 
+from google.appengine import runtime
 from google.appengine.ext import db
 from google.appengine.ext import deferred
-from google.appengine.api import memcache
-from google.appengine import runtime
 from google.appengine.runtime import apiproxy_errors
 
-from simian.mac import models
 from simian.mac import common
-from simian.mac.munki import plist as plist_module
-from simian.mac.common import gae_util
+from simian.mac import models
 from simian.mac.common import util
+from simian.mac.munki import plist as plist_module
 
 
 CLIENT_ID_FIELDS = {
@@ -45,6 +37,7 @@ CLIENT_ID_FIELDS = {
     'os_version': str, 'client_version': str, 'on_corp': bool,
     'last_notified_datetime': str, 'uptime': float, 'root_disk_free': int,
     'user_disk_free': int, 'applesus': bool, 'runtype': str,
+    'mgmt_enabled': bool,
 }
 CONNECTION_DATETIMES_LIMIT = 10
 CONNECTION_DATES_LIMIT = 30
@@ -61,7 +54,7 @@ FLASH_PLUGIN_DEBUG_NAME = 'flash_player_debug'
 APPLESUS_PKGS_TO_INSTALL_FORMAT = 'AppleSUS: %s'
 # Serial numbers for which first connection de-duplication should be skipped.
 DUPE_SERIAL_NUMBER_EXCEPTIONS = [
-      'SystemSerialNumb', 'System Serial#', 'Not Available', None]
+    'SystemSerialNumb', 'System Serial#', 'Not Available', None]
 
 
 class Error(Exception):
@@ -87,7 +80,6 @@ def _SaveFirstConnection(client_id, computer):
     client_id: dict client id.
     computer: models.Computer entity.
   """
-  #logging.debug('Saving first connection for: %s' % client_id)
   e = models.FirstClientConnection(key_name=client_id['uuid'])
   e.computer = computer
   e.owner = client_id['owner']
@@ -126,14 +118,7 @@ def LogClientConnection(
     computer: optional models.Computer object.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
   """
-  #logging.debug(
-  #    ('LogClientConnection(%s, %s, user_settings? %s, pkgs_to_install: %s, '
-  #     'ip_address: %s, delay=%s)'),
-  #    event, client_id, user_settings not in [None, {}], pkgs_to_install,
-  #    ip_address, delay)
-
   if delay:
-    #logging.debug('Delaying LogClientConnection call %s seconds', delay)
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
     deferred_name = 'log-client-conn-%s-%s' % (client_id['uuid'], now_str)
     deferred.defer(
@@ -251,7 +236,6 @@ def LogClientConnection(
 
     c.put()
     if is_new_client:  # Queue welcome email to be sent.
-      #logging.debug('Deferring _SaveFirstConnection....')
       deferred.defer(
           _SaveFirstConnection, client_id=_client_id, computer=c,
           _countdown=300, _queue='first')
@@ -276,18 +260,17 @@ def WriteClientLog(model, uuid, **kwargs):
   Args:
     model: db.Model to write to.
     uuid: str uuid of client.
-    kwargs: property/value pairs to write to the model; uuid not allowed.
+    **kwargs: property/value pairs to write to the model; uuid not allowed.
   Returns:
     models.Computer instance which is this client
   """
   if 'uuid' in kwargs:
-    #logging.debug('WriteClientLog: Deleting uuid from kwargs')
-    del(kwargs['uuid'])
+    del kwargs['uuid']
 
   uuid = common.SanitizeUUID(uuid)
 
   if 'computer' not in kwargs:
-    kwargs['computer'] =  models.Computer.get_by_key_name(uuid)
+    kwargs['computer'] = models.Computer.get_by_key_name(uuid)
 
   l = model(uuid=uuid, **kwargs)
   try:
@@ -604,7 +587,6 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
   manifest_plist = plist_module.MunkiManifestPlist(manifest_plist_xml)
   manifest_plist.Parse()
 
-  catalogs = manifest_plist['catalogs']
   packages = {}
 
   query = models.PackageInfo.all()
@@ -618,6 +600,7 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
       'plist': manifest_plist,
       'packagemap': packages,
   }
+
 
 def _ModifyList(l, value):
   """Adds or removes a value from a list.
@@ -646,7 +629,6 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
     str XML manifest with any custom modifications based on the client_id.
   """
   # TODO(user): This function is getting out of control and needs refactoring.
-  manifest_changed = False
   manifest = client_id['track']
 
   site_mods = models.SiteManifestModification.MemcacheWrappedGetAllFilter(
@@ -688,14 +670,11 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
     elif mod.manifests and manifest not in mod.manifests:
       return  # return if the desired manifest is not in the mod manifests.
 
-    #logging.debug(
-    #    'Applying manifest mod: %s %s', mod.install_types, mod.value)
     for install_type in mod.install_types:
       plist_module.UpdateIterable(
           plist, install_type, mod.value, default=[], op=_ModifyList)
 
   if site_mods or owner_mods or os_version_mods or uuid_mods or tag_mods:
-    manifest_changed = True
     if type(plist) is str:
       plist = plist_module.MunkiManifestPlist(plist)
       plist.Parse()
@@ -722,7 +701,6 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
     # If FlashDeveloper is True, replace the regular flash plugin with the
     # debug version in managed_updates.
     if flash_developer:
-      manifest_changed = True
       plist[common.MANAGED_UPDATES].append(FLASH_PLUGIN_DEBUG_NAME)
       try:
         plist[common.MANAGED_UPDATES].remove(FLASH_PLUGIN_NAME)
@@ -733,10 +711,7 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
     for block_package in block_packages:
       for install_type in common.INSTALL_TYPES:
         if block_package in plist.get(install_type, []):
-          manifest_changed = True
           plist[install_type].remove(block_package)
-          #logging.debug(
-          #    'Removed BlockPackage from %s: %s', block_package, install_type)
 
   if type(plist) is str:
     return plist

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """plist module tests."""
-
-
 
 import base64
 import datetime
@@ -45,7 +41,7 @@ class PlistModuleTest(mox.MoxTestBase):
   def testUpdateIterable(self):
     """Test UpdateIterable()."""
     d = {
-      'foo': [0, 1],
+        'foo': [0, 1],
     }
 
     array_add = lambda a, v: a.append(v)
@@ -67,9 +63,9 @@ class PlistModuleTest(mox.MoxTestBase):
     self.assertEqual(
         d,
         {
-          'foo': [0, 1, 2],
-          'simple': 'HELLO',
-          'newd': {'newv': 1},
+            'foo': [0, 1, 2],
+            'simple': 'HELLO',
+            'newd': {'newv': 1},
         },
     )
 
@@ -140,15 +136,15 @@ class ApplePlistTest(mox.MoxTestBase):
 
   def testValidateBasic(self):
     """Test _ValidateBasic."""
-    self.apl._plist = { 'findthis': 12345 }
-    config = { 'findthis': int }
+    self.apl._plist = {'findthis': 12345}
+    config = {'findthis': int}
     self.apl._ValidateBasic(config)
 
-    self.apl._plist = { 'findthis': 'evil string' }
+    self.apl._plist = {'findthis': 'evil string'}
     self.assertRaises(
         plist.InvalidPlistError, self.apl._ValidateBasic, config)
 
-    self.apl._plist = { 'unknown': 1 }
+    self.apl._plist = {'unknown': 1}
     self.assertRaises(
         plist.InvalidPlistError, self.apl._ValidateBasic, config)
 
@@ -247,8 +243,8 @@ class ApplePlistTest(mox.MoxTestBase):
   def testBasicCdata(self):
     """Test with some simple CDATA."""
     xml = ('%s<dict><key>cdata</key>'
-          '<string>line1\nline2\n</string></dict>%s') % (
-              plist.PLIST_HEAD, plist.PLIST_FOOT)
+           '<string>line1\nline2\n</string></dict>%s') % (
+               plist.PLIST_HEAD, plist.PLIST_FOOT)
     self.PlistTest(xml, {'cdata': 'line1\nline2\n'})
 
   def testBasic(self):
@@ -291,7 +287,7 @@ class ApplePlistTest(mox.MoxTestBase):
     xml = ('%s  <dict>\n    <key>foo</key>\n    <string>bar</string>\n  '
            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
     xml2 = ('%s  <dict>\n    <key>subway</key>\n    <string>BDFM</string>\n  '
-           '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
+            '</dict>%s' % (plist.PLIST_HEAD, plist.PLIST_FOOT))
     nested_xml = ('%s  <dict>\n    <key>foo</key>\n    <dict>\n'
                   '      <key>subway</key>\n'
                   '      <string>BDFM</string>\n'
@@ -314,13 +310,13 @@ class ApplePlistTest(mox.MoxTestBase):
          'floattest': 12.3456,
     }
     out = ('<dict>\n  '
-         '<key>bar</key>\n  <dict>\n    '
-         '<key>foobar</key>\n    <string></string>\n  </dict>\n  '
-         '<key>floattest</key>\n  <real>12.345600</real>\n  '
-         '<key>foo</key>\n  <array>\n    <integer>1</integer>\n    '
-         '<string>two</string>\n    <array>\n      <false/>\n    </array>\n  '
-         '</array>\n  <key>outside</key>\n  <true/>\n'
-         '</dict>')
+           '<key>bar</key>\n  <dict>\n    '
+           '<key>foobar</key>\n    <string></string>\n  </dict>\n  '
+           '<key>floattest</key>\n  <real>12.345600</real>\n  '
+           '<key>foo</key>\n  <array>\n    <integer>1</integer>\n    '
+           '<string>two</string>\n    <array>\n      <false/>\n    </array>\n  '
+           '</array>\n  <key>outside</key>\n  <true/>\n'
+           '</dict>')
     self.assertEquals(out, plist.DictToXml(d, indent_num=0))
 
   def testSequenceToXml(self):
@@ -369,14 +365,14 @@ YnBsaXN0MDDYAQIDBAUGBwgJCgsMDQ4PEFNpczlWaXNUcnVlVGlzUGlXaXNGYWxzZVZpc0RhdGFT
 Zm9vV2lzVG9kYXlXaXNBcnJheRAJCSJASPXDCEQBAgP/U2JhcjNBtGtLgAAAAKMREhNRMVEyUTMI
 GR0kKTE4PERMTk9UVVpeZ2ttbwAAAAAAAAEBAAAAAAAAABQAAAAAAAAAAAAAAAAAAABx""")
     plist_dict = {
-      'foo': 'bar',
-      'is9': 9,
-      'isArray': ['1', '2', '3'],
-      'isData': plist.AppleData('\x01\x02\x03\xff'),
-      'isFalse': False,
-      'isTrue': True,
-      'isPi': 3.1400001049041748,
-      'isToday': datetime.datetime(2011, 11, 10, 0, 0, tzinfo=plist.UTC()),
+        'foo': 'bar',
+        'is9': 9,
+        'isArray': ['1', '2', '3'],
+        'isData': plist.AppleData('\x01\x02\x03\xff'),
+        'isFalse': False,
+        'isTrue': True,
+        'isPi': 3.1400001049041748,
+        'isToday': datetime.datetime(2011, 11, 10, 0, 0, tzinfo=plist.UTC()),
     }
     self.PlistTest(plist_bin, plist_dict)
 
@@ -402,16 +398,16 @@ YVdpc0ZhbHNlVmlzTm9uZVNmb29XaXNBcnJheVdpc1RvZGF5EAkAgTA5I0AJHrhgAAAARAECA/8I
 CVNiYXKjFBUWUTFRMlEzM0G0a0uAAAAACB0hKC4zOkJJTVVdX2BjbHFyc3d7fX+BAAAAAAAAAQEA
 AAAAAAAAGAAAAAAAAAAAAAAAAAAAAIo=""")
     plist_dict = {
-      'foo': 'bar',
-      'is9': 9,
-      'isUid': plist.AppleUid(12345),
-      'isArray': ['1', '2', '3'],
-      'isData': plist.AppleData('\x01\x02\x03\xff'),
-      'isFalse': False,
-      'isTrue': None,  # see docstring
-      'isPi': 3.1400001049041748,
-      'isToday': datetime.datetime(2011, 11, 10, 0, 0, tzinfo=plist.UTC()),
-      'isNone': None,  # see docstring
+        'foo': 'bar',
+        'is9': 9,
+        'isUid': plist.AppleUid(12345),
+        'isArray': ['1', '2', '3'],
+        'isData': plist.AppleData('\x01\x02\x03\xff'),
+        'isFalse': False,
+        'isTrue': None,  # see docstring
+        'isPi': 3.1400001049041748,
+        'isToday': datetime.datetime(2011, 11, 10, 0, 0, tzinfo=plist.UTC()),
+        'isNone': None,  # see docstring
     }
     self.PlistTest(plist_bin, plist_dict)
 
@@ -885,6 +881,8 @@ AAAAAAAAfA==""")
     other._plist = {'foo': 1, 'bar': True}
 
     self.assertTrue(pl.Equal(other))
+    self.assertEquals(pl, other)
+    self.assertFalse(pl != other)
 
   def testEqualWithIgnoreKeysReturningTrue(self):
     """Tests Equal() with ignore_keys, returning True."""
@@ -1232,13 +1230,13 @@ class MunkiPackageInfoPlistTest(mox.MoxTestBase):
   def testEq(self):
     """Test __eq__."""
     other = plist.MunkiPackageInfoPlist()
-    other._plist = { 'foo': 1 }
-    self.munki._plist = { 'foo': 1 }
+    other._plist = {'foo': 1}
+    self.munki._plist = {'foo': 1}
     self.assertFalse(id(other._plist) == id(self.munki._plist))
     self.assertTrue(self.munki == other)
-    self.assertFalse(self.munki == { 'foo': 1 })
+    self.assertFalse(self.munki == {'foo': 1})
     self.assertFalse(self.munki == self)
-    other._plist = { 'foo': 2 }
+    other._plist = {'foo': 2}
     self.assertFalse(self.munki == other)
 
   def testContains(self):

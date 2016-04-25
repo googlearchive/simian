@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """IP Blacklist admin handler."""
-
-
-
-
 
 import re
 from simian.mac import admin
@@ -28,6 +22,7 @@ from simian.mac import models
 from simian.mac.common import util
 
 IP_REGEX = '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?$'
+
 
 class IPBlacklist(admin.AdminHandler):
 
@@ -56,7 +51,7 @@ class IPBlacklist(admin.AdminHandler):
       return
     values = self.request.get_all('item_0', None)
     comments = self.request.get_all('item_1', None)
-    if values and (not comments or not len(values) == len(comments)):
+    if values and (not comments or len(values) != len(comments)):
       self.error(400)
       return
     is_ip = re.compile(IP_REGEX)

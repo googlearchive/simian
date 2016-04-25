@@ -155,3 +155,93 @@ indexes:
   - name: filename
   - name: mtime
     direction: desc
+
+- kind: OwnerManifestModification
+  properties:
+  - name: owner
+  - name: mtime
+    direction: desc
+
+- kind: OwnerManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: OwnerManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc
+
+- kind: SiteManifestModification
+  properties:
+  - name: site
+  - name: mtime
+    direction: desc
+
+- kind: SiteManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: SiteManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc
+
+- kind: OSVersionManifestModification
+  properties:
+  - name: os_version
+  - name: mtime
+    direction: desc
+
+- kind: OSVersionManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: OSVersionManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc
+
+- kind: UuidManifestModification
+  properties:
+  - name: uuid
+  - name: mtime
+    direction: desc
+
+- kind: UuidManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: UuidManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc
+
+- kind: TagManifestModification
+  properties:
+  - name: tag_key_name
+  - name: mtime
+    direction: desc
+
+- kind: TagManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: TagManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc

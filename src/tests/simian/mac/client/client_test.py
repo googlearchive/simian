@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """client module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 import mox
 import stubout
@@ -33,6 +28,7 @@ from simian.mac.client import client
 
 class ClientModuleTest(mox.MoxTestBase):
   """Test module level functions in client."""
+
   def setUp(self):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
@@ -43,6 +39,7 @@ class ClientModuleTest(mox.MoxTestBase):
 
 
 class BaseSimianClientTest(mox.MoxTestBase):
+
   def setUp(self):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
@@ -58,9 +55,9 @@ class BaseSimianClientTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(
         client.client.SimianClient, 'GetSystemRootCACertChain', True)
     argv = [
-      '/usr/bin/security',
-      'find-certificate', '-a',
-      '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
+        '/usr/bin/security',
+        'find-certificate', '-a',
+        '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
     ]
     stdout = 'output'
     stderr = ''
@@ -85,9 +82,9 @@ class BaseSimianClientTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(
         client.client.SimianClient, 'GetSystemRootCACertChain', True)
     argv = [
-      '/usr/bin/security',
-      'find-certificate', '-a',
-      '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
+        '/usr/bin/security',
+        'find-certificate', '-a',
+        '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
     ]
     stdout = 'output'
     stderr = ''
@@ -279,8 +276,8 @@ class SimianClient(mox.MoxTestBase):
     filename = '/tmp/pkgname.dmg'
     upload_pkginfo = self.mox.CreateMockAnything()
     upload_pkginfo_dict = {
-      'installer_item_size': 1,
-      'installer_item_hash': 'foobar',
+        'installer_item_size': 1,
+        'installer_item_hash': 'foobar',
     }
     cur_pkginfo = 'xml pkginfo data'
     pkginfo_plist = self.mox.CreateMockAnything()
@@ -310,8 +307,8 @@ class SimianClient(mox.MoxTestBase):
     orig_sha256_hash = 'haha hash 2'
     upload_pkginfo = self.mox.CreateMockAnything()
     upload_pkginfo_dict = {
-      'installer_item_size': 1,
-      'installer_item_hash': 'not %s' % orig_sha256_hash,
+        'installer_item_size': 1,
+        'installer_item_hash': 'not %s' % orig_sha256_hash,
     }
     cur_pkginfo = 'xml pkginfo data'
     pkginfo_plist = self.mox.CreateMockAnything()
@@ -614,6 +611,9 @@ class SimianClient(mox.MoxTestBase):
             filename, description, display_name, catalogs, manifests,
             install_types, pkginfo_hooks=pkginfo_hooks))
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

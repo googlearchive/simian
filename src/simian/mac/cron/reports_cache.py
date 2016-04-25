@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,28 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module containing url handler for report calculation.
 
 Classes:
   ReportsCache: the url handler
 """
 
-
-
-
 import datetime
 import logging
 import time
 import webapp2
 
-from google.appengine.ext import deferred
 from google.appengine.api import taskqueue
+from google.appengine.ext import deferred
 
 from simian.mac import models
-from simian.mac.common import gae_util
 from simian.mac.admin import summary as summary_module
+from simian.mac.common import gae_util
 
 
 TRENDING_INSTALLS_LIMIT = 5
@@ -58,7 +53,7 @@ class ReportsCache(webapp2.RequestHandler):
   FETCH_LIMIT = 500
 
   def get(self, name=None, arg=None):
-    """Handle GET"""
+    """Handle GET."""
 
     if name == 'summary':
       summary = summary_module.GetComputerSummary()
@@ -159,7 +154,7 @@ class ReportsCache(webapp2.RequestHandler):
 
       if n == self.FETCH_LIMIT:
         # full fetch, might not have finished this user -- rewind
-        del(userdata[last_user])
+        del userdata[last_user]
         last_user_cursor = prev_user_cursor
 
       for user in userdata:
@@ -206,8 +201,7 @@ class ReportsCache(webapp2.RequestHandler):
           summary, since=since)
       models.KeyValueCache.DeleteMemcacheWrap(
           cursor_name, prop_name='text_value')
-      summary_tmp = models.ReportsCache.DeleteMsuUserSummary(
-          since=since, tmp=True)
+      models.ReportsCache.DeleteMsuUserSummary(since=since, tmp=True)
 
     gae_util.ReleaseLock(lock_name)
 
@@ -222,7 +216,6 @@ class ReportsCache(webapp2.RequestHandler):
 
 def _GenerateInstallCounts():
     """Generates a dictionary of all installs names and the count of each."""
-    #logging.debug('Generating install counts....')
 
     # Obtain a lock.
     lock_name = 'pkgs_list_cron_lock'
@@ -239,7 +232,6 @@ def _GenerateInstallCounts():
     cursor_obj = models.KeyValueCache.get_by_key_name('pkgs_list_cursor')
     if cursor_obj:
       query.with_cursor(cursor_obj.text_value)
-      #logging.debug('Continuing with cursor: %s', cursor_obj.text_value)
 
     # Loop over new InstallLog entries.
     try:
@@ -247,14 +239,11 @@ def _GenerateInstallCounts():
     except:
       installs = None
     if not installs:
-      #logging.debug('No more installs to process.')
       models.ReportsCache.SetInstallCounts(pkgs)
       gae_util.ReleaseLock(lock_name)
       return
 
-    i = 0
     for install in installs:
-      i += 1
       pkg_name = install.package
       if pkg_name not in pkgs:
         pkgs[pkg_name] = {
@@ -285,13 +274,11 @@ def _GenerateInstallCounts():
 
     # Update any changed packages.
     models.ReportsCache.SetInstallCounts(pkgs)
-    #logging.debug('Processed %d installs and saved to ReportsCache.', i)
 
     if not cursor_obj:
       cursor_obj = models.KeyValueCache(key_name='pkgs_list_cursor')
 
     cursor_txt = str(query.cursor())
-    #logging.debug('Saving new cursor: %s', cursor_txt)
     cursor_obj.text_value = cursor_txt
     cursor_obj.put()
 
@@ -317,7 +304,7 @@ def _GenerateTrendingInstallsCache(since_hours=None):
       total_success += 1
     else:
       trending['failure'][pkg] = trending['failure'].setdefault(pkg, 0) + 1
-      total_failure +=1
+      total_failure += 1
 
   # Get the top trending installs and failures.
   success = sorted(

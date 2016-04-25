@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki reports module tests."""
-
-
-
 
 import datetime
 import json
 import logging
-logging.basicConfig(filename='/dev/null')
+import mox
+import stubout
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -223,7 +219,7 @@ class HandlersTest(test.RequestHandlerTest):
         reports.REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT)
     self.mox.ReplayAll()
     self.assertEqual(
-        {'pkill_installd': True, 'repair': True,
+        {'pkill_installd': True, 'pkill_softwareupdated': True, 'repair': True,
          'logging_level': 3, 'upload_logs': True},
         self.c.GetReportFeedback(uuid, report_type, computer=computer))
     self.mox.VerifyAll()
@@ -370,36 +366,36 @@ class HandlersTest(test.RequestHandlerTest):
         uuid=uuid, computer=computer, package='Foo App1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
-        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+        mtime=mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App2-123123',
         status='0', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
-        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+        mtime=mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App3-2.1.1',
         status='1', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
-        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+        mtime=mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Foo App4-456456',
         status='-5', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
-        mtime=test.mox.IsA(datetime.datetime)).AndReturn(mock_install)
+        mtime=mox.IsA(datetime.datetime)).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package=installs[-1] + '-',
         status='UNKNOWN', on_corp=on_corp, applesus=False, unattended=False,
         duration_seconds=None, dl_kbytes_per_sec=None,
-        mtime=test.mox.IsA(datetime.datetime)).AndReturn(
+        mtime=mox.IsA(datetime.datetime)).AndReturn(
             mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(False)
 
     self.mox.StubOutWithMock(reports.gae_util, 'BatchDatastoreOp')
-    reports.gae_util.BatchDatastoreOp(reports.models.db.put, test.mox.IsA(list))
+    reports.gae_util.BatchDatastoreOp(reports.models.db.put, mox.IsA(list))
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])
@@ -458,7 +454,7 @@ class HandlersTest(test.RequestHandlerTest):
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='FooApp1-1.0.0',
         status='0', on_corp=on_corp, applesus=False, unattended=False,
-        duration_seconds=100, mtime=test.mox.IsA(datetime.datetime),
+        duration_seconds=100, mtime=mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=225).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # failed munki install report, with time.
@@ -479,26 +475,26 @@ class HandlersTest(test.RequestHandlerTest):
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='FutureApp-9.9.9',
         status='0', on_corp=on_corp, applesus=False, unattended=False,
-        duration_seconds=60, mtime=test.mox.IsA(datetime.datetime),
+        duration_seconds=60, mtime=mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with bogus time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='iTunes-10.2.0',
         status='0', on_corp=on_corp, applesus=True, unattended=False,
-        duration_seconds=300, mtime=test.mox.IsA(datetime.datetime),
+        duration_seconds=300, mtime=mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
     # successful applesus install report with no time.
     reports.models.InstallLog(
         uuid=uuid, computer=computer, package='Safari-5.1.0',
         status='0', on_corp=on_corp, applesus=True, unattended=True,
-        duration_seconds=4, mtime=test.mox.IsA(datetime.datetime),
+        duration_seconds=4, mtime=mox.IsA(datetime.datetime),
         dl_kbytes_per_sec=None).AndReturn(mock_install)
     mock_install.success = mock_install.IsSuccess().AndReturn(True)
 
     self.mox.StubOutWithMock(reports.gae_util, 'BatchDatastoreOp')
-    reports.gae_util.BatchDatastoreOp(reports.models.db.put, test.mox.IsA(list))
+    reports.gae_util.BatchDatastoreOp(reports.models.db.put, mox.IsA(list))
 
     self.request.get_all('removals').AndReturn([])
     self.request.get_all('problem_installs').AndReturn([])
@@ -624,6 +620,9 @@ class HandlersTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

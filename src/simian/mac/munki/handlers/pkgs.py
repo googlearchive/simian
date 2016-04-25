@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module to handle /pkgs"""
-
-
 
 import logging
 import urllib
@@ -27,7 +23,6 @@ from google.appengine.api import memcache
 from google.appengine.ext import blobstore
 from google.appengine.ext.webapp import blobstore_handlers
 
-from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.munki import common
@@ -62,7 +57,9 @@ class Packages(
     auth_return = auth.DoAnyAuth()
     if hasattr(auth_return, 'email'):
       email = auth_return.email()
-      if not auth.IsAdminUser(email) and not auth.IsSupportUser(email):
+      if not any((auth.IsAdminUser(email),
+                  auth.IsSupportUser(email),
+                 )):
         raise auth.IsAdminMismatch
 
     filename = urllib.unquote(filename)
@@ -109,18 +106,18 @@ class Packages(
       resource_expired = False
     else:
       resource_expired = handlers.IsClientResourceExpired(
-        pkg_date, header_date_str)
+          pkg_date, header_date_str)
 
     # Client supplied If-Match: etag, but that etag does not match current
     # etag.  return 412.
     if (etag_match_str and pkg.pkgdata_sha256 and
-      etag_match_str != pkg.pkgdata_sha256):
+        etag_match_str != pkg.pkgdata_sha256):
       self.response.set_status(412)
 
     # Client supplied no etag or If-No-Match: etag, and the etag did not
     # match, or the client's file is older than the mod time of this package.
     elif ((etag_nomatch_str and pkg.pkgdata_sha256 and
-      etag_nomatch_str != pkg.pkgdata_sha256) or resource_expired):
+           etag_nomatch_str != pkg.pkgdata_sha256) or resource_expired):
       self.response.headers['Content-Disposition'] = str(
           'attachment; filename=%s' % filename)
       # header date empty or package has changed, send blob with last-mod date.

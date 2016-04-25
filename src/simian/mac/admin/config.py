@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Configuration settings admin handler."""
 
 
-
-
-
-import base64
 import json
 import os
 
@@ -105,15 +99,9 @@ class Config(admin.AdminHandler):
 
   def NotifyAdminsOfChange(self, setting, value):
     """Notify Admins of changes to Settings."""
-    try:
-      recipients = settings_module.EMAIL_ADMIN_LIST
-    except AttributeError:
-      logging.info(
-          'email_admin_list unset, skipping change notification: %s', setting)
-      return
     subject_line = 'Simian Settings Change by %s' % (users.get_current_user())
     main_body = '%s set to: %s' % (setting, value)
-    mail.SendMail(recipients, subject_line, main_body)
+    mail.SendMail(settings_module.EMAIL_ADMIN_LIST, subject_line, main_body)
 
   def _UpdateSettingValue(self):
     self.response.headers['Content-Type'] = 'application/json'
@@ -157,8 +145,11 @@ class Config(admin.AdminHandler):
       self.response.out.write(json.dumps(
           {'error': 'Trying to set invalid setting.'}))
 
-  def _GetPems(self, pem_settings={}):
+  def _GetPems(self, pem_settings=None):
     """Returns a dictionary of PEM validation."""
+    if not pem_settings:
+      pem_settings = {}
+
     pems = PEM.copy()
     pem_keys = PEM.keys()
     pem_keys.sort()  # orders ca_* to be seen first

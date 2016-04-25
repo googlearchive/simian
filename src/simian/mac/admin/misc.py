@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Admin handler."""
 
-
-
-import datetime
-import logging
 import urllib
 
 from simian.mac import admin
 from simian.mac import models
+from simian.mac.admin import maintenance
 from simian.mac.common import auth
 from simian.mac.common import util
 from simian.mac.munki import common
@@ -43,7 +38,6 @@ class Misc(admin.AdminHandler):
 
   def post(self, report=None, uuid=None):
     """Misc post handler."""
-    #logging.debug('POST called: report=%s, uuid=%s', report, uuid)
     if not self.IsAdminUser() and not auth.IsSupportUser():
       self.response.set_status(403)
       return
@@ -110,12 +104,9 @@ class Misc(admin.AdminHandler):
       if not self.IsAdminUser():
         self.response.set_status(403)
         return
-      from simian.mac.admin import maintenance
       action = uuid
       if action == 'update_installs_schema':
         maintenance.UpdateInstallLogSchema()
-      elif action == 'update_legacy_apple_updates':
-        maintenance.ConvertLegacyAppleUpdateInstallLogEntities()
       elif action == 'rebuild_install_counts':
         maintenance.RebuildInstallCounts()
       else:
@@ -177,7 +168,7 @@ class Misc(admin.AdminHandler):
     """Displays all preflight exits."""
     query = models.PreflightExitLog.all().order('-mtime')
     exits = self.Paginate(query, DEFAULT_PREFLIGHT_EXIT_LOG_FETCH_LIMIT)
-    values = {'preflight_exits': exits,  'report_type': 'preflight_exits'}
+    values = {'preflight_exits': exits, 'report_type': 'preflight_exits'}
     self.Render('preflight_exits.html', values)
 
   def _DisplayLowDiskFree(self):
@@ -203,7 +194,7 @@ class Misc(admin.AdminHandler):
     self.Render('summary.html', values)
 
   def _DisplayManifest(self, track):
-    """Displays Manifests in a template"""
+    """Displays Manifests in a template."""
     m = models.Manifest.get_by_key_name(track)
     self.Render('plist.html',
                 {'plist_type': 'manifests',
@@ -231,15 +222,17 @@ class Misc(admin.AdminHandler):
       summary_list = []
       keys = summary.keys()
       keys.sort(cmp=lambda x, y: cmp(summary[x], summary[y]), reverse=True)
-      map(lambda x: summary_list.append({'var': x, 'val': summary[x]}), keys)
+      for x in keys:
+        summary_list.append({'var': x, 'val': summary[x]})
 
-      summaries.append({
-          'values': summary_list, 'since': human_since, 'mtime': m.mtime})
+      summaries.append(
+          {'values': summary_list, 'since': human_since, 'mtime': m.mtime})
 
     # TODO(user): Since the above is a list now, memcache here.
 
-    self.Render('msu_log_summary.html',
-        {'summaries': summaries,  'report_type': 'msu_gui_logs'})
+    self.Render(
+        'msu_log_summary.html',
+        {'summaries': summaries, 'report_type': 'msu_gui_logs'})
 
   def _DisplayMsuLogEvent(self):
     """Displays a summary of MSU logs."""
@@ -260,7 +253,6 @@ class Misc(admin.AdminHandler):
       self.response.set_status(404)
       return
     manifest = common.GetComputerManifest(uuid=uuid, packagemap=True)
-    contents = manifest['plist'].GetContents()
     manifest_str = manifest['plist'].GetXml()
 
     if self.request.get('format') == 'xml':
@@ -268,17 +260,17 @@ class Misc(admin.AdminHandler):
       self.response.out.write(manifest_str)
     else:
       manifest_html = admin.XmlToHtml(manifest_str)
-      self.Render('plist.html',
+      self.Render(
+          'plist.html',
           {'plist_type': 'host_manifest',
            'title': 'Host Manifest: %s' % uuid,
            'xml': manifest_html,
-           'raw_xml_link': '/admin/hostmanifest/%s?format=xml' % uuid,
-           })
+           'raw_xml_link': '/admin/hostmanifest/%s?format=xml' % uuid})
 
   def _DisplayUserSettings(self):
     """Displays a list of hosts with user_settings configured."""
     query = models.Computer.AllActive().filter('user_settings_exist =', True)
     computers = self.Paginate(query, DEFAULT_USER_SETTINGS_FETCH_LIMIT)
-    self.Render('user_settings.html',
+    self.Render(
+        'user_settings.html',
         {'computers': computers, 'report_type': 'usersettings_knobs'})
-

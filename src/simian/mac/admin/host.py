@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Host admin handler."""
-
-
-
-
 
 import json
 
@@ -43,8 +37,19 @@ class Host(admin.AdminHandler):
     """GET handler."""
     if uuid:
       uuid = util.UrlUnquote(uuid)
-    auth.DoUserAuth()
-    self._DisplayHost(uuid=uuid)
+    else:
+      self.response.set_status(404)
+      return
+
+    computer = models.Computer.get_by_key_name(uuid)
+    if not computer:
+      self.response.set_status(404)
+      return
+
+    self_report = bool(auth.DoUserAuthWithSelfReportFallback(
+        constrain_username=computer.owner))
+
+    self._DisplayHost(computer, self_report)
 
   def post(self, uuid=None):
     """POST handler."""
@@ -82,20 +87,15 @@ class Host(admin.AdminHandler):
 
     self.redirect('/admin/host/%s?msg=%s' % (uuid, msg))
 
-  def _DisplayHost(self, uuid=None, computer=None):
+  def _DisplayHost(self, computer, self_report):
     """Displays the report for a single host.
 
     Args:
-      uuid: str uuid for host to display.
       computer: models.Computer object to display.
+      self_report: if True, display as self report.
     """
-    if not uuid and not computer:
-      self.response.set_status(404)
-      return
-    elif not computer:
-      computer = models.Computer.get_by_key_name(uuid)
-    else:
-      uuid = computer.uuid
+
+    uuid = computer.uuid
 
     popup = self.request.get('format', None) == 'popup'
     if popup:
@@ -145,6 +145,7 @@ class Host(admin.AdminHandler):
     values = {
         'uuid_lookup_url': uuid_lookup_url,
         'owner_lookup_url': owner_lookup_url,
+        'client_site_enabled': settings.CLIENT_SITE_ENABLED,
         'computer': computer,
         'applesus_installs': applesus_installs,
         'installs': installs,
@@ -159,6 +160,7 @@ class Host(admin.AdminHandler):
         'is_support_user': auth.IsSupportUser(),
         'is_security_user': auth.IsSecurityUser(),
         'is_physical_security_user': auth.IsPhysicalSecurityUser(),
+        'self_report': self_report
     }
 
     if popup:

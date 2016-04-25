@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 """Manifest Modifications admin handler."""
-
-
-
 
 import json
 
 from google.appengine.api import users
 from google.appengine.ext import db
 
+from simian import settings
 from simian.mac import admin
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import auth
+from simian.mac.common import gae_util
 
+MAX_TARGETS_PER_POST = 70
 
 # Manifest Modification Type key/value pairs, where the key is used for
 # form field and query parameter naming, and the value is for human readable
@@ -77,11 +74,12 @@ class ManifestModifications(admin.AdminHandler):
   def _AddManifestModification(self):
     """Adds a new manifest modification to Datastore."""
     mod_type = self.request.get('mod_type')
-    target = self.request.get('target').strip()
+    targets = [x.strip() for x in self.request.get('target').split(',')
+               if x.strip()]
     munki_pkg_name = self.request.get('munki_pkg_name').strip()
     manifests = self.request.get_all('manifests')
     install_types = self.request.get_all('install_types')
-    remove_from_manifest = self.request.get('remove-from-manifest') != ''
+    remove_from_manifest = bool(self.request.get('remove-from-manifest'))
 
     # Security users are only able to inject specific packages.
     if not self.IsAdminUser():
@@ -102,7 +100,7 @@ class ManifestModifications(admin.AdminHandler):
             'You are not allowed to inject: %s' % munki_pkg_name)
         self.response.set_status(403)
         return
-      elif mod_type not in [k for k, v in MOD_GROUP_TYPES.get(grp, [])]:
+      elif mod_type not in [k for k, _ in MOD_GROUP_TYPES.get(grp, [])]:
         self.response.out.write(
             'You are not allowed to inject to: %s' % mod_type)
         self.response.set_status(403)
@@ -110,7 +108,7 @@ class ManifestModifications(admin.AdminHandler):
 
     # Validation.
     error_msg = None
-    if not target or not munki_pkg_name or not install_types:
+    if not targets or not munki_pkg_name or not install_types:
       error_msg = (
           'target, munki_pkg_name, and install_types are all required')
     if not error_msg:
@@ -125,16 +123,24 @@ class ManifestModifications(admin.AdminHandler):
     if not error_msg:
       if not models.PackageInfo.all().filter('name =', munki_pkg_name).get():
         error_msg = 'No package found with Munki name: %s' % munki_pkg_name
+    if not error_msg and len(targets) > MAX_TARGETS_PER_POST:
+      error_msg = 'too many targets'
     if error_msg:
       self.redirect('/admin/manifest_modifications?msg=%s' % error_msg)
       return
 
-    mod = models.BaseManifestModification.GenerateInstance(
-        mod_type, target, munki_pkg_name, manifests=manifests,
-        install_types=install_types, user=users.get_current_user(),
-        remove=remove_from_manifest)
-    mod.put()
-    models.BaseManifestModification.ResetModMemcache(mod_type, target)
+    to_put = []
+    for target in targets:
+      mod = models.BaseManifestModification.GenerateInstance(
+          mod_type, target, munki_pkg_name, manifests=manifests,
+          install_types=install_types, user=users.get_current_user(),
+          remove=remove_from_manifest)
+      to_put.append(mod)
+
+    gae_util.BatchDatastoreOp(db.put, to_put)
+    for target in targets:
+      models.BaseManifestModification.ResetModMemcache(mod_type, target)
+
     msg = 'Manifest Modification successfully saved.'
     self.redirect(
         '/admin/manifest_modifications?mod_type=%s&msg=%s' % (mod_type, msg))
@@ -175,6 +181,19 @@ class ManifestModifications(admin.AdminHandler):
       model = models.MANIFEST_MOD_MODELS.get(mod_type)
 
     mods_query = model.all().order('-mtime')
+
+    filter_value = self.request.get('filter_value')
+    filter_field = self.request.get('filter_field')
+    if filter_value:
+      if filter_field == 'target':
+        mods_query.filter(model.TARGET_PROPERTY_NAME, filter_value)
+      elif filter_field == 'package':
+        mods_query.filter('value', filter_value)
+      elif filter_field == 'admin':
+        if '@' not in filter_value:
+          filter_value += '@' + settings.AUTH_DOMAIN
+        mods_query.filter('user', users.User(email=filter_value))
+
     mods = self.Paginate(mods_query, DEFAULT_MANIFEST_MOD_FETCH_LIMIT)
 
     is_admin = self.IsAdminUser()
@@ -201,14 +220,16 @@ class ManifestModifications(admin.AdminHandler):
       mod_types = []
 
     data = {
-      'mod_types': mod_types,
-      'mod_type': mod_type,
-      'mods': mods,
-      'error': error_msg,
-      'can_add_manifest_mods': is_admin or is_support or is_security,
-      'munki_pkg_names': munki_pkg_names,
-      'install_types': common.INSTALL_TYPES,
-      'manifests': common.TRACKS,
-      'report_type': 'manifests_admin',
+        'mod_types': mod_types,
+        'mod_type': mod_type,
+        'mods': mods,
+        'error': error_msg,
+        'can_add_manifest_mods': is_admin or is_support or is_security,
+        'munki_pkg_names': munki_pkg_names,
+        'install_types': common.INSTALL_TYPES,
+        'manifests': common.TRACKS,
+        'report_type': 'manifests_admin',
+        'mods_filter': filter_field,
+        'mods_filter_value': filter_value,
     }
     self.Render('manifest_modifications.html', data)

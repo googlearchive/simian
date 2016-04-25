@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """hw module tests."""
-
-
 
 import mox
 import stubout
@@ -66,15 +62,15 @@ class SystemProfileTest(mox.MoxTestBase):
 
     hw.subprocess.Popen(
         ['/usr/sbin/system_profiler', '-XML'],
-        stdout = hw.subprocess.PIPE,
-        stderr = hw.subprocess.PIPE).AndReturn(mock_sp)
+        stdout=hw.subprocess.PIPE,
+        stderr=hw.subprocess.PIPE).AndReturn(mock_sp)
     mock_sp.communicate().AndReturn((stdout, stderr))
     mock_sp.wait().AndReturn(0)
 
     hw.subprocess.Popen(
         ['/usr/sbin/system_profiler', '-XML', 'SPNetworkDataType'],
-        stdout = hw.subprocess.PIPE,
-        stderr = hw.subprocess.PIPE).AndReturn(mock_sp)
+        stdout=hw.subprocess.PIPE,
+        stderr=hw.subprocess.PIPE).AndReturn(mock_sp)
     mock_sp.communicate().AndReturn((stdout, stderr))
     mock_sp.wait().AndReturn(0)
 

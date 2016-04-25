@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """App Engine Models related to Munki."""
-
-
-
 
 import datetime
 import logging
@@ -27,16 +22,14 @@ import os
 import re
 import urllib
 
-from google.appengine.api import mail as mail_tool
-from google.appengine.api import taskqueue
 from google.appengine.api import users
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import deferred
-from google.appengine.runtime import apiproxy_errors
 
 from simian.mac import common
 from simian.mac.common import gae_util
+from simian.mac.common import mail as mail_tool
 from simian.mac.models import base
 from simian.mac.models import constants
 from simian.mac.models import settings
@@ -222,7 +215,8 @@ class PackageInfo(BaseMunkiModel):
   AVG_DURATION_TEXT = (
       '%d users have installed this with an average duration of %d seconds.')
   AVG_DURATION_REGEX = re.compile(
-      '\d+ users have installed this with an average duration of \d+ seconds\.')
+      r'\d+ users have installed this with an average duration of '
+      r'\d+ seconds\.')
 
   # catalog names this pkginfo belongs to; unstable, testing, stable.
   catalogs = db.StringListProperty()
@@ -287,6 +281,9 @@ class PackageInfo(BaseMunkiModel):
 
     This mimics the new blobstore.BlobReferenceProperty() without requiring
     a schema change, which isn't fun for external Simian customers.
+
+    Args:
+      blob_info: blobstore.BlobInfo instance.
     """
     self.blobstore_key = str(blob_info.key())
 
@@ -398,6 +395,8 @@ class PackageInfo(BaseMunkiModel):
       pkginfo: a PackageInfo entity ready to be put to Datastore.
       original_plist: str XML of the original pkginfo plist, before updates.
       original_catalogs: list of catalog names the pkg was previously in.
+    Returns:
+      return AdminPackageLog record.
     Raises:
       PackageInfoUpdateError: there were validation problems with the pkginfo.
     """
@@ -421,6 +420,8 @@ class PackageInfo(BaseMunkiModel):
     # set in the constructure, so set here.
     log.plist = pkginfo.plist
     log.put()
+
+    return log
 
   def PutAndLogFromProposal(self, original_plist, original_catalogs):
     if self.proposal.status == 'approved':
@@ -449,12 +450,13 @@ class PackageInfo(BaseMunkiModel):
           PackageInfo entity, only otherwise update an existing one.
     Returns:
       pkginfo: Returns updated PackageInfo object.
+      log: Returns AdminPackageLog record.
     Raises:
       PackageInfoLockError: if the package is already locked in the datastore.
       PackageInfoNotFoundError: if the filename is not a key in the datastore.
       PackageInfoUpdateError: there were validation problems with the pkginfo.
     """
-    if type(plist) is str or type(plist) is unicode:
+    if isinstance(plist, basestring) or isinstance(plist, unicode):
       plist = plist_lib.MunkiPackageInfoPlist(plist)
       plist.EncodeXml()
       try:
@@ -497,7 +499,7 @@ class PackageInfo(BaseMunkiModel):
     pkginfo.catalogs = plist['catalogs']
     pkginfo.pkgdata_sha256 = plist['installer_item_hash']
     try:
-      cls._PutAndLogPackageInfoUpdate(
+      log = cls._PutAndLogPackageInfoUpdate(
           pkginfo, original_plist, original_catalogs)
     except PackageInfoUpdateError:
       gae_util.ReleaseLock(lock)
@@ -505,7 +507,7 @@ class PackageInfo(BaseMunkiModel):
 
     gae_util.ReleaseLock(lock)
 
-    return pkginfo
+    return pkginfo, log
 
   def Update(self, **kwargs):
     """Updates properties and/or plist of an existing PackageInfo entity.
@@ -513,19 +515,23 @@ class PackageInfo(BaseMunkiModel):
     Omitted properties are left unmodified on the PackageInfo entity.
 
     Args:
-      catalogs: list, optional, a subset of common.TRACKS.
-      manifests: list, optional, a subset of common.TRACKS.
-      install_types: list, optional, a subset of common.INSTALL_TYPES.
-      manifest_mod_access: list, optional, subset of common.MANIFEST_MOD_GROUPS.
-      name: str, optional, pkginfo name value.
-      display_name: str, optional, pkginfo display_name value.
-      unattended_install: boolean, optional, True to set unattended_install.
-      description: str, optional, pkginfo description.
-      version: str, optional, pkginfo version.
-      minimum_os_version: str, optional, pkginfo minimum_os_version value.
-      maximum_os_version: str, optional, pkginfo maximum_os_version value.
-      force_install_after_date: datetime, optional, pkginfo
-          force_install_after_date value.
+      **kwargs: many, below:
+          catalogs: list, optional, a subset of common.TRACKS.
+          manifests: list, optional, a subset of common.TRACKS.
+          install_types: list, optional, a subset of common.INSTALL_TYPES.
+          manifest_mod_access: list, optional, subset of
+            common.MANIFEST_MOD_GROUPS.
+          name: str, optional, pkginfo name value.
+          display_name: str, optional, pkginfo display_name value.
+          unattended_install: boolean, optional, True to set unattended_install.
+          unattended_uninstall: boolean, optional, True to set
+            unattended_uninstall.
+          description: str, optional, pkginfo description.
+          version: str, optional, pkginfo version.
+          minimum_os_version: str, optional, pkginfo minimum_os_version value.
+          maximum_os_version: str, optional, pkginfo maximum_os_version value.
+          force_install_after_date: datetime, optional, pkginfo
+              force_install_after_date value.
 
     Raises:
       PackageInfoLockError: if the package is already locked in the datastore.
@@ -538,6 +544,7 @@ class PackageInfo(BaseMunkiModel):
     name = kwargs.get('name')
     display_name = kwargs.get('display_name')
     unattended_install = kwargs.get('unattended_install')
+    unattended_uninstall = kwargs.get('unattended_uninstall')
     description = kwargs.get('description')
     version = kwargs.get('version')
     minimum_os_version = kwargs.get('minimum_os_version')
@@ -594,6 +601,7 @@ class PackageInfo(BaseMunkiModel):
             del self.plist['force_install_after_date']
 
       self.plist.SetUnattendedInstall(unattended_install)
+      self.plist.SetUnattendedUninstall(unattended_uninstall)
       self.plist['category'] = category
       self.plist['developer'] = developer
     else:
@@ -854,21 +862,13 @@ class PackageInfoProposal(PackageInfo):
     recipient, _ = settings.Settings.GetItem('email_admin_list')
     if recipient:
       recipient_list.append(recipient)
-    return_address, _ = settings.Settings.GetItem('email_sender')
-    if not return_address:
-      return_address = self.user
-    message = mail_tool.EmailMessage(to=recipient_list, sender=return_address,
-                                     subject=subject, body=body)
-    try:
-      deferred.defer(message.send)
-    except (deferred.Error, taskqueue.Error, apiproxy_errors.Error):
-      logging.exception('Notification failed to send.')
+    mail_tool.SendMail(recipient_list, subject, body)
 
   def _BuildProposalBody(self, hostname, filename):
     body = ''
     for key in self.COMMON_PROPERTIES:
       if getattr(self, key) != getattr(self.pkginfo, key):
-        body += '%s --> %s\n' % (
+        body += u'%s --> %s\n' % (
             getattr(self.pkginfo, key), getattr(self, key))
 
     hostname = urllib.quote(hostname)

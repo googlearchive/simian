@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """maint module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
+import mox
+import stubout
 
 from google.apputils import app
 from tests.simian.mac.common import test
@@ -170,7 +167,7 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(maint.models, 'PackageInfo')
     self.mox.StubOutWithMock(maint.blobstore, 'BlobInfo')
     self.mox.StubOutWithMock(maint.time, 'sleep')
-    self.mox.StubOutWithMock(maint.mail, 'EmailMessage')
+    self.mox.StubOutWithMock(maint.mail, 'SendMail')
     blobstore_key_good = 'goodkey'
     blobstore_key_bad = 'badkey'
     filename_bad = 'badfilename'
@@ -188,9 +185,10 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
         mock_pkginfo_good.blobstore_key).AndReturn(True)
     maint.blobstore.BlobInfo.get(
         mock_pkginfo_bad.blobstore_key).AndReturn(None)
-    mock_email1 = self.mox.CreateMockAnything()
-    maint.mail.EmailMessage().AndReturn(mock_email1)
-    mock_email1.send().AndReturn(None)
+
+    maint.mail.SendMail(
+        mox.IgnoreArg(), 'Package is lacking a file: %s' % filename_bad,
+        mox.IgnoreArg()).AndReturn(None)
 
     # verify Blobstore blobs are not orphaned.
     blob_good = self.mox.CreateMockAnything()
@@ -208,17 +206,17 @@ class VerifyPackagesCleanupTest(test.RequestHandlerTest):
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 3
     self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 4
     self.MockPackageInfoQuery(blobstore_key_bad)  # attempt 5
-    mock_email2 = self.mox.CreateMockAnything()
-    maint.mail.EmailMessage().AndReturn(mock_email2)
-    mock_email2.send().AndReturn(None)
+
+    maint.mail.SendMail(
+        mox.IgnoreArg(), 'Orphaned Blob in Blobstore: %s' % filename_bad,
+        mox.IgnoreArg()).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()
-    self.assertEqual(
-        mock_email1.subject, 'Package is lacking a file: %s' % filename_bad)
-    self.assertEqual(
-        mock_email2.subject, 'Orphaned Blob in Blobstore: %s' % filename_bad)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

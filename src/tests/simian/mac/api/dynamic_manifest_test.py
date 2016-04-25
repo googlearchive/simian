@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Munki dynamic_manifest module tests."""
-
-
 
 import logging
 import urllib
-logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
-from tests.simian.mac.common import test
 from simian.mac.api import dynamic_manifest as dyn_man
+from tests.simian.mac.common import test
 
 
 class DynamicManifestHandlersTest(test.RequestHandlerTest):
@@ -85,7 +80,6 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     pkg_name = 'Foo%20Pkg-1.2'
     pkg_name_unquoted = urllib.unquote(pkg_name)
 
-    manifests = ['unstable', 'testing']
     install_types = ['optional_installs', 'managed_updates']
 
     self.request.get_all('install_types').AndReturn(install_types)
@@ -286,7 +280,6 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     target = 'foouser'
     pkg_name = 'FooPkg-1.2'
     install_types = ['optional_installs', 'managed_updates']
-    mock_model = self._MockModTypeModel(mod_type)
 
     self.MockDoUserAuth(is_admin=True)
     self.request.get_all('install_types').AndReturn([])  # no install_types!!
@@ -354,6 +347,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
   def testPostWithPkgAlias(self):
     """Tests post() with a pkg_alias, not a pkg_name."""
+    mutate = 'true'
     mod_type = 'owner'
     target = 'foouser'
     pkg_alias = 'FooPkg'
@@ -367,6 +361,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.MockDoOAuthAuth(user=mock_user)
     self.request.get('mod_type').AndReturn(mod_type)
     self.request.get('target').AndReturn(target)
+    self.request.get('mutate', 'true').AndReturn(mutate)
     self.request.get('pkg_alias').AndReturn(pkg_alias)
     self.mox.StubOutWithMock(dyn_man.models.PackageAlias, 'ResolvePackageName')
     dyn_man.models.PackageAlias.ResolvePackageName(pkg_alias).AndReturn(
@@ -394,6 +389,45 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.assertEqual(mock_model.user, mock_user)
     self.assertEqual(mock_model.install_types, install_types)
     self.mox.VerifyAll()
+
+  def testPostWithPkgAliasAndWithoutMutate(self):
+    """Tests post() with a pkg_alias without mutate.
+
+    If this test is retrofitted to use a stub datastore then it should verify
+    that _PutMod() was not called.
+    """
+    mutate = 'false'
+    mod_type = 'owner'
+    target = 'foouser'
+    pkg_alias = 'FooPkg'
+    pkg_name = 'FooPkg Premium Pro 5'
+    install_types = ['optional_installs', 'managed_updates']
+    mock_user = self.mox.CreateMockAnything()
+    email = 'foouser@example.com'
+
+    self.MockDoOAuthAuth(user=mock_user)
+    self.request.get('mod_type').AndReturn(mod_type)
+    self.request.get('target').AndReturn(target)
+    self.request.get('mutate', 'true').AndReturn(mutate)
+    self.request.get('pkg_alias').AndReturn(pkg_alias)
+    self.mox.StubOutWithMock(dyn_man.models.PackageAlias, 'ResolvePackageName')
+    dyn_man.models.PackageAlias.ResolvePackageName(pkg_alias).AndReturn(
+        pkg_name)
+
+    self.request.get_all('install_types').AndReturn(install_types)
+
+
+    self.c.response.headers.__setitem__('Content-Type', 'application/json')
+    self.response.out.write(dyn_man.json.dumps([{'pkg_name': pkg_name}]))
+
+    self.mox.ReplayAll()
+    self.c.post()
+    self.mox.VerifyAll()
+
+
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

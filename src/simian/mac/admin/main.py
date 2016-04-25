@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Main module with WSGI app and URL mappings for the admin UI."""
 
-
-
 import webapp2
+
+from google.appengine.ext import webapp
 
 from simian import settings
 from simian.mac.admin import acl_groups
@@ -33,8 +31,8 @@ from simian.mac.admin import lock_admin
 from simian.mac.admin import manifest_modifications
 from simian.mac.admin import misc
 from simian.mac.admin import package
-from simian.mac.admin import packages
 from simian.mac.admin import package_alias
+from simian.mac.admin import packages
 from simian.mac.admin import panic
 from simian.mac.admin import release_report
 from simian.mac.admin import summary
@@ -42,7 +40,6 @@ from simian.mac.admin import tags
 from simian.mac.admin import uploadpkg
 
 
-from google.appengine.ext import webapp
 webapp.template.register_template_library(
     'simian.mac.admin.custom_filters')
 

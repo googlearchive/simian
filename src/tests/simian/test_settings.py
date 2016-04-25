@@ -37,10 +37,6 @@ SERVER_PRIVATE_KEY_PEM = 'foo_server_private_pem'
 
 REQUIRED_ISSUER = 'CN=test-issuer'
 
-DOMAIN = 'appspot.com'
-
-SUBDOMAIN = 'example'
-
 API_INFO_KEY = 'abcd'
 
 EMAIL_ADMIN_LIST = ['admin@example.com']
@@ -54,4 +50,3 @@ SERVER_PORT = 443
 AUTH_DOMAIN = 'example.com'
 
 CLIENT_SSL_PATH = '/path/to/ssl'
-

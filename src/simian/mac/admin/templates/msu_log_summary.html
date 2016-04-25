@@ -15,7 +15,9 @@
     <h3>MSU Log Event: {{ msu_event_name }}</h3>
     <a href="/admin">Back to admin home</a>
 
-    {% include "results_pagination.html" %}
+    <div style="margin-bottom:5px;">
+      {% include "results_pagination.html" %}
+    </div>
 
     <table class="stats-table">
     <tr><th>UUID</th><th>User</th><th>Event Time</th><th>Description</th></tr>
@@ -36,4 +38,3 @@
   {% endif %}
 {% endif %}
 {% endblock %}
-

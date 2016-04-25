@@ -1,0 +1,17 @@
+header {
+    display: none;
+}
+
+#menu {
+    display: none;
+}
+
+#content {
+    margin-left: 0px !important;
+}
+
+a:not(.uuidhover):not(.more):not(.host_details) {
+   pointer-events: none;
+   cursor: default;
+   color:black;
+}

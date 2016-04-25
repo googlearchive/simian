@@ -22,7 +22,6 @@
 
 
 import datetime
-import getpass
 import httplib
 import logging
 import mimetools
@@ -33,22 +32,12 @@ import sys
 import tempfile
 import time
 import urllib
-import urllib2
 import urlparse
 import warnings
 
 from M2Crypto import SSL
 from M2Crypto.SSL import Checker
-try:
-  import google.appengine.tools.appengine_rpc
-except ImportError:
-  from pkgutil import extend_path as _extend_path
-  import google
-  _path = '%s/gae_client.zip' % os.path.dirname(os.path.realpath(__file__))
-  google.__path__ = _extend_path(['%s/google/' % _path], google.__name__)
-  sys.path.insert(0, _path)
 
-from google.appengine.tools import appengine_rpc
 
 from simian.auth import x509
 from simian import auth
@@ -81,6 +70,16 @@ DEBUG = False
 if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
 URL_UPLOADPKG = '/uploadpkg'
+
+_CIPHER_LIST = ':'.join([
+    'ECDHE-ECDSA-AES128-GCM-SHA256',
+    'ECDHE-RSA-AES128-GCM-SHA256',
+    'ECDHE-ECDSA-CHACHA20-POLY1305',
+    'ECDHE-RSA-CHACHA20-POLY1305',
+    'ECDHE-ECDSA-AES128-SHA256',
+    'ECDHE-RSA-AES128-SHA256',
+])
+_SSL_VERSION = 'tlsv1_2'
 
 
 class Error(Exception):
@@ -273,7 +272,9 @@ class MultiBodyConnection:  # pylint: disable=g-old-style-class,no-init
     # the connection is ready for it after this request() completes.
     # note python >=2.7 httplib now offers this functionality for us,
     # but we are continuing to do it ourselves.
-    httplib.HTTPConnection.request(self, method, url, headers=headers)
+
+    httplib.HTTPConnection.request(
+        self, method, url, headers=headers)
 
     bytes_sent = 0
     self._ProgressCallback(bytes_sent, content_length)
@@ -384,7 +385,9 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
   def connect(self):
     """Connect to the host and port specified in __init__."""
     server_address = ((self.host, self.port))
-    ctx = SSL.Context()
+
+    ctx = SSL.Context(_SSL_VERSION)
+    ctx.set_cipher_list(_CIPHER_LIST)
 
     if hasattr(self, '_ca_cert_chain'):
       self._LoadCACertChain(ctx)
@@ -407,41 +410,6 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     # _tunnel_* options here, see original HTTPConnection.connect().
 
 
-class HTTPSHandler(appengine_rpc.urllib2.HTTPSHandler):
-  """Handler object to advertise https support to urllib2."""
-
-  def https_open(self, req):
-    # this function is the same as urllib2.HTTPSHandler, except we
-    # return our HTTPS class, not the default httplib.HTTPSConnection.
-    return self.do_open(HTTPSMultiBodyConnection, req)
-
-
-class AppEngineHttpRpcServer(appengine_rpc.HttpRpcServer):
-  """HttpRpcServer subclass which uses safe SSL."""
-
-  def _GetOpener(self):
-    """Returns an OpenerDirector that supports cookies and ignores redirects.
-
-    This method calls the original _GetOpener in appengine_rpc.  In this
-    local modification we temporarily stub out
-    urllib2.OpenerDirector.add_handler to stop appengine_rpc from loading
-    FancyHTTPSHandler, and inject our HTTPSHandler instead.
-
-    Returns:
-      A urllib2.OpenerDirector object.
-    """
-    _orig_add_handler = appengine_rpc.urllib2.OpenerDirector.add_handler
-
-    def _add_handler(self, handler):
-      if not isinstance(handler, appengine_rpc.fancy_urllib.FancyHTTPSHandler):
-        _orig_add_handler(self, handler)
-      else:
-        _orig_add_handler(self, HTTPSHandler())
-
-    appengine_rpc.urllib2.OpenerDirector.add_handler = _add_handler
-    opener = super(AppEngineHttpRpcServer, self)._GetOpener()
-    appengine_rpc.urllib2.OpenerDirector.add_handler = _orig_add_handler
-    return opener
 
 
 class HttpsClient(object):
@@ -564,6 +532,7 @@ class HttpsClient(object):
       use_https = self.proxy_use_https
     else:
       use_https = self.use_https
+
     if use_https:
       conn = HTTPSMultiBodyConnection(*conn_args)
     else:
@@ -804,91 +773,6 @@ class HttpsClient(object):
     return response
 
 
-class UAuth(object):
-  """Class to authenticate to /uauth with user credentials."""
-
-  def __init__(self, hostname=None, interactive_user=True):
-    """init.
-
-    Args:
-      hostname: str, optional, default SERVER_HOSTNAME:SERVER_PORT,
-          hostname to connect to.
-      interactive_user: bool, optional, default True, whether interactive
-          user is present.
-    """
-    if hostname is None:
-      hostname = '%s:%s' % (SERVER_HOSTNAME, SERVER_PORT)
-    self.hostname = hostname
-    self.interactive_user = interactive_user
-    self._ca_cert_chain = None
-
-  def _AuthFunction(self):
-    """Returns (username, password) to HttpRpcServer."""
-    if not self.interactive_user:
-      raise SimianClientError('UAuth: Requires password, no interactive user')
-
-    user = '%s@%s' % (getpass.getuser(), AUTH_DOMAIN)
-    password = getpass.getpass('%s password: ' % user)
-    return (user, password)
-
-  def Login(self):
-    """Login to /uauth.
-
-    Returns:
-      cookie string ready to be set into http Cookie header
-    Raises:
-      SimianClientError: if an error occurs on the client
-      SimianServerError: if an unexpected return/error occurs on the server
-    """
-    # populate the certificates globally in HTTPSMultiBodyConnection
-    # to avoid trying to hook its instantiation by urllib2.
-    HTTPSMultiBodyConnection.SetCACertChain(self._ca_cert_chain)
-    s = AppEngineHttpRpcServer(
-        self.hostname,
-        self._AuthFunction,
-        None,
-        'ah',
-        save_cookies=True,
-        secure=True)
-
-    try:
-      response = s.Send('/uauth')
-    except urllib2.HTTPError, e:
-      raise SimianServerError(str(e))
-
-    # Step 3 - load the response
-    auth1 = auth_client.AuthSimianClient()
-    auth1.LoadCaParameters(settings)
-    auth1.Input(t=response)
-
-    if not auth1.AuthStateOK():
-      raise SimianClientError('UAuth: Invalid response: %s' % response)
-
-    token_name = response
-    output = None
-
-    for cookie in s.cookie_jar:
-      if cookie.domain == self.hostname:
-        if cookie.name == token_name:
-          if cookie.secure:
-            suffix = 'secure'
-          output = '%s=%s; %s; httponly;' % (cookie.name, cookie.value, suffix)
-
-    if not output:
-      raise SimianClientError('UAuth: No cookies from /uauth')
-
-    return output
-
-  def SetCACertChain(self, certs):
-    """Set the CA certificate chain to verify SSL server certs.
-
-    Args:
-      certs: str, one or more X509 certificates concatenated after
-        another
-    """
-    self._ca_cert_chain = certs
-
-
 class HttpsAuthClient(HttpsClient):
   """Https client with support for authentication."""
 
@@ -926,9 +810,6 @@ class HttpsAuthClient(HttpsClient):
     self._ca_params = util.GetCaParameters(
         settings, omit_server_private_key=True)
     logging.debug('Loaded ca_params')
-    self._default_ca_params = util.GetCaParametersDefault(
-        settings, omit_server_private_key=True)
-    logging.debug('Loaded default_ca_params')
 
   def _AdjustHeaders(self, headers):
     """Adjust headers before a request.
@@ -1183,13 +1064,9 @@ class HttpsAuthClient(HttpsClient):
       PuppetSslCertError: there was an error reading the cert.
     """
     required_issuer = self._ca_params.required_issuer
-    default_required_issuer = self._default_ca_params.required_issuer
 
     logging.debug(
         '_ValidatePuppetSslCert: required_issuer %s', required_issuer)
-    logging.debug(
-        '_ValidatePuppetSslCert: default_required_issuer %s',
-        default_required_issuer)
 
     try:
       cert_path = os.path.join(cert_dir_path, cert_fname)
@@ -1203,28 +1080,12 @@ class HttpsAuthClient(HttpsClient):
       logging.debug('Looking at issuer %s', issuer)
       # Check issuer match.
       if issuer != required_issuer:
-        # Matches the default CA params issuer instead, if it is available?
-        if (default_required_issuer is not None and
-            default_required_issuer == issuer):
-          # match, good.
-          msg = ('Cert %s does not match config issuer, '
-                 'but matches default' % cert_fname)
-          logging.warning(msg)
-          logging.warning('Dumping config CA params for defaults')
-          self._ca_params = self._default_ca_params
-          # TODO(user): It would be nicer if the cert scraping code like
-          # this function raised a signal that hinted the later
-          # AuthSimianClient into using the different config. Instead we
-          # just whack the CA_ID setting to point later consumers of the
-          # CA settings directly.
-          settings.CA_ID = self._ca_params.ca_id
-        else:
-          # no match at all.
-          msg = 'Skipping cert %s, unknown issuer' % cert_fname
-          logging.warning(msg)
-          logging.warning(
-              'Expected: "%s" Received: "%s"', required_issuer, issuer)
-          raise PuppetSslCertError(msg)
+        # no match at all.
+        msg = 'Skipping cert %s, unknown issuer' % cert_fname
+        logging.warning(msg)
+        logging.warning(
+            'Expected: "%s" Received: "%s"', required_issuer, issuer)
+        raise PuppetSslCertError(msg)
     except IOError, e:
       logging.debug('Skipped cert %s, IO Error %s', cert_fname, str(e))
       raise PuppetSslCertError(str(e))
@@ -1303,31 +1164,6 @@ class HttpsAuthClient(HttpsClient):
       auth1.LoadCaParameters(settings)
 
     self._auth1 = auth1
-
-  def DoUAuth(self):
-    """Do UAuth authentication."""
-    interactive_user = os.isatty(sys.stdin.fileno())
-
-    ua = UAuth(hostname=self.netloc, interactive_user=interactive_user)
-    ua.SetCACertChain(self._ca_cert_chain)
-    token = ua.Login()
-
-    if not token:
-      raise SimianClientError('No token supplied on cookie')
-
-    self._cookie_token = token
-
-  def DoUserAuth(self, unused_user_auth=None):
-    """Do user authentication.
-
-    This method causes the client to authenticate as a user, not as a machine.
-    So, it is somewhat the opposite method to DoSimianAuth().
-
-    Args:
-      unused_user_auth: str or None, control the user auth type, or when None,
-        use default.  Currently a noop.
-    """
-    return self.DoUAuth()
 
   def DoSimianAuth(self, interactive_user=None):
     """Do Simian authentication.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """App Engine Model Properties."""
-
-
 
 
 from google.appengine.ext import db
 
-from simian.mac.common import util
 from simian.mac.common import compress
+from simian.mac.common import util
 
 
 class SerializedProperty(db.TextProperty):
@@ -111,4 +107,3 @@ class CompressedUtf8BlobProperty(db.BlobProperty):
   def __len__(self):
     """Returns the length of the uncompressed blob data."""
     return self.length
-

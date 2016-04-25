@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,14 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module to handle /deletepkg."""
-
-
-
-
-import logging
 
 from simian.auth import gaeserver
 from simian.mac import models
@@ -51,7 +44,6 @@ class DeletePackage(handlers.AuthenticationHandler):
     catalogs = pkginfo.catalogs
     install_types = pkginfo.install_types
 
-    #logging.info('Deleting package: %s', filename)
     blobstore_key = pkginfo.blobstore_key
     # Delete the PackageInfo entity, and then the package Blobstore entity.
     pkginfo.delete()
@@ -66,6 +58,3 @@ class DeletePackage(handlers.AuthenticationHandler):
         user=user, action='deletepkg', filename=filename, catalogs=catalogs,
         install_types=install_types, plist=plist)
     admin_log.put()
-
-    #logging.info(
-    #    'PackageInfo and Package Blob deleted successfully: %s', filename)

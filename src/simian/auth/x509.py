@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,14 +38,12 @@ import hashlib
 import re
 import time
 import pyasn1
-import pyasn1.error
 from pyasn1.codec.der import decoder as der_decoder
 from pyasn1.codec.der import encoder as der_encoder
+import pyasn1.error
 from pyasn1.type import univ
 import pyasn1.type.useful
-import tlslite
-import tlslite.X509
-import tlslite.utils.keyfactory
+from tlslite import api as tlslite_api
 
 
 # OIDs as a dict, for quick lookup of the OID
@@ -108,6 +106,12 @@ X509_CERT_VERSION_3 = 0x2
 
 # Regex for valid, standard base64 characters. (i.e. not websafe)
 BASE64_RE = re.compile(r'^[0-9A-Za-z/+=]+$')
+
+
+# Constants used for RFC4514 attribute_value -> str escaping
+SPACE = str(u'\u0020')
+NULL = '\x00'
+RFC4514_ESCAPED_CHARS = frozenset(('"', '+', ',', ';', '<', '>', '\\', NULL))
 
 
 class Error(Exception):
@@ -176,7 +180,7 @@ class BaseDataObject(object):
     Args:
       name: str, name for the method, e.g. "Foo"
       key: str, key in dict to retrieve, e.g. "foo"
-      setattr: function, optional, used to set attribute on class
+      setattr_: function, optional, used to set attribute on class
     """
     if setattr_ is None:
       setattr_ = setattr
@@ -270,7 +274,6 @@ class X509Certificate(BaseDataObject):
       list of der_encoder.univ.OctetString
     """
     return [x for x in values if isinstance(x, univ.OctetString)]
-
 
   def _GetV3ExtensionFieldsFromSequence(self, seq):
     """Get X509 V3 extension fields from a sequence.
@@ -398,6 +401,43 @@ class X509Certificate(BaseDataObject):
       output['key_usage'] = cert_key_usage
     return output
 
+  def _AttributeValueToString(self, value):
+    """Transform an AttributeValue to a String, escaping if needed.
+
+    Follows RFC4514 section 2.4.
+
+    Args:
+      value: string, like "Foo" from "OU=Foo"
+    Returns:
+      str, a new str if escaped, otherwise the same str.
+    """
+    value = str(value)  # pyasn1 PrintableString -> str
+
+    # using a regex to sub() leads to problems when adjacent target chars
+    # lead to overlapping matches. do this by hand.
+    tmp = []
+    i = 0
+    while i < len(value):
+      if value[i] in RFC4514_ESCAPED_CHARS:
+        if i == 0 or value[i - 1] != '\\':
+          if value[i] == NULL:
+            tmp.append('\\00')
+          else:
+            tmp.append('\\%s' % value[i])
+      else:
+        tmp.append(value[i])
+      i += 1
+    value = ''.join(tmp)
+
+    if value.startswith(SPACE):  # string may not start with unescaped space
+      value = '\\' + value
+    elif value.startswith('#'):  # string may not start with unescaped #
+      value = '\\' + value
+    if value.endswith(SPACE):    # string may not end with unprotected space
+      value = value[0:-1] + '\\' + SPACE
+
+    return value
+
   def _AssembleDNSequence(self, seq):
     """Assemble multiple DN fields into a string output.
 
@@ -413,17 +453,18 @@ class X509Certificate(BaseDataObject):
       CertificateParseError: the sequence structured is unknown
     """
     output = []
+    delimiter = ','
     try:
       for i in seq:
         oid, value = i[0]
-
         if oid in OID_NAME:
-          output.append('%s=%s' % (OID_NAME[oid], value))
+          new_value = self._AttributeValueToString(value)
+          output.append('%s=%s' % (OID_NAME[oid], new_value))
         else:
           raise CertificateParseError('Unknown OID %s' % str(oid))
     except (IndexError, ValueError, TypeError):
       raise CertificateParseError('Unknown DN sequence structure', seq)
-    return ','.join(output)
+    return delimiter.join(output)
 
   def _GetFieldsFromSequence(self, seq):
     """Get cert fields from a sequence.
@@ -624,7 +665,7 @@ class X509Certificate(BaseDataObject):
           'public_key': tlslite.utils.RSAKey.RSAKey object
       }
     """
-    cert = tlslite.X509.X509()
+    cert = tlslite_api.X509()
     cert.parseBinary(bytes_str)
     return {
         'public_key': cert.publicKey,
@@ -768,7 +809,7 @@ def LoadPemGeneric(s, header, footer, skip_info=True):
       if lines[i] == footer:
         end = i
       elif skip_info and lines[i].find(':') > -1:
-        del(lines[i])
+        del lines[i]
     i += 1
 
   if begin is None:
@@ -841,6 +882,6 @@ def LoadRSAPrivateKeyFromPEM(s):
   # tlslite expects to see the header too.
   pem_rsa_key = '\n'.join(lines)
   try:
-    return tlslite.utils.keyfactory.parsePEMKey(pem_rsa_key)
+    return tlslite_api.parsePEMKey(pem_rsa_key)
   except SyntaxError, e:
     raise RSAPrivateKeyPEMFormatError(str(e))

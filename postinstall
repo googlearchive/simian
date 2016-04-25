@@ -198,7 +198,7 @@ cp "$(pwd)/roots.pem" ${INSTALL_DIR}/${VE_DIR}/
 ### update munki configuration
 
 echo Begin section: Harmless "configuration not found" messages may follow
-server=`${VE_PYTHON} -c "from simian import settings ; print '%s.%s' % (settings.SUBDOMAIN, settings.DOMAIN)"`
+server=`${VE_PYTHON} -c "from simian import settings ; print '%s' % settings.SERVER_HOSTNAME`
 defaults write /Library/Preferences/ManagedInstalls SoftwareRepoURL "https://${server}"
 echo End section
 

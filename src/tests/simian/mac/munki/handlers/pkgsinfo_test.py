@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,22 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """pkgsinfo module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
 
 import mox
 import stubout
 
 from google.apputils import app
 from google.apputils import basetest
-from simian.mac.munki.handlers import pkgsinfo
 from tests.simian.mac.common import test
+from simian.mac.munki.handlers import pkgsinfo
 
 
 class MunkiPackageInfoPlistStrictTest(mox.MoxTestBase):
@@ -104,8 +99,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
   def testHash(self):
     """Test _Hash()."""
     self.stubs.Set(
-      pkgsinfo.hashlib, 'sha256',
-      self.mox.CreateMock(pkgsinfo.hashlib.sha256))
+        pkgsinfo.hashlib, 'sha256',
+        self.mox.CreateMock(pkgsinfo.hashlib.sha256))
     s = 'foo'
     h = self.mox.CreateMockAnything()
     h.hexdigest().AndReturn('hexfoo')
@@ -219,7 +214,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     install_types = ['managed_installs', 'managed_updates']
     catalogs = ['stable', 'testing']
     mock_pkg = self.mox.CreateMockAnything()
-    mock_pkg_properties  = ['name', 'foo']
+    mock_pkg_properties = ['name', 'foo']
     mock_pkg.name = 'fooname'
     mock_pkg.foo = 'foofoo'
     pkgs = [{'name': mock_pkg.name, 'foo': mock_pkg.foo}]
@@ -286,7 +281,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename = 'pkgname.dmg'
     body = 'junk'
     self.request.body = body
-    parsed_dict = {'missing': 'the required values'}
 
     self.request.get('hash').AndReturn(None)
     self.request.get('catalogs', None).AndReturn('anything')
@@ -309,7 +303,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     """Test put() with valid input params, but package does not exist."""
     filename = 'pkgname.dmg'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
     self.request.body = body
 
     self.request.get('hash').AndReturn(None)
@@ -334,7 +327,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename = 'pkgname.dmg'
     body = '<fakexml>blabla</fakexml>'
     pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']
@@ -367,8 +359,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     name = 'foo pkg name'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']
@@ -421,8 +411,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     name = 'foo pkg name'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = []  # this pkg is in no manifests
@@ -475,8 +463,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     name = 'foo pkg name'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = None
@@ -531,8 +517,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     name = 'foo pkg name'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']
@@ -584,10 +568,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     """Test put() with valid input params, giving success."""
     filename = 'pkg name.dmg'
     filename_quoted = 'pkg%20name.dmg'
-    name = 'foo pkg name'
     body = '<fakexml>blabla</fakexml>'
-    pkgloc = '/package/location.pkg'
-    pkgdict = {'installer_item_location': pkgloc}
     self.request.body = body
     catalogs = ['catalog1', 'catalog2']
     manifests = ['manifest1', 'manifest2']
@@ -694,6 +675,9 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

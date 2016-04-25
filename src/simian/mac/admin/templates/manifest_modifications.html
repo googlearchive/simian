@@ -5,69 +5,80 @@
 {% block page-content %}
  {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
 
- {% if can_add_manifest_mods %}
-  <form method="POST" action="/admin/manifest_modifications" class="form">
-    <fieldset style="max-width: 650px">
-    <legend>Add New Manifest Modification</legend>
+{% if can_add_manifest_mods %}
+  <script type="text/javascript">
+    function showManifestModCreator() {
+      simian.addClass(document.getElementById('new-manifest-modification'), 'visible');
+      simian.registerEscListener(function() {
+        simian.removeClass(document.getElementById('new-manifest-modification'), 'visible');
+      });
+    }
+  </script>
+  <div id="new-manifest-modification" class="modaldialog" style="width:405px;">
+    <form method="POST" action="/admin/manifest_modifications" class="form">
+      <fieldset style="max-width: 650px">
+      <legend>Add New Manifest Modification</legend>
 
-    <input type="hidden" name="add_manifest_mod" value="1" />
+      <input type="hidden" name="add_manifest_mod" value="1" />
 
-    <div class="formcolumn" style="width: 250px;">
-      <label>Mod Type</label>
-      <select name="mod_type">
-        {% for key, value in mod_types %}
-          <option value="{{ key }}">{{ value }}</option>
-        {% endfor %}
-      </select>
-      <br/>
-
-      <label>Target</label>
-      <input type="text" name="target" size="50"/>
-      <br/>
-    </div>
-
-    {% if is_admin %}
-      <div class="formcolumn">
-        <label>Install Types</label>
-        {% for install_type in install_types %}
-          <input type="checkbox" name="install_types" value="{{ install_type }}"
-                 id="type-{{ install_type }}" class="tags" />
-          <label for="type-{{ install_type }}">{{ install_type }}</label>
-        {% endfor %}
-        <br/>
-
-        <label>Manifests</label>
-        {% for manifest in manifests %}
-          <input type="checkbox" name="manifests" value="{{ manifest }}"
-                 id="manifest-{{ manifest }}" class="tags" />
-          <label for="manifest-{{ manifest }}">{{ manifest }}</label>
-        {% endfor %}
-        <br/>
-      </div>
-    {% endif %}
-
-    <table style="width: 650px;">
-      <tr>
-      <td>
-        <label>Munki Package Name</label>
-        <select name="munki_pkg_name">
-          <option selected="selected"/>
-          {% for item in munki_pkg_names %}
-            <option value="{{ item.name }}">{{ item.munki_name }}</option>
+      <div class="formcolumn" style="width: 250px;">
+        <label>Mod Type</label>
+        <select name="mod_type">
+          {% for key, value in mod_types %}
+            <option value="{{ key }}">{{ value }}</option>
           {% endfor %}
         </select>
-        <input type="checkbox" name="remove-from-manifest" id="remove-from-manifest" class="tags" />
-        <label for="remove-from-manifest">Block</label>
         <br/>
+
+        <label>Targets (comma separated list)</label>
+        <input type="text" name="target" size="50"/>
+        <br/>
+      </div>
+
+      {% if is_admin %}
+        <div class="formcolumn">
+          <label>Install Types</label>
+          {% for install_type in install_types %}
+            <input type="checkbox" name="install_types" value="{{ install_type }}"
+                   id="type-{{ install_type }}" class="tags" />
+            <label for="type-{{ install_type }}">{{ install_type }}</label>
+          {% endfor %}
+          <br/>
+
+          <label>Manifests</label>
+          {% for manifest in manifests %}
+            <input type="checkbox" name="manifests" value="{{ manifest }}"
+                   id="manifest-{{ manifest }}" class="tags" />
+            <label for="manifest-{{ manifest }}">{{ manifest }}</label>
+          {% endfor %}
+          <br/>
         </div>
-      </td>
-      <td valign="bottom" align="right">
+      {% endif %}
+
+      <table style="width: 100%;">
+        <tr>
+        <td>
+          <label>Munki Package Name</label>
+          <select name="munki_pkg_name">
+            <option selected="selected"/>
+            {% for item in munki_pkg_names %}
+              <option value="{{ item.name }}">{{ item.munki_name }}</option>
+            {% endfor %}
+          </select>
+          <input type="checkbox" name="remove-from-manifest" id="remove-from-manifest" class="tags" />
+          <label for="remove-from-manifest">Block</label>
+          <br/>
+          </div>
+        </td>
+        </tr>
+      </table>
+      <div style="text-align:right;">
+        <input type="button" class="button" value="Close" onclick="simian.removeClass(document.getElementById('new-manifest-modification'), 'visible');">
         <button type="submit">Save</button>
-      </td>
-      </tr>
-    </table>
-    </fieldset>
-  </form>
+      </div>
+      </fieldset>
+    </form>
+  </div>
 {% endif %}
 
 <p>
@@ -82,8 +93,23 @@
 {% if mod_type %}
   <h3>Existing "{{ mod_type }}" Manifest Modifications</h3>
 
-  {% include "results_pagination.html" %}
+  <div style="margin-bottom:5px;">
+    {% include "results_pagination.html" %}
 
+    <form class="search" method="GET" style="display: inline; float: right;">
+      <select name="filter_field" style="float: left;">
+        <option value="target" {% ifequal mods_filter "target" %}selected{% endifequal %}>Target</option>
+        <option value="package" {% ifequal mods_filter "package" %}selected{% endifequal %}>Package</option>
+        <option value="admin" {% ifequal mods_filter "admin" %}selected{% endifequal %}>Admin</option>
+      </select>
+      <input type="text" name="filter_value" value="{{ mods_filter_value }}" />
+      <input type="hidden" name="mod_type" value="{{ mod_type }}" />
+      <button type="submit"><img src="/admin/static/search.svg"></button>
+    </form>
+    {% if can_add_manifest_mods %}
+      <button class="red upload" onclick="showManifestModCreator();" style="display: inline; float: right; margin: 0 5px;">New Manifest Modifications</button>
+    {% endif %}
+  </div>
   {% if mods %}
   <table class="stats-table">
     <tr class="multi-header">

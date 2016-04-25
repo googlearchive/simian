@@ -68,7 +68,7 @@
   <div style="margin-top: 10px" id="editbuttons">
     {% spaceless %}
     <a class="button leftbutton"
-       onclick="if(!formEdited || confirm('Discard changes?')) location.href='{{ return_address }}'">
+       onclick="if(!formEdited || confirm('Discard changes?')) simian.setLocationHref(location, '{{ return_address }}');">
        &laquo; Back to {{ return_title }} list</a>
 
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
@@ -86,16 +86,16 @@
 
     <a class="blue button {% if not pkg.blob_info %}rightbutton{% endif %}"
        {% if editxml %}
-         onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/package/{{ pkg.filename }}'">
+         onclick="if(!formEdited || confirm('Discard changes?')) simian.setLocationHref(location, '/admin/package/{{ pkg.filename }}');">
          Human friendly editor
        {% else %}
-         onclick="if(!formEdited || confirm('Discard changes?')) location.href='/admin/package/{{ pkg.filename }}?editxml=1'">
+         onclick="if(!formEdited || confirm('Discard changes?')) simian.setLocationHref(location, '/admin/package/{{ pkg.filename }}?editxml=1');">
          Edit PkgInfo XML
        {% endif %}
     </a>
 
     {% if is_admin_user or is_support_user %}
-      &nbsp;<a class="blue button" onclick="location.href='/pkgs-userauth/{{ pkg.filename }}'">Download</a>
+      &nbsp;<a class="blue button" onclick="simian.setLocationHref(location, '/pkgs-userauth/{{ pkg.filename }}');">Download</a>
 
       <button type="button" class="red delete" style="margin-left: 4px"
               {% if not pkg_safe_to_modify %} disabled{% endif %}
@@ -302,6 +302,13 @@
         id="unattended_install" {% if pkg.unattended %} checked{% endif %}
         {% if not pkg_safe_to_modify %} disabled{% endif %}/>
     <label for="unattended_install">unattended install</label>
+    <br/>
+
+    <label>Unattended uninstall?</label>
+    <input type="checkbox" class="tags formfield" name="unattended_uninstall"
+        id="unattended_uninstall" {% if pkg.unattended_uninstall %} checked{% endif %}
+        {% if not pkg_safe_to_modify %} disabled{% endif %}/>
+    <label for="unattended_uninstall">unattended uninstall</label>
     <br/>
 
     <label>Manifest mod access</label>

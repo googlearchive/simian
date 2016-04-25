@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module containing classes to connect to Simian as a Mac client."""
-
-
-
 
 
 import logging
 import os
 import os.path
-import platform
 import re
 import subprocess
 from simian.client import client
+from simian.mac.common import hw
 from simian.mac.munki import pkgs
 from simian.mac.munki import plist
-from simian.mac.common import hw
 
 MUNKI_CONFIG_PLIST = '/Library/Preferences/ManagedInstalls.plist'
 
@@ -55,9 +49,9 @@ class BaseSimianClient(object):
 
     try:
       argv = [
-        '/usr/bin/security',
-        'find-certificate', '-a',
-        '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
+          '/usr/bin/security',
+          'find-certificate', '-a',
+          '-p', '/System/Library/Keychains/SystemRootCertificates.keychain'
       ]
       logging.debug('GetSystemRootCACertChain: Executing %s', argv)
       p = subprocess.Popen(
@@ -240,7 +234,7 @@ class SimianClient(BaseSimianClient, client.SimianClient):
       pkginfo.Validate()
     except plist.Error, e:
       raise client.SimianClientError((
-        'Internal sanity check, plist error: %s' % str(e)))
+          'Internal sanity check, plist error: %s' % str(e)))
 
     # TODO(user): Refactor so that this code block and cli.EditPackageInfo
     # share the same pkginfo_hooks iteration code.

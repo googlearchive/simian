@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Common classes for Simian unit tests.
 
 Contents:
@@ -23,21 +21,14 @@ Contents:
   RequestHandlerTest
 """
 
-
-
 import tests.appenginesdk
-
-import mox
-import stubout
 
 from google.appengine.ext import testbed
 
-from google.apputils import app
 from google.apputils import basetest
 
 from tests.simian.mac.common import test_base as test_base
 from simian import settings
-from simian.mac import models
 from simian.mac.common import auth
 
 
@@ -76,7 +67,7 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
       user: user for DoUserAuth to return.
       fail: bool, whether to fail or not
     """
-    if not 'authDoUserAuth' in self._set_mock:
+    if 'authDoUserAuth' not in self._set_mock:
       self.mox.StubOutWithMock(auth, 'DoUserAuth')
       self._set_mock['authDoUserAuth'] = 1
     if fail:
@@ -122,7 +113,7 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
     munki_auth_module = self.GetTestClassModule().gaeserver
     if not hasattr(munki_auth_module, 'DoMunkiAuth'):
       raise NotImplementedError('MockDoMunkiAuth for non-Munki handler class')
-    if not 'authDoMunkiAuth' in self._set_mock:
+    if 'authDoMunkiAuth' not in self._set_mock:
       self.mox.StubOutWithMock(munki_auth_module, 'DoMunkiAuth')
       self._set_mock['authDoMunkiAuth'] = 1
     if fail:
@@ -139,7 +130,7 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
       fail: bool, whether to fail or not
       and_return: any, variable to pass to AndReturn, default None
     """
-    if not 'authDoAnyAuth' in self._set_mock:
+    if 'authDoAnyAuth' not in self._set_mock:
       self.mox.StubOutWithMock(auth, 'DoAnyAuth')
       self._set_mock['authDoAnyAuth'] = 1
     if fail:
@@ -159,11 +150,10 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
     """
     test_class_models = self.GetTestClassModule().models
     model_class = getattr(test_class_models, model_name)
-    if not '%s:%s' % (model_name, method_name) in self._set_mock:
+    if '%s:%s' % (model_name, method_name) not in self._set_mock:
       mock_model = self.mox.CreateMock(getattr(model_class, method_name))
       self.stubs.Set(model_class, method_name, mock_model)
       self._set_mock['%s:%s' % (model_name, method_name)] = mock_model
-    model = self.mox.CreateMockAnything()
     return getattr(model_class, method_name)(*args)
 
   def MockModelStatic(self, model_name, method_name, *args):
@@ -199,14 +189,14 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
 
     Args:
       name: str, name of model, like 'Package'
-      args: list, optional arguments supplied to model instantiation
-      kwargs: dict, optional arguments supplied to model instantiation
+      *args: list, optional arguments supplied to model instantiation
+      **kwargs: dict, optional arguments supplied to model instantiation
     Returns:
       a new mocked instance of the model
     """
     test_class_models = self.GetTestClassModule().models
 
-    if not 'models_%s' % model_name in self._set_mock:
+    if 'models_%s' % model_name not in self._set_mock:
       self.mox.StubOutWithMock(
           getattr(self.GetTestClassModule(), 'models'),
           model_name)

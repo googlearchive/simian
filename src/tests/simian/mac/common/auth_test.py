@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """auth module tests."""
 
-
-
 import logging
-logging.basicConfig(filename='/dev/null')
+
+import os
 
 import tests.appenginesdk
 
+import mock
 import mox
 import stubout
+
+from google.appengine.api import users
 
 from google.apputils import app
 from google.apputils import basetest
@@ -40,7 +40,11 @@ class AuthModuleTest(mox.MoxTestBase):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
+    os.environ['AUTH_DOMAIN'] = 'example.com'
+
   def tearDown(self):
+    del os.environ['AUTH_DOMAIN']
+
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
@@ -63,6 +67,7 @@ class AuthModuleTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     self.assertEqual(mock_user, auth.DoUserAuth())
     self.mox.VerifyAll()
+
 
   def testDoUserAuthWithIsAdminTrueSuccess(self):
     self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
@@ -542,6 +547,41 @@ class AuthModuleTest(mox.MoxTestBase):
     test_resolver.email = email_three
     self.assertFalse(test_resolver._IsAllowedToViewPackages())
     self.mox.VerifyAll()
+
+  @mock.patch.object(auth, 'IsGroupMember', return_value=False)
+  @mock.patch.object(auth, '_GetGroupMembers', return_value=[])
+  @mock.patch.dict(settings.__dict__, {
+      'ALLOW_SELF_REPORT': True, 'AUTH_DOMAIN': 'example.com'})
+  @mock.patch.object(auth.users, 'get_current_user')
+  def testDoUserAuthWithSelfReportFallbackAccessDenied(
+      self, get_current_user, *_):
+    get_current_user.return_value = None
+    self.assertRaises(
+        auth.NotAuthenticated, auth.DoUserAuthWithSelfReportFallback)
+
+    get_current_user.return_value = users.User(email='user1@example.com')
+    self.assertRaises(
+        auth.NotAuthenticated,
+        auth.DoUserAuthWithSelfReportFallback, constrain_username='user2')
+
+    settings.__dict__['ALLOW_SELF_REPORT'] = False
+    get_current_user.return_value = users.User(email='user1@example.com')
+    self.assertRaises(
+        auth.NotAuthenticated, auth.DoUserAuthWithSelfReportFallback)
+
+  @mock.patch.object(auth, 'IsGroupMember', return_value=False)
+  @mock.patch.object(auth, '_GetGroupMembers', return_value=[])
+  @mock.patch.dict(auth.settings.__dict__, {
+      'ALLOW_SELF_REPORT': True, 'AUTH_DOMAIN': 'example.com'})
+  @mock.patch.object(auth.users, 'get_current_user')
+  def testDoUserAuthWithSelfReportFallbackSucceed(self, get_current_user, *_):
+    get_current_user.return_value = users.User(email='user1@example.com')
+    self.assertEqual(
+        'user1',
+        auth.DoUserAuthWithSelfReportFallback(constrain_username='user1'))
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

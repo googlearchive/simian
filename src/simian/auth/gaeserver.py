@@ -37,6 +37,9 @@ import logging
 import os
 import time
 
+
+import webapp2
+
 from google.appengine import runtime
 from google.appengine.api import datastore
 from google.appengine.api import memcache
@@ -60,6 +63,7 @@ LEVEL_ADMIN = base.LEVEL_ADMIN
 LEVEL_UPLOADPKG = LEVEL_ADMIN
 # Deadline in seconds for datastore RPC operations
 DATASTORE_RPC_DEADLINE = 5
+
 
 
 class Error(Exception):
@@ -321,6 +325,7 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
   if require_level is None:
     require_level = LEVEL_BASE
 
+
   cookie_str = os.environ.get('HTTP_COOKIE', None)
   if not cookie_str:
     logging.info('HTTP_COOKIE is empty or nonexistent.')
@@ -347,13 +352,13 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
   token = c[auth.AUTH_TOKEN_COOKIE].value
   try:
     session = a.GetSessionIfAuthOK(token, require_level)
-  except base.AuthSessionError, e:
+  except base.AuthSessionError as e:
     # If this happens, an auth token is being sent but it's not in
     # memcache/Datastore. It could be that clients are sleeping during Munki
     # executions, thus when they wake and Munki continues their session is
     # expired and deleted. Or it could be some bug with saving and accessing
     # sessions.
-    logging.warning('DoMunkiAuth: %s', str(e))
+    logging.info('DoMunkiAuth: %s', str(e))
     raise NotAuthenticated('UnknownAuthToken')
 
   # logging.debug('Auth client connected: uuid %s', session.uuid)

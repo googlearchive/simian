@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """ACL Groups admin handler."""
-
-
-
-
 
 import re
 from simian.mac import admin
@@ -30,6 +24,7 @@ from simian.mac.common import util
 
 # TODO(user): consolidate email regex duplicated in settings.
 MAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}\b'
+
 
 class ACLGroups(admin.AdminHandler):
 
@@ -76,7 +71,7 @@ class ACLGroups(admin.AdminHandler):
       self.redirect('/admin/acl_groups?msg=Group%20saved')
 
   def GetMembers(self, group_name):
-    """Get a list of members belonging to the group"""
+    """Get a list of members belonging to the group."""
     members = models.KeyValueCache.MemcacheWrappedGet(group_name, 'text_value')
     member_list = []
     if members:

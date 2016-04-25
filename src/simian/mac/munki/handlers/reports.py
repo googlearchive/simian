@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Reports URL handlers."""
-
-
 
 import datetime
 import json
@@ -34,8 +30,6 @@ from simian.mac.common import gae_util
 from simian.mac.common import util
 from simian.mac.munki import common
 from simian.mac.munki import handlers
-
-
 
 
 # int number of days after which postflight_datetime is considered stale.
@@ -132,6 +126,7 @@ class Reports(handlers.AuthenticationHandler):
         if (c.preflight_count_since_postflight >=
             REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT):
           feedback['pkill_installd'] = True
+          feedback['pkill_softwareupdated'] = True
           feedback['repair'] = True
           feedback['logging_level'] = 3
           feedback['upload_logs'] = True

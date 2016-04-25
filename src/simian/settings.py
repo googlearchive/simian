@@ -27,17 +27,22 @@ import re
 import sys
 import types
 
+# pylint disable-msg=g-import-not-at-top
 try:
+  # pylint disable-msg=unused-import
   from simian.mac import models
+  # pylint enable-msg=unused-import
 except ImportError:
   models = None
 
 from simian.auth import x509
+# pylint enable-msg=g-import-not-at-top
 
 # If True, all domain users have (readonly) access to web UI. If False, only
 # define admins, support, security, etc. users have access.
 # TODO(user): move setting to Datastore.
 ALLOW_ALL_DOMAIN_USERS_READ_ACCESS = False
+ALLOW_SELF_REPORT = True
 
 # Automatic values:
 # True if running in debug mode.
@@ -68,6 +73,9 @@ if os.environ.get('____TESTING_SETTINGS_MODULE'):
 if 'unittest2' in sys.modules or 'unittest' in sys.modules:
   TESTING = True
 
+if GAE:
+  SERVER_HOSTNAME = os.environ.get('DEFAULT_VERSION_HOSTNAME')
+
 # To require a second administrator to approve changes set this to True.
 APPROVAL_REQUIRED = False
 
@@ -92,11 +100,9 @@ class BaseSettings(types.ModuleType):
   Child classes can optionally implement:
     - _Initialize()
     - _PopulateGlobals()
-    - _Calculate()
     - _CheckValidation()
 
   Child classes can use these helper functions to configure themselves:
-    - _SetCalculatedSetting()
     - _SetValidation()
 
   This class will do a few things upon initialization:
@@ -144,7 +150,6 @@ class BaseSettings(types.ModuleType):
       self.__author__ = module.__author__
     self._is_class = 1
     self._validation = {}
-    self._calculated_settings = {}
     self._Initialize()
     self._PopulateGlobals()
 
@@ -179,7 +184,6 @@ class BaseSettings(types.ModuleType):
       if k.upper() == k and not callable(globals_()[k]):
         try:
           set_func(k.lower(), globals_()[k])
-          self._Calculate(k.lower())
         except NotImplementedError:
           break
 
@@ -196,26 +200,8 @@ class BaseSettings(types.ModuleType):
     """
     raise NotImplementedError
 
-  def _ResolveIfCalculatedSetting(self, k):
-    """Resolve one calculated settings item if necessary.
-
-    Args:
-      k: str, name to resolve. The name will always be in lowercase.
-    """
-    if k not in self._calculated_settings:
-      return
-
-    for dep_k in self._calculated_settings[k]:
-      unused = getattr(self, dep_k)
-      self._Calculate(dep_k)
-
-    self._Calculate(k)
-
   def _Set(self, k, v):
     """Set one settings item.
-
-    This method should call _Calculate(k) after setting the item, even if the
-    set operation did not result in the value actually changing.
 
     Args:
       k: str, name to set. The name will always be in lowercase.
@@ -233,16 +219,6 @@ class BaseSettings(types.ModuleType):
     """
     raise NotImplementedError
 
-  def _Calculate(self, k=None):
-    """Calculate settings values.
-
-    Args:
-      k: str, default None, any settings name. If specified this tells
-        the calculate function that the value for k was just set, therefore
-        we do not need to recalculate that value.  This avoids recursion
-        problems.
-    """
-
   def _CheckValueRegex(self, k, v, regex):
     """Check whether v meets regex validation for setting k.
 
@@ -255,7 +231,7 @@ class BaseSettings(types.ModuleType):
     Raises:
       ValueError: if the value is not appropriately formed to be set for k.
     """
-    if type(regex) is str:
+    if isinstance(regex, basestring):
       regex = re.compile(regex)
 
     m = regex.search(str(v))
@@ -284,10 +260,11 @@ class BaseSettings(types.ModuleType):
 
     raise ValueError('value "%s" for %s' % (v, k))
 
-  def CheckValuePemX509Cert(self, k, v):
+  def CheckValuePemX509Cert(self, _, v):
     """Check whether v meets PEM cert validation for setting k.
+
     Args:
-      k: str, name.
+      _: str, name, unused.
       v: any value.
     Returns:
       None if the value is appropriate and can be set.
@@ -295,14 +272,15 @@ class BaseSettings(types.ModuleType):
       ValueError: if the value is not appropriately formed to be set for k.
     """
     try:
-      unused = x509.LoadCertificateFromPEM(v)
+      _ = x509.LoadCertificateFromPEM(v)
     except x509.Error, e:
       raise ValueError(str(e))
 
-  def CheckValuePemRsaPrivateKey(self, k, v):
+  def CheckValuePemRsaPrivateKey(self, _, v):
     """Check whether v meets PEM RSA priv key validation for settings k.
+
     Args:
-      k: str, name.
+      _: str, name, unused..
       v: any value.
     Returns:
       None if the value is appropriate and can be set.
@@ -310,7 +288,7 @@ class BaseSettings(types.ModuleType):
       ValueError: if the value is not appropriately formed to be set for k.
     """
     try:
-      unused = x509.LoadRSAPrivateKeyFromPEM(v)
+      _ = x509.LoadRSAPrivateKeyFromPEM(v)
     except x509.Error, e:
       raise ValueError(str(e))
 
@@ -334,29 +312,20 @@ class BaseSettings(types.ModuleType):
       getattr(self, validation_type)(
           k, v, *self._validation[k][validation_type])
 
-  def _SetCalculatedSetting(self, k, dependent_ks):
-    """Set a calculated settings on setting k.
-
-    Args:
-      k: str, name.
-      dependent_k: list of str, key names to _Get() to create k.
-    """
-    self._calculated_settings[k] = dependent_ks
-
   def _SetValidation(self, k, t, *validation):
     """Set validation on setting k.
 
     Args:
       k: str, name.
       t: str, type of validation, in self._VALIDATION_TYPES
-      validation: data to supply as validation data to validation func.
+      *validation: data to supply as validation data to validation func.
     Raises:
       ValueError: if t is invalid.
     """
     if t not in self._VALIDATION_TYPES:
       raise ValueError(t)
 
-    if not k in self._validation:
+    if k not in self._validation:
       self._validation[k] = {}
 
     self._validation[k][t] = validation
@@ -369,7 +338,7 @@ class BaseSettings(types.ModuleType):
     Returns:
       str regex validation if one exists, otherwise None.
     """
-    if not k in self._validation:
+    if k not in self._validation:
       return None
 
     return self._validation[k].get(self._VALIDATION_REGEX, [None])[0]
@@ -409,7 +378,6 @@ class BaseSettings(types.ModuleType):
       else:
         raise AttributeError(k)
     else:
-      self._ResolveIfCalculatedSetting(str(k).lower())
       try:
         return self._Get(str(k).lower())
       except AttributeError, e:
@@ -456,7 +424,6 @@ class ModuleSettings(BaseSettings):
     except (KeyError, AttributeError), e:
       raise NotImplementedError(
           'ModuleSettings not implemented correctly: %s' % str(e))
-    self._Calculate()
 
   def _Get(self, k):
     """Get one settings item.
@@ -476,16 +443,12 @@ class ModuleSettings(BaseSettings):
   def _Set(self, k, v):
     """Set one settings item.
 
-    This method should call _Calculate(k) after setting the item, even if the
-    set operation did not result in the value actually changing.
-
     Args:
       k: str, name to set. The name will always be in lowercase.
       v: str, value to set.
     """
     self._CheckValidation(k, v)
     setattr(self._module, k.upper(), v)
-    self._Calculate(k)
 
 
 class TestModuleSettings(ModuleSettings):  # pylint: disable=abstract-method
@@ -534,16 +497,12 @@ class DictSettings(BaseSettings):
   def _Set(self, k, v):
     """Set one settings item.
 
-    This method should call _Calculate(k) after setting the item, even if the
-    set operation did not result in the value actually changing.
-
     Args:
       k: str, name to set. The name will always be in lowercase.
       v: str, value to set.
     """
     self._CheckValidation(k, v)
     self._settings[k] = v
-    self._Calculate(k)
 
   def _Dir(self):
     """Returns directory of all settings names as a list."""
@@ -551,13 +510,13 @@ class DictSettings(BaseSettings):
 
 
 class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
-  """Settings stored in a dictionary with calculated values for Simian."""
+  """Settings stored in a dictionary for Simian."""
 
-  def _IsCaIdValid(self, k, v):
+  def _IsCaIdValid(self, _, v):
     """Is this settings ca_id value valid?
 
     Args:
-      k: str, key being checked. See _VALIDATION_FUNC interface.
+      _: str, key being checked. See _VALIDATION_FUNC interface. Unused.
       v: unknown type (probably None or str), check this ca_id value.
     Returns:
       True if valid, False if not.
@@ -577,8 +536,7 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
     self._SetValidation(
         'server_public_cert_pem', self._VALIDATION_PEM_X509_CERT)
     # Note: One should add other CA_ID based parameter validation here.
-    if not GAE:
-      self._SetCalculatedSetting('server_hostname', ['subdomain', 'domain'])
+
     # Client specific settings
     self._SetValidation('ca_id', self._VALIDATION_FUNC, self._IsCaIdValid)
     # Server specific settings
@@ -626,33 +584,6 @@ class SimianDictSettings(DictSettings):  # pylint: disable=abstract-method
         r'^https?\:\/\/[a-zA-Z0-9\-\.]+(\.[a-zA-Z]{2,3})?(\/\S*)?$')
     self._SetValidation(
         'server_private_key_pem', self._VALIDATION_PEM_RSA_PRIVATE_KEY)
-
-  def _Calculate(self, k=None):
-    """Calculate settings values.
-
-    Args:
-      k: str, default None, any name. If specified this tells
-        the calculate function that the value for k was just set, therefore
-        we do not need to recalculate that value.  This avoids recursion
-        problems.
-    """
-    if k in ['subdomain', 'domain']:
-      try:
-        # Set this value only into DictSettings storage, not any
-        # child classes which will likely override _Set().
-        if GAE:
-          DictSettings._Set(
-              self, 'server_hostname',
-              os.environ.get('DEFAULT_VERSION_HOSTNAME'))
-        else:
-          # Only calculate a value if the other values are present.
-          # _Get() raises AttributeError if not.
-          unused = DictSettings._Get(self, 'subdomain')
-          unused = DictSettings._Get(self, 'domain')
-          DictSettings._Set(self, 'server_hostname', '%s.%s' % (
-              self._Get('subdomain'), self._Get('domain')))
-      except (KeyError, AttributeError):
-        pass
 
 
 class FilesystemSettings(SimianDictSettings):
@@ -771,7 +702,6 @@ class FilesystemSettings(SimianDictSettings):
     pem = self._GetExternalConfiguration(pem_file, as_file=True, path=path)
     if pem:
       self._settings[k] = pem
-      self._Calculate(k)
     else:
       raise AttributeError(k)
     return pem
@@ -809,6 +739,15 @@ class FilesystemSettings(SimianDictSettings):
     Raises:
       AttributeError: if this settings item does not exist.
     """
+    # oss config have domain/subdomain instead of server_hostname
+    if k == 'server_hostname':
+      try:
+        return self._GetExternalValue(k)
+      except AttributeError:
+        return '%s.%s' % (
+            self._GetExternalValue('subdomain'),
+            self._GetExternalValue('domain')
+        )
     logging.debug('_Get(%s)', k)
     if k.endswith('_pem'):
       v = self._GetExternalPem(k)
@@ -873,9 +812,6 @@ class DatastoreSettings(SimianDictSettings):
   def _Set(self, k, v):
     """Set one settings item.
 
-    This method should call _Calculate(k) after setting the item, even if the
-    set operation did not result in the value actually changing.
-
     Args:
       k: str, name to set. The name will always be in lowercase.
       v: str, value to set.
@@ -885,7 +821,6 @@ class DatastoreSettings(SimianDictSettings):
       self._module.models.Settings.SetItem(k, v)
     else:
       raise NotImplementedError('missing App Engine')
-    self._Calculate(k)
 
   def _Dir(self):
     """Returns directory of all settings names as a list.

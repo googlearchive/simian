@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,25 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module containing url handler for authsession_cleanup cron.
 
 Classes:
   AuthSessionCleanup: the url handler
 """
 
-
-
-
 import datetime
-import logging
-import os
-import re
 import time
 import webapp2
 
-from google.appengine.api import mail
 from google.appengine.ext import blobstore
 
 from simian import settings
@@ -40,7 +31,7 @@ from simian.auth import gaeserver
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import gae_util
-from simian.mac.munki import plist
+from simian.mac.common import mail
 
 
 class AuthSessionCleanup(webapp2.RequestHandler):
@@ -119,15 +110,13 @@ class VerifyPackages(webapp2.RequestHandler):
       if p.blobstore_key and blobstore.BlobInfo.get(p.blobstore_key):
         continue
       elif p.mtime < (datetime.datetime.utcnow() - datetime.timedelta(days=7)):
-        m = mail.EmailMessage()
-        m.to = [settings.EMAIL_ADMIN_LIST]
-        m.sender = settings.EMAIL_SENDER
-        m.subject = 'Package is lacking a file: %s' % p.filename
-        m.body = (
+
+        subject = 'Package is lacking a file: %s' % p.filename
+        body = (
             'The following package is lacking a DMG file: \n'
             'https://%s/admin/package/%s' % (
                 settings.SERVER_HOSTNAME, p.filename))
-        m.send()
+        mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
 
     # Verify all Blobstore Blobs have associated PackageInfo entities.
     for b in blobstore.BlobInfo.all():
@@ -142,15 +131,11 @@ class VerifyPackages(webapp2.RequestHandler):
           if not b.filename and not b.size:
             b.delete()
             break
-          m = mail.EmailMessage()
-          m.to = [settings.EMAIL_ADMIN_LIST]
-          m.sender = settings.EMAIL_SENDER
-          m.subject = 'Orphaned Blob in Blobstore: %s' % b.filename
-          m.body = (
+          subject = 'Orphaned Blob in Blobstore: %s' % b.filename
+          body = (
               'An orphaned Blob exists in Blobstore. Use App Engine Admin '
               'Console\'s "Blob Viewer" to locate and delete this Blob.\n\n'
               'Filename: %s\nBlobstore Key: %s' % (b.filename, key))
-          m.send()
+          mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
           break
         time.sleep(1)
-

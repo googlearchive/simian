@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,30 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Module containing url handler for all Apple Updates related crons.
 
 Classes:
   AppleSUSCatalogSync: syncs SUS catalogs from Apple.
 """
 
-
-
 import datetime
 import logging
 import urllib2
 import webapp2
 
-from google.appengine.api import mail
 from google.appengine.api import urlfetch
 from google.appengine.ext import db
-from google.appengine.runtime import apiproxy_errors
 
 from simian import settings
 from simian.mac import common
 from simian.mac import models
 from simian.mac.common import applesus
+from simian.mac.common import mail
 from simian.mac.munki import plist
 
 
@@ -103,10 +98,7 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
     deprecated_products_strs = ['%s: %s %s' % (p.product_id, p.name, p.version)
                                 for p in deprecated_products]
     catalog_name = catalog.key().name()
-    m = mail.EmailMessage()
-    m.to = [settings.EMAIL_ADMIN_LIST]
-    m.sender = settings.EMAIL_SENDER
-    m.subject = '%s Apple Updates catalog synced to Simian.' % catalog_name
+
     new_msg = '\n\nNew Products:\n%s' % '\n'.join(new_products_strs)
     if deprecated_products_strs:
       dep_msg = '\n\nDeprecated Products:\n%s' % '\n'.join(
@@ -117,13 +109,11 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       restart_note = '\n\n%s' % RESTART_REQUIRED_FOOTER
     else:
       restart_note = ''
-    m.body = '%s Apple Updates catalog synced to Simian on %s UTC.%s%s%s' % (
+    body = '%s Apple Updates catalog synced to Simian on %s UTC.%s%s%s' % (
         catalog_name, catalog.mtime, new_msg, dep_msg, restart_note)
-    try:
-      m.send()
-    except apiproxy_errors.DeadlineExceededError:
-      #logging.info('Email failed to send; skipping.')
-      pass
+    subject = '%s Apple Updates catalog synced to Simian.' % catalog_name
+
+    mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
 
   def _UpdateCatalogIfChanged(self, catalog, url):
     """Returns the contents of a url passed to URLFetch.fetch().
@@ -306,10 +296,6 @@ class AppleSUSAutoPromote(webapp2.RequestHandler):
     Args:
       promotions: a dict of track keys with lists of update product entities.
     """
-    m = mail.EmailMessage()
-    m.to = [settings.EMAIL_ADMIN_LIST]
-    m.sender = settings.EMAIL_SENDER
-    m.subject = 'Apple Updates Auto-Promotion'
     msg = []
     restart_required = False
     for track, updates in promotions.iteritems():
@@ -322,12 +308,10 @@ class AppleSUSAutoPromote(webapp2.RequestHandler):
     if restart_required:
       msg.append('\n\n%s' % RESTART_REQUIRED_FOOTER)
     msg = '\n'.join(msg)
-    m.body = 'The following Apple Updates were promoted:\n%s' % msg
-    try:
-      m.send()
-    except apiproxy_errors.DeadlineExceededError:
-      #logging.info('Email failed to send; skipping.')
-      pass
+    body = 'The following Apple Updates were promoted:\n%s' % msg
+    subject = 'Apple Updates Auto-Promotion'
+
+    mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
 
   def _ReadyToAutoPromote(self, applesus_product, track, now=None):
     """Returns boolean whether AppleSUSProduct should be promoted or not.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Packages admin handler."""
-
-
 
 
 import datetime
@@ -84,6 +80,7 @@ class Packages(admin.AdminHandler):
       pkg['duration_seconds_avg'] = installs.get(p.munki_name, {}).get(
           'duration_seconds_avg', None) or 'N/A'
       pkg['unattended'] = p.plist.get('unattended_install', False)
+      pkg['unattended_uninstall'] = p.plist.get('unattended_uninstall', False)
       force_install_after_date = p.plist.get('force_install_after_date', None)
       if force_install_after_date:
         pkg['force_install_after_date'] = force_install_after_date
@@ -120,21 +117,20 @@ class Packages(admin.AdminHandler):
         d = {'name': name,
              'count': install.get('install_count', 'N/A'),
              'fail_count': install.get('install_fail_count', 'N/A'),
-             'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')
-        }
+             'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')}
         pkgs.append(d)
       elif not applesus and not install['applesus']:
         d = {'name': name,
              'count': install.get('install_count', 'N/A'),
              'fail_count': install.get('install_fail_count', 'N/A'),
-             'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')
-        }
+             'duration_seconds_avg': install.get('duration_seconds_avg', 'N/A')}
         pkgs.append(d)
     if applesus:
       report_type = 'apple_historical'
     else:
       report_type = 'packages_historical'
-    self.Render(self.TEMPLATE,
+    self.Render(
+        self.TEMPLATE,
         {'packages': pkgs, 'counts_mtime': counts_mtime,
          'applesus': applesus, 'cached_pkgs_list': True,
          'report_type': report_type})
@@ -156,7 +152,8 @@ class Packages(admin.AdminHandler):
         time = datetime.datetime.strftime(log.mtime, '%Y-%m-%d %H:%M:%S')
         title = 'plist for Package Log <b>%s - %s</b>' % (log.filename, time)
         raw_xml = '/admin/packages/logs?plist=%d&format=xml' % key_id
-        self.Render('plist.html',
+        self.Render(
+            'plist.html',
             {'plist_type': 'package_log',
              'xml': admin.XmlToHtml(log.plist.GetXml()),
              'title': title,
@@ -202,4 +199,3 @@ class PackageProposals(Packages):
 
   def _GetPackageQuery(self):
     return self.DATASTORE_MODEL.all()
-

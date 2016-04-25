@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Simian Settings Models."""
-
-
-
 
 from simian.mac.models import base
 
@@ -60,6 +55,12 @@ SETTINGS = {
         'comment': ('Number of days before updates auto-promote from '
                     'testing to stable.'),
         'default': 7,
+    },
+    'client_site_enabled': {
+        'type': 'bool',
+        'title': 'Display Client Site/Office',
+        'comment': 'If enabled, data is displayed in Summary and Host reports.',
+        'default': False,
     },
     'list_of_categories': {
         'type': 'string',
@@ -296,12 +297,14 @@ class Settings(base.KeyValueCache):
   def GetAll(cls):
     """Return a dictionary of all settings.
 
-    Format = {
-        'setting name': {
-            'value': value,
-            'mtime': datetime,
-        },
-    }
+    Returns:
+      Dictionary of all settings, in the following format:
+        {
+          'setting name': {
+              'value': value,
+              'mtime': datetime,
+          },
+        }
     """
     settings = SETTINGS.copy()
     for setting in SETTINGS:

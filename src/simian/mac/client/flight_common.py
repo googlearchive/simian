@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,7 +191,7 @@ def Exec(cmd, env=None, timeout=0, waitfor=0):
   Returns:
     Tuple. (Integer return code, string standard out, string standard error).
   """
-  if type(cmd) is str:
+  if isinstance(cmd, basestring):
     shell = True
   else:
     shell = False
@@ -297,7 +297,7 @@ def GetPlistDateValue(key, secure=False, plist=None, str_format=None):
     # FoundationPlist was used, so value is NSCFDate with local time offset.
     time_since_epoc = value.timeIntervalSince1970()
     value = datetime.datetime.utcfromtimestamp(time_since_epoc)
-  elif type(value) is not datetime.datetime:
+  elif not isinstance(value, datetime.datetime):
     if value:
       logging.error('plist date type unknown: %s %s', value, type(value))
     value = None
@@ -388,7 +388,7 @@ def GetDiskFree(path=None):
     path = '/'
   try:
     st = os.statvfs(path)
-  except OSError, e:
+  except OSError as e:
     raise Error(str(e))
 
   return st.f_frsize * st.f_bavail  # f_bavail matches df(1) output
@@ -418,8 +418,7 @@ def GetClientIdentifier(runtype=None):
 
   config_track = facts.get('configtrack', 'BROKEN')
 
-  simian_track = (facts.get('simiantrack', None) or
-                 _GetMachineInfoPlistValue('SimianTrack'))
+  simian_track = (facts.get('simiantrack', None))
 
   # Apple SUS integration.
   applesus = facts.get('applesus', 'true').lower() == 'true'
@@ -432,8 +431,8 @@ def GetClientIdentifier(runtype=None):
   serial = facts.get('hardware_serialnumber', None) or _GetSerialNumber()
 
   # client_management_enabled facter support; defaults to enabled.
-  mgmt_enabled = '%d' % (
-      facts.get('client_management_enabled', 'true') == 'true')
+  mgmt_enabled = facts.get(
+      'client_management_enabled', 'true').lower() == 'true'
 
   # Determine if the computer is on the corp network or not.
   on_corp = None
@@ -445,7 +444,7 @@ def GetClientIdentifier(runtype=None):
       on_corp_cmd = f.read()
       on_corp_cmd = on_corp_cmd.strip()
       f.close()
-    except IOError, e:
+    except IOError as e:
       logging.exception(
           'Error reading %s: %s', on_corp_cmd_config, str(e))
   if on_corp_cmd:
@@ -454,7 +453,7 @@ def GetClientIdentifier(runtype=None):
           on_corp_cmd, timeout=60, waitfor=0.5)
       # exit=0 means on corp, so reverse.
       on_corp = '%d' % (not on_corp)
-    except OSError, e:
+    except OSError as e:
       # in this case, we don't know if on corp or not so don't log either.
       logging.exception('OSError calling on_corp_cmd: %s', str(e))
       on_corp = None
@@ -467,13 +466,13 @@ def GetClientIdentifier(runtype=None):
   # get uptime
   try:
     uptime = GetSystemUptime()
-  except Error, e:
+  except Error as e:
     uptime = 'ERROR: %s' % str(e)
 
   # get free space
   try:
     root_disk_free = GetDiskFree()
-  except Error, e:
+  except Error as e:
     root_disk_free = 'ERROR: %s' % str(e)
 
   # get user disk free
@@ -485,7 +484,7 @@ def GetClientIdentifier(runtype=None):
       user_dir_path = '/Users/%s/' % owner
       if os.path.isdir(user_dir_path):
         user_disk_free = GetDiskFree(user_dir_path)
-    except Error, e:
+    except Error as e:
       user_disk_free = 'ERROR: %s' % str(e)
 
   client_id = {
@@ -527,7 +526,7 @@ def DictToStr(d, delimiter=DELIMITER):
     if value is None:
       out.append('%s=' % key)
     else:
-      if type(value) is str:
+      if isinstance(value, basestring):
         value = value.decode('utf-8')
       out.append('%s=%s' % (key, value))
   return delimiter.join(out).encode('utf-8')
@@ -539,8 +538,8 @@ def GetAppleSUSCatalog():
   try:
     new = updatecheck.getResourceIfChangedAtomically(
         '%s/applesus/' % url, APPLE_SUS_CATALOG)
-  except fetch.MunkiDownloadError:
-    logging.exception('MunkiDownloadError getting Apple SUS catalog.')
+  except fetch.MunkiDownloadError as e:
+    logging.exception(u'MunkiDownloadError getting Apple SUS catalog: %s', e)
     return
 
   if new:
@@ -600,17 +599,17 @@ def Flatten(o):
   """
   if o is None or not OBJC_OK:
     pass
-  elif type(o) is Foundation.NSCFDictionary:
+  elif type(o, Foundation.NSCFDictionary):
     n = {}
     for k, v in o.iteritems():
       n[Flatten(k)] = Flatten(v)
     o = n
-  elif type(o) is Foundation.NSCFArray:
+  elif isinstance(o, Foundation.NSCFArray):
     n = []
     for i in xrange(len(o)):
       n.append(Flatten(o[i]))
     o = n
-  elif type(o) is objc.pyobjc_unicode:
+  elif isinstance(o, objc.pyobjc_unicode):
     o = unicode(o)
   elif hasattr(o, 'initWithInteger_'):
     o = int(o)
@@ -625,7 +624,7 @@ def GetManagedInstallReport(install_report_path=None):
         managed_installs_dir, 'ManagedInstallReport.plist')
   try:
     install_report = fpl.readPlist(install_report_path)
-  except fpl.NSPropertyListSerializationException, e:
+  except fpl.NSPropertyListSerializationException as e:
     logging.debug('Error reading %s : %s', install_report_path, str(e))
     return {}, install_report_path
   return install_report, install_report_path
@@ -699,10 +698,8 @@ def _UploadManagedInstallReport(client, on_corp, install_report):
     install_time = installs[i].get('time', None)
     if hasattr(install_time, 'timeIntervalSince1970'):
       installs[i]['time'] = install_time.timeIntervalSince1970()
-    # TODO(user): if we moved all of this code to simianauth, we could just use
-    #      JSON instead of doing all this DictToStr nonsense just to pass it
-    #      over the commandline. JSON wasn't used initially since it was not
-    #      built into python2.5 we didn't want to depend on simplejson install.
+    # TODO(user): convert DictToStr to JSON, here and on the server, in
+    #     //mac/munki/handlers/reports.py:_LogInstalls
     installs[i] = DictToStr(installs[i])
 
   if installs or removals or problem_installs:
@@ -836,7 +833,7 @@ def KillHungManagedSoftwareUpdate():
     try:
       logging.warning('Sending SIGKILL to pid %d', pid)
       os.kill(pid, signal.SIGKILL)
-    except OSError, e:
+    except OSError as e:
       # if the process died between ps and now we're OK, otherwise log error.
       if e.args[0] != errno.ESRCH:
         logging.warning('OSError on kill(%d, SIGKILL): %s', pid, str(e))
@@ -887,9 +884,9 @@ def RepairClient():
 
   try:
     updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download_path)
-  except fetch.MunkiDownloadError, e:
+  except fetch.MunkiDownloadError as e:
     raise RepairClientError(
-        'MunkiDownloadError getting Munki client: %s' % str(e))
+        u'MunkiDownloadError getting Munki client: %s' % e)
 
   return_code, unused_stdout, stderr = Exec(
       ['/usr/bin/hdiutil', 'attach', '-mountpoint', mount_path, '-nobrowse',
@@ -925,4 +922,3 @@ def RepairClient():
   # If we've just repaired, kill any hung managedsofwareupdate instances, as
   # that may be the main reason we needed to repair in the first place.
   KillHungManagedSoftwareUpdate()
-

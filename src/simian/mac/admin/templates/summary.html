@@ -9,9 +9,14 @@
 
 {% if summary %}
   {% if limit %}
-    {% include "results_pagination.html" %}
+    <div style="margin-bottom:5px;">
+      {% include "results_pagination.html" %}
+    </div>
   {% endif %}
 
+  {% if self_report %}
+    <link href="{{ static_path }}/admin/css/self_report.css" rel="stylesheet" type="text/css" />
+  {% endif %}
   <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader"
        title="summary">Summary
     {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
@@ -183,24 +188,26 @@
   {% endif %}
 
   {% ifnotequal report_type "site" %}
-    <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site
-      {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
-    </div>
-    <div id="by_site" style="max-width: 95%;">
-      <ol class="clients-by-site">
-      {% for site in summary.sites_histogram %}
-        <li>
-        <span class="site">{{ site.0 }}</span>
-        {% if cached_mtime %}
-          <a class="client-count"
-             href="/admin?filter-type=site&filter={{ site.0 }}">{{ site.1 }}</a>
-        {% else %}
-          <span class="client-count">{{ site.1 }}</span>
-        {% endif %}
-        </li>
-      {% endfor %}
-      </ol>
-    </div>
+    {% if client_site_enabled %}
+      <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site
+        {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
+      </div>
+      <div id="by_site" style="max-width: 95%;">
+        <ol class="clients-by-site">
+        {% for site in summary.sites_histogram %}
+          <li>
+          <span class="site">{{ site.0 }}</span>
+          {% if cached_mtime %}
+            <a class="client-count"
+               href="/admin?filter-type=site&filter={{ site.0 }}">{{ site.1 }}</a>
+          {% else %}
+            <span class="client-count">{{ site.1 }}</span>
+          {% endif %}
+          </li>
+        {% endfor %}
+        </ol>
+      </div>
+    {% endif %}
   {% endifnotequal %}
 
 {% else %}
@@ -223,7 +230,9 @@
     <div id="computers">
   {% else %}
     {% if limit %}
-      {% include "results_pagination.html" %}
+      <div style="margin-bottom:5px;">
+        {% include "results_pagination.html" %}
+      </div>
     {% endif %}
   {% endif %}
 

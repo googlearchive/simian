@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Admin UI summary generating module."""
-
-
-
-
 
 import datetime
 import gc
@@ -47,14 +41,22 @@ class Summary(admin.AdminHandler):
 
   def get(self):
     """Summary get handler."""
-    auth.DoUserAuth()
     report_type = self.request.get('filter-type')
     report_filter = self.request.get('filter')
+
+    self_report_username = auth.DoUserAuthWithSelfReportFallback()
+
+    if self_report_username:
+      report_type = 'owner'
+      report_filter = self_report_username
+
     if report_type and report_filter:
       report_filter = urllib.unquote(report_filter)
       report_filter = report_filter.strip()
-      include_inactive = self.request.get('include-inactive') != ''
-      self._DisplaySummary(report_type, report_filter, include_inactive)
+      include_inactive = bool(self.request.get('include-inactive'))
+      self._DisplaySummary(
+          report_type, report_filter, include_inactive,
+          bool(self_report_username))
     else:
       self._DisplayCachedSummary()
 
@@ -65,22 +67,25 @@ class Summary(admin.AdminHandler):
     trend_hour, trend_hour_mtime = models.ReportsCache.GetTrendingInstalls(1)
     trend_day, trend_day_mtime = models.ReportsCache.GetTrendingInstalls(24)
     trending_installs = [
-      (1, trend_hour, trend_hour_mtime),
-      (24, trend_day, trend_day_mtime),
+        (1, trend_hour, trend_hour_mtime),
+        (24, trend_day, trend_day_mtime),
     ]
     values = {
         'summary': summary, 'cached_mtime': mtime, 'report_type': 'summary',
         'trending_installs': trending_installs,
+        'client_site_enabled': settings.CLIENT_SITE_ENABLED,
     }
     self.Render('summary.html', values)
 
-  def _DisplaySummary(self, report_type, report_filter, include_inactive):
+  def _DisplaySummary(
+      self, report_type, report_filter, include_inactive, self_report):
     """Displays stats summary for a given track or site.
 
     Args:
       report_type: str report type being requested.
       report_filter: str report filter to apply to the type.
       include_inactive: bool, True to include inactive hosts.
+      self_report: bool, True to enable self report
     """
     default_limit = DEFAULT_COMPUTER_FETCH_LIMIT
     computers = None
@@ -129,7 +134,8 @@ class Summary(admin.AdminHandler):
     values = {
         'computers': computers, 'summary': summary, 'report_type': 'search',
         'search_type': report_type, 'search_term': report_filter,
-        'owner_lookup_url': owner_lookup_url,
+        'owner_lookup_url': owner_lookup_url, 'self_report': self_report,
+        'client_site_enabled': settings.CLIENT_SITE_ENABLED,
     }
     self.Render('summary.html', values)
 
@@ -261,7 +267,6 @@ def GetComputerSummary(computers=None, query=None):
 
   summary['sites_histogram'] = DictToList(
       summary['sites_histogram'], reverse=True, by_value=True)
-  #summary['tracks'] = DictToList(tracks, reverse=False)
   summary['os_versions'] = DictToList(os_versions, version=True)
   summary['client_versions'] = DictToList(client_versions, version=True)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,20 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """UploadFile URL handlers."""
 
-
-
-import datetime
 import logging
-import os
-import re
-import time
-import urllib
 
-from google.appengine.api import mail
 from google.appengine.ext import deferred
 from google.appengine.runtime import apiproxy_errors
 
@@ -35,6 +25,7 @@ from simian import settings
 from simian.auth import gaeserver
 from simian.mac import common as main_common
 from simian.mac import models
+from simian.mac.common import mail
 from simian.mac.munki import handlers
 
 
@@ -113,7 +104,5 @@ def SendNotificationEmail(recipients, c, server_fqdn):
                c.preflight_count_since_postflight))
   body = '\n'.join(body)
   subject = 'Logs you requested have been uploaded for %s' % c.hostname
-  message = mail.EmailMessage(
-      to=recipients, sender=settings.EMAIL_SENDER, subject=subject,
-      body=body)
-  message.send()
+
+  mail.SendMail(recipients, subject, body)

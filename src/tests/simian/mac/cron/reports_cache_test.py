@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """reports_cache module tests."""
-
-
 
 import datetime
 import logging
-logging.basicConfig(filename='/dev/null')
 import random
 
 import mox
@@ -92,7 +87,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     """Generate a random datetime and additional datetimes after it.
 
     Args:
-      add_seconds: optional, integers supplied which will
+      *add_seconds: optional, integers supplied which will
         be added to the base random datetime.
     Returns:
       list of datetime objects, starting from a random datetime and
@@ -216,7 +211,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     reports = self._GenReportsAndSummary(summary_output, reports_raw)
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -238,7 +232,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     for report in reports:
       if last_user != report.user:
         lquery.cursor().AndReturn('cursor%d' % i)
-        i +=1
+        i += 1
       last_user = report.user
 
     reports_cache.models.ComputerMSULog.all().AndReturn(lquery)
@@ -300,7 +294,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     summary_output['total_users_2_events'] -= 1
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -367,7 +360,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     reports = self._GenReportsAndSummary(summary_output, reports_raw)
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -389,7 +381,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     for report in reports:
       if last_user != report.user:
         lquery.cursor().AndReturn('cursor%d' % i)
-        i +=1
+        i += 1
       last_user = report.user
 
     reports_cache.models.ComputerMSULog.all().AndReturn(lquery)
@@ -435,7 +427,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     reports = self._GenReportsAndSummary(summary_output, reports_raw)
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -457,7 +448,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     for report in reports:
       if last_user != report.user:
         lquery.cursor().AndReturn('cursor%d' % i)
-        i +=1
+        i += 1
       last_user = report.user
 
     reports_cache.models.ComputerMSULog.all().AndReturn(lquery)
@@ -508,7 +499,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     reports = self._GenReportsAndSummary(summary_output, reports_raw)
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -530,7 +520,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     for report in reports:
       if last_user != report.user:
         lquery.cursor().AndReturn('cursor%d' % i)
-        i +=1
+        i += 1
       last_user = report.user
 
     reports_cache.models.ComputerMSULog.all().AndReturn(lquery)
@@ -581,7 +571,6 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     reports = self._GenReportsAndSummary(summary_output, reports_raw)
 
     lquery = self.mox.CreateMockAnything()
-    mock_summary = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(reports_cache.models, 'ComputerMSULog')
     self.mox.StubOutWithMock(reports_cache.models, 'KeyValueCache')
     self.mox.StubOutWithMock(reports_cache.models, 'ReportsCache')
@@ -607,7 +596,7 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     for report in reports:
       if last_user != report.user:
         lquery.cursor().AndReturn('cursor%d' % i)
-        i +=1
+        i += 1
       last_user = report.user
 
     last_user_cursor = 'cursor%d' % (i-1)
@@ -810,6 +799,9 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     reports_cache._GenerateTrendingInstallsCache(1)
     self.mox.VerifyAll()
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

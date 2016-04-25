@@ -380,7 +380,10 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(self.mbc, '_LoadCACertChain')
 
     self.mbc._ca_cert_chain = 'cert chain foo'
-    client.SSL.Context().AndReturn(context)
+
+    client.SSL.Context(client._SSL_VERSION).AndReturn(context)
+    context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
+
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
     def __connect(address):  # pylint: disable=g-bad-name
@@ -401,7 +404,8 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client, 'SSL')
     self.mox.StubOutWithMock(client.SSL, 'Context')
 
-    client.SSL.Context().AndReturn(context)
+    client.SSL.Context(client._SSL_VERSION).AndReturn(context)
+    context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertRaises(client.SimianClientError, self.mbc.connect)
@@ -425,8 +429,8 @@ class HttpsClientTest(mox.MoxTestBase):
   def testInit(self):
     """Test __init__()."""
     mock_lh = self.mox.CreateMockAnything()
-    self.stubs.Set(client.HttpsClient, '_LoadHost', mock_lh)
     self.mox.StubOutWithMock(self.client, '_LoadHost')
+    self.stubs.Set(client.HttpsClient, '_LoadHost', mock_lh)
     mock_lh(self.hostname, None, None).AndReturn(None)
     self.mox.ReplayAll()
     i = client.HttpsClient(self.hostname)
@@ -962,145 +966,6 @@ class HttpsAuthClientTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.assertEqual({}, self.client.GetFacter())
-    self.mox.VerifyAll()
-
-  def testDoUAuth(self):
-    """Test DoUAuth()."""
-    self.mox.StubOutWithMock(client.os, 'isatty')
-    self.mox.StubOutWithMock(client, 'UAuth')
-    mock_ua = self.mox.CreateMockAnything()
-
-    client.os.isatty(client.sys.stdin.fileno()).AndReturn(True)
-    client.UAuth(
-        hostname=self.client.netloc, interactive_user=True).AndReturn(mock_ua)
-    mock_ua.SetCACertChain(self.client._ca_cert_chain).AndReturn(None)
-    mock_ua.Login().AndReturn('token')
-
-    self.mox.ReplayAll()
-    self.client.DoUAuth()
-    self.assertEqual('token', self.client._cookie_token)
-    self.mox.VerifyAll()
-
-  def testDoUAuthWhenNoToken(self):
-    """Test DoUAuth() when no token returned."""
-    self.mox.StubOutWithMock(client.os, 'isatty')
-    self.mox.StubOutWithMock(client, 'UAuth')
-    mock_ua = self.mox.CreateMockAnything()
-
-    client.os.isatty(client.sys.stdin.fileno()).AndReturn(True)
-    client.UAuth(
-        hostname=self.client.netloc, interactive_user=True).AndReturn(mock_ua)
-    mock_ua.SetCACertChain(self.client._ca_cert_chain).AndReturn(None)
-    mock_ua.Login().AndReturn(None)
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, self.client.DoUAuth)
-    self.mox.VerifyAll()
-
-  def testDoUserAuth(self):
-    """Test DoUserAuth()."""
-    self.mox.StubOutWithMock(self.client, 'DoUAuth')
-    self.client.DoUAuth().AndReturn(None)
-
-    self.mox.ReplayAll()
-    self.client.DoUserAuth()
-    self.mox.VerifyAll()
-
-  def testDoSimianAuth(self):
-    """Test DoSimianAuth()."""
-    # TODO(user)
-
-
-class UAuthTest(mox.MoxTestBase):
-  """Test UAuth."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-    self.hostname = 'hostname'
-    self.client = client.UAuth(self.hostname, interactive_user=False)
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
-  def _MockAuthFunction(self):
-    self.client._AuthFunction = lambda: self.username, self.password
-
-  def testInit(self):
-    """Test __init__()."""
-    self.assertEqual(self.client.hostname, self.hostname)
-    self.assertEqual(self.client.interactive_user, False)
-
-  def testAuthFunction(self):
-    """Test _AuthFunction()."""
-    self.assertRaises(client.SimianClientError, self.client._AuthFunction)
-    self.client.interactive_user = True
-    self.mox.StubOutWithMock(client.getpass, 'getuser')
-    self.mox.StubOutWithMock(client.getpass, 'getpass')
-    client.getpass.getuser().AndReturn('joe')
-    email = 'joe@%s' % client.AUTH_DOMAIN
-    client.getpass.getpass('%s password: ' % email).AndReturn('pass')
-    self.mox.ReplayAll()
-    self.assertEqual((email, 'pass'), self.client._AuthFunction())
-    self.mox.VerifyAll()
-
-  def testLogin(self):
-    """Test Login()."""
-    self.mox.StubOutWithMock(client, 'AppEngineHttpRpcServer')
-    self.mox.StubOutWithMock(client.auth_client, 'AuthSimianClient')
-
-    mock_s = self.mox.CreateMockAnything()
-    response = 'response'
-    mock_auth1 = self.mox.CreateMockAnything()
-    self.client._AuthFunction = self._MockAuthFunction
-
-    client.AppEngineHttpRpcServer(
-        self.hostname, self._MockAuthFunction, None, 'ah',
-        save_cookies=True, secure=True).AndReturn(mock_s)
-    mock_s.Send('/uauth').AndReturn(response)
-    client.auth_client.AuthSimianClient().AndReturn(mock_auth1)
-    mock_auth1.LoadCaParameters(client.settings).AndReturn(None)
-    mock_auth1.Input(t=response)
-    mock_auth1.AuthStateOK().AndReturn(True)
-    mock_s.cookie_jar = [self.mox.CreateMockAnything()]
-    mock_s.cookie_jar[0].domain = self.hostname
-    mock_s.cookie_jar[0].name = response
-    mock_s.cookie_jar[0].secure = True
-    mock_s.cookie_jar[0].value = 'value'
-
-    cookie = '%s=%s; %s; httponly;' % (response, 'value', 'secure')
-
-    self.mox.ReplayAll()
-    self.assertEqual(self.client.Login(), cookie)
-    self.mox.VerifyAll()
-
-  def testLoginWhenNoOutput(self):
-    """Test Login()."""
-    self.mox.StubOutWithMock(client, 'AppEngineHttpRpcServer')
-    self.mox.StubOutWithMock(client.auth_client, 'AuthSimianClient')
-
-    mock_s = self.mox.CreateMockAnything()
-    response = 'response'
-    mock_auth1 = self.mox.CreateMockAnything()
-    self.client._AuthFunction = self._MockAuthFunction
-
-    client.AppEngineHttpRpcServer(
-        self.hostname, self._MockAuthFunction, None, 'ah',
-        save_cookies=True, secure=True).AndReturn(mock_s)
-    mock_s.Send('/uauth').AndReturn(response)
-    client.auth_client.AuthSimianClient().AndReturn(mock_auth1)
-    mock_auth1.LoadCaParameters(client.settings).AndReturn(None)
-    mock_auth1.Input(t=response)
-    mock_auth1.AuthStateOK().AndReturn(True)
-    mock_s.cookie_jar = [self.mox.CreateMockAnything()]
-    mock_s.cookie_jar[0].domain = self.hostname
-    mock_s.cookie_jar[0].name = 'not-%s' % response
-    mock_s.cookie_jar[0].secure = True
-    mock_s.cookie_jar[0].value = 'value'
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, self.client.Login)
     self.mox.VerifyAll()
 
 
