@@ -40,7 +40,7 @@ test: m2crypto VE
 settings_check: test
 	VE/bin/python \
 	src/simian/util/validate_settings.py etc/simian/ \
-	src/ ./pyasn1*.egg ./tlslite*.egg
+	src/ ./.eggs/pyasn1*.egg ./.eggs/tlslite*.egg
 
 build: VE
 	VE/bin/python setup.py build
@@ -65,7 +65,7 @@ clean_ve:
 	rm -rf VE
 
 clean: clean_contents clean_pkgs clean_sdist clean_test clean_ve
-	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* *.egg install_name_tool
+	rm -rf ${SIMIAN}.dmg ${SIMIAN}-${MUNKI}.dmg dist/* build/* *.egg .eggs install_name_tool
 
 ${SDIST}: VE clean_sdist client_config
 	VE/bin/python setup.py sdist --formats=tar
@@ -132,17 +132,19 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.*-*.egg \
-	-R PyYAML-*.egg \
-	-R WebOb-*.egg \
-	-R google_apputils-*.egg \
-	-R icalendar-*.egg \
-	-R pyasn1-*.egg \
-	-R python_dateutil-*.egg \
-	-R python_gflags-*.egg \
-	-R pytz-*.egg \
-	-R requests-*.egg \
-	-R tlslite-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
+	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
+	-R .eggs/PyYAML-*.egg \
+	-R .eggs/WebOb-*.egg \
+	-R .eggs/google_apputils-*.egg \
+	-R .eggs/icalendar-*.egg \
+	-R .eggs/pyasn1-*.egg \
+	-R .eggs/python_dateutil-*.egg \
+	-R .eggs/python_gflags-*.egg \
+	-R .eggs/pytz-*.egg \
+	-R .eggs/requests-*.egg \
+	-R .eggs/tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
 	-s preinstall \
@@ -157,17 +159,19 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-version ${SIMIAN_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.*-*.egg \
-	-R PyYAML-*.egg \
-	-R WebOb-*.egg \
-	-R google_apputils-*.egg \
-	-R icalendar-*.egg \
-	-R pyasn1-*.egg \
-	-R python_dateutil-*.egg \
-	-R python_gflags-*.egg \
-	-R pytz-*.egg \
-	-R requests-*.egg \
-	-R tlslite-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
+	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
+	-R .eggs/PyYAML-*.egg \
+	-R .eggs/WebOb-*.egg \
+	-R .eggs/google_apputils-*.egg \
+	-R .eggs/icalendar-*.egg \
+	-R .eggs/pyasn1-*.egg \
+	-R .eggs/python_dateutil-*.egg \
+	-R .eggs/python_gflags-*.egg \
+	-R .eggs/pytz-*.egg \
+	-R .eggs/requests-*.egg \
+	-R .eggs/tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
 	-s preinstall \
@@ -182,17 +186,19 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.*-*.egg \
-	-R PyYAML-*.egg \
-	-R WebOb-*.egg \
-	-R google_apputils-*.egg \
-	-R icalendar-*.egg \
-	-R pyasn1-*.egg \
-	-R python_dateutil-*.egg \
-	-R python_gflags-*.egg \
-	-R pytz-*.egg \
-	-R requests-*.egg \
-	-R tlslite-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
+	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
+	-R .eggs/PyYAML-*.egg \
+	-R .eggs/WebOb-*.egg \
+	-R .eggs/google_apputils-*.egg \
+	-R .eggs/icalendar-*.egg \
+	-R .eggs/pyasn1-*.egg \
+	-R .eggs/python_dateutil-*.egg \
+	-R .eggs/python_gflags-*.egg \
+	-R .eggs/pytz-*.egg \
+	-R .eggs/requests-*.egg \
+	-R .eggs/tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
 	-s preinstall \
@@ -205,17 +211,19 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-version ${SIMIAN_VERSION}.${MUNKI_VERSION} \
 	-pyver ${PYTHON_VERSION} \
 	-vep install_name_tool \
-	-R simian_M2Crypto-*-10.*-*.egg \
-	-R PyYAML-*.egg \
-	-R WebOb-*.egg \
-	-R google_apputils-*.egg \
-	-R icalendar-*.egg \
-	-R pyasn1-*.egg \
-	-R python_dateutil-*.egg \
-	-R python_gflags-*.egg \
-	-R pytz-*.egg \
-	-R requests-*.egg \
-	-R tlslite-*.egg \
+	-R simian_M2Crypto-*-10.9-*.egg \
+	-R simian_M2Crypto-*-10.10-*.egg \
+	-R simian_M2Crypto-*-10.11-*.egg \
+	-R .eggs/PyYAML-*.egg \
+	-R .eggs/WebOb-*.egg \
+	-R .eggs/google_apputils-*.egg \
+	-R .eggs/icalendar-*.egg \
+	-R .eggs/pyasn1-*.egg \
+	-R .eggs/python_dateutil-*.egg \
+	-R .eggs/python_gflags-*.egg \
+	-R .eggs/pytz-*.egg \
+	-R .eggs/requests-*.egg \
+	-R .eggs/tlslite-*.egg \
 	-r ${SDIST} \
 	-s postflight \
 	-s preinstall \

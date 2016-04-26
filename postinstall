@@ -91,7 +91,7 @@ fi
 
 ### install virtualenv
 
-${PYTHON} ${EZ} -U virtualenv==1.10.1
+${PYTHON} ${EZ} -U virtualenv==13.1.2 setuptools==18.6.1
 
 ### find & test newly installed virtualenv
 

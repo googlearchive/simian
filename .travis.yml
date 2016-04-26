@@ -1,5 +1,5 @@
 language: c
-script: make settings_check
+script: make test
 sudo: required
 os:
   - osx

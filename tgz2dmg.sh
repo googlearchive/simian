@@ -164,7 +164,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 cd "${TMPDIR}/contents"
-rm Distribution
+rm -f Distribution
 
 # At this stage we can edit the pkg contents
 # and write a preflight to handle other python deps.
