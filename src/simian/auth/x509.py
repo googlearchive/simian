@@ -43,7 +43,8 @@ from pyasn1.codec.der import encoder as der_encoder
 import pyasn1.error
 from pyasn1.type import univ
 import pyasn1.type.useful
-from tlslite import api as tlslite_api
+
+from simian.auth import tlslite_bridge
 
 
 # OIDs as a dict, for quick lookup of the OID
@@ -665,7 +666,7 @@ class X509Certificate(BaseDataObject):
           'public_key': tlslite.utils.RSAKey.RSAKey object
       }
     """
-    cert = tlslite_api.X509()
+    cert = tlslite_bridge.X509()
     cert.parseBinary(bytes_str)
     return {
         'public_key': cert.publicKey,
@@ -882,6 +883,6 @@ def LoadRSAPrivateKeyFromPEM(s):
   # tlslite expects to see the header too.
   pem_rsa_key = '\n'.join(lines)
   try:
-    return tlslite_api.parsePEMKey(pem_rsa_key)
+    return tlslite_bridge.parsePEMKey(pem_rsa_key)
   except SyntaxError, e:
     raise RSAPrivateKeyPEMFormatError(str(e))

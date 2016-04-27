@@ -665,15 +665,17 @@ class Auth1Test(AuthTestingBase):
     """Test _LoadKey()."""
     keystr='pemkey'
     self.stubs.Set(
-        base.tlslite_api,
+        base.tlslite_bridge,
         'parsePEMKey',
         self.mox.CreateMockAnything())
 
     mock_key = self.mox.CreateMockAnything()
 
-    base.tlslite_api.parsePEMKey(keystr).AndRaise(SyntaxError)
+    base.tlslite_bridge.parsePEMKey(keystr).AndRaise(
+        SyntaxError)
 
-    base.tlslite_api.parsePEMKey(keystr).AndReturn(mock_key)
+    base.tlslite_bridge.parsePEMKey(keystr).AndReturn(
+        mock_key)
 
     self.mox.ReplayAll()
     self.assertRaises(ValueError, self.ba._LoadKey, keystr)

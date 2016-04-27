@@ -158,9 +158,9 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
     self.mox.StubOutWithMock(
-        x509.tlslite_api, 'parsePEMKey')
+        x509.tlslite_bridge, 'parsePEMKey')
     x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
-    x509.tlslite_api.parsePEMKey(
+    x509.tlslite_bridge.parsePEMKey(
         '\n'.join(pem_output)).AndReturn('ok')
 
     self.mox.ReplayAll()
@@ -177,9 +177,9 @@ class X509ModuleTest(mox.MoxTestBase):
 
     self.mox.StubOutWithMock(x509, 'LoadPemGeneric')
     self.mox.StubOutWithMock(
-        x509.tlslite_api, 'parsePEMKey')
+        x509.tlslite_bridge, 'parsePEMKey')
     x509.LoadPemGeneric(pem_input, header, footer).AndReturn(pem_output)
-    x509.tlslite_api.parsePEMKey(
+    x509.tlslite_bridge.parsePEMKey(
         '\n'.join(pem_output)).AndRaise(SyntaxError)
 
     self.mox.ReplayAll()
@@ -1027,8 +1027,8 @@ class X509CertificateTest(mox.MoxTestBase):
     bytes = 'bytes'
     publickey = 'publickey'
 
-    self.mox.StubOutClassWithMocks(x509.tlslite_api, 'X509')
-    mock_tls509 = x509.tlslite_api.X509()
+    self.mox.StubOutClassWithMocks(x509.tlslite_bridge, 'X509')
+    mock_tls509 = x509.tlslite_bridge.X509()
     mock_tls509.parseBinary(bytes).AndReturn(None)
     mock_tls509.publicKey = publickey
 

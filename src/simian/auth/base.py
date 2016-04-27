@@ -44,8 +44,8 @@ import logging
 import os
 import struct
 
-from tlslite import api as tlslite_api
 
+from simian.auth import tlslite_bridge
 from simian.auth import x509
 
 # Message separator
@@ -663,7 +663,7 @@ class Auth1(AuthBase):
       ValueError: keystr is improperly formed
     """
     try:
-      key = tlslite_api.parsePEMKey(keystr)
+      key = tlslite_bridge.parsePEMKey(keystr)
     except (SyntaxError, AttributeError), e:
       raise ValueError('invalid PEM key format: %s' % str(e))
     return key

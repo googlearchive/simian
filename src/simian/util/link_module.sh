@@ -17,14 +17,14 @@ EOF
 }
 
 function find_egg_file() {
-  egg=$(find . -type f -maxdepth 1 -name ${module}-*.egg 2>/dev/null)
+  egg=$(find .eggs -type f -maxdepth 1 -name ${module}-*.egg 2>/dev/null)
   if [[ ! -z "${egg}" ]]; then
     echo "${egg}"
   fi
 }
 
 function find_egg_dir() {
-  egg=$(find . -type d -name ${module}-*.egg 2>/dev/null)
+  egg=$(find .eggs -type d -name ${module}-*.egg 2>/dev/null)
   if [[ ! -z "${egg}" ]]; then
     find "${egg}" -type d -maxdepth 1 -mindepth 1 \! -name EGG-INFO
   fi
