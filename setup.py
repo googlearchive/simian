@@ -41,7 +41,7 @@ except ImportError:
 REQUIRE_BASE = [
     'setuptools>=18.2',
     'pyasn1>=0.1.2',
-    'tlslite==0.4.1',
+    'tlslite==0.4.9',
     'pyyaml>=3.10',
     'requests',
 ]

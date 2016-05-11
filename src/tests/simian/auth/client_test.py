@@ -23,6 +23,7 @@
 import logging
 logging.basicConfig(filename='/dev/null')
 
+
 import mox
 import stubout
 

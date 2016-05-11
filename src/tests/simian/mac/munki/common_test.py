@@ -385,7 +385,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.LogClientConnection, event, client_id, user_settings=None,
         pkgs_to_install=None, apple_updates_to_install=None,
         ip_address=ip_address, report_feedback=None,
-        _name=deferred_name, _countdown=2)
+        _name=deferred_name, _countdown=2, cert_fingerprint=None)
     self.mox.ReplayAll()
     common.LogClientConnection(event, client_id, delay=2, ip_address=ip_address)
     self.mox.VerifyAll()

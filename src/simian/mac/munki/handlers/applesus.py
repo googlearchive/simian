@@ -23,7 +23,6 @@ from simian.mac.common import auth
 from simian.mac.munki import handlers
 
 
-
 class AppleSUS(handlers.AuthenticationHandler):
   """Handler for /applesus/"""
 

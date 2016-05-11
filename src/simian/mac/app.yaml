@@ -56,10 +56,6 @@ handlers:
   script: simian.mac.urls.app
   secure: always
 
-- url: /deletepkg
-  script: simian.mac.urls.app
-  secure: always
-
 - url: /reports
   script: simian.mac.urls.app
   secure: always
@@ -95,10 +91,6 @@ handlers:
 - url: /uploadfile/.*
   script: simian.mac.urls.app
   secure: always
-
-- url: /uploadpkg
-  script: simian.mac.urls.app
-  # intentionally omit "secure: always" for Scotty/Blobstore functionality.
 
 - url: /auth
   script: simian.mac.urls.app

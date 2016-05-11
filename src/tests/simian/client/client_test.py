@@ -23,12 +23,14 @@
 import logging
 import sys
 
+
 import mox
 import stubout
 
 from google.apputils import app
 from google.apputils import basetest
 
+from simian import auth
 from simian.client import client
 
 if hasattr(mox.MockAnything, '__str__'): del(mox.MockAnything.__str__)
@@ -968,6 +970,18 @@ class HttpsAuthClientTest(mox.MoxTestBase):
     self.assertEqual({}, self.client.GetFacter())
     self.mox.VerifyAll()
 
+  def testGetAuthTokenFromHeadersSuccess(self):
+    token = '%s=123; secure; httponly;' % auth.AUTH_TOKEN_COOKIE
+    result = self.client._GetAuthTokenFromHeaders(
+        {'set-cookie': 'other=value;,%s,something=else;' % token})
+    self.assertEqual(token, result)
+
+  def testGetAuthTokenFromHeadersMissingHeader(self):
+    self.assertRaises(
+        client.SimianClientError,
+        self.client._GetAuthTokenFromHeaders,
+        {'set-cookie': ''})
+
 
 class SimianClientTest(mox.MoxTestBase):
   """Test SimianClient class."""
@@ -1135,103 +1149,6 @@ class SimianClientTest(mox.MoxTestBase):
         self.client.GetPackage, [name],
         '_SimianRequest', 'GET', '/pkgs/%s' % name, output_filename=None)
 
-  def testSimianFormUpload(self):
-    """Test _SimianFormUpload()."""
-    user = 'foouser'
-    fqdn_user = '%s@%s' % (user, client.AUTH_DOMAIN)
-    name = u'hebrew \u05d7'
-    name_utf8_str = 'hebrew \xd7\x97'
-    params = {'pkginfo': u'fooinfo \u05d7'}
-    updated_params = {
-        'name': name_utf8_str, 'pkginfo': 'fooinfo \xd7\x97', 'user': fqdn_user}
-    self.client._user = user
-    mock_response = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(self.client, 'DoMultipart')
-    self.client.DoMultipart(
-        '', updated_params, name_utf8_str, input_filename='',
-        input_file='').AndReturn(mock_response)
-    mock_response.IsError().AndReturn(False)
-
-    self.mox.ReplayAll()
-    self.client._SimianFormUpload('', name, params, '', '')
-    self.mox.VerifyAll()
-
-  def testPutPackage(self):
-    """Test PutPackage()."""
-    filename = 'name.dmg'
-    params = {'pkginfo': 'xml'}
-    post_path = '/_ah/upload-here.cgi'
-    post_url = 'http://%s%s' % (self.hostname, post_path)
-    redirect_path = '/ok?foo=bar'
-    redirect_url = 'http://%s%s' % (self.hostname, redirect_path)
-    input_file = 'input_file'
-    result = 'result'
-    mock_response = self.mox.CreateMockAnything()
-
-    self.assertRaises(client.Error, self.client.PutPackage, filename, params)
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.mox.StubOutWithMock(self.client, '_SimianFormUpload')
-    self.client._SimianRequest('GET', '/uploadpkg').AndReturn(post_url)
-    self.client._SimianFormUpload(
-        post_path, filename, params,
-        input_file=input_file, input_filename=None).AndReturn(
-            mock_response)
-    mock_response.headers = {'location': redirect_url}
-    mock_response.IsRedirect().AndReturn(True)
-    self.client._SimianRequest('GET', redirect_path).AndReturn(result)
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.Error, self.client.PutPackage, filename, params)
-    self.assertEqual(
-        result,
-        self.client.PutPackage(filename, params, input_file=input_file))
-    self.mox.VerifyAll()
-
-  def testPutPackageWhenNotRedirect(self):
-    """Test PutPackage() where a redirect was not received.
-
-    Lack of redirect indicates a blob upload failure.
-    """
-    filename = 'name.dmg'
-    params = {'pkginfo': 'xml'}
-    post_path = '/_ah/upload-here.cgi'
-    post_url = 'http://%s%s' % (self.hostname, post_path)
-    redirect_path = '/ok?foo=bar'
-    redirect_url = 'http://%s%s' % (self.hostname, redirect_path)
-    input_file = 'input_file'
-    mock_response = self.mox.CreateMockAnything()
-
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.mox.StubOutWithMock(self.client, '_SimianFormUpload')
-    self.client._SimianRequest('GET', '/uploadpkg').AndReturn(post_url)
-    self.client._SimianFormUpload(
-        post_path, filename, params,
-        input_file=input_file, input_filename=None).AndReturn(
-            mock_response)
-    mock_response.headers = {'location': redirect_url}
-    mock_response.IsRedirect().AndReturn(False)
-    mock_response.__str__().AndReturn('error response')
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        client.SimianClientError,
-        self.client.PutPackage,
-        filename, params, input_file=input_file)
-    self.mox.VerifyAll()
-
-  def testPutPackageWithDifferentUploadHost(self):
-    """Test PutPackage() where a different upload host is returned."""
-    url = 'https://foohost/foopath'
-    self.client.netloc = 'something different'
-    self.mox.StubOutWithMock(self.client, '_SimianRequest')
-    self.client._SimianRequest('GET', '/uploadpkg').AndReturn(url)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        client.SimianClientError,
-        self.client.PutPackage, '', '', 'anyfile')
-    self.mox.VerifyAll()
-
   def testGetPackageInfo(self):
     """Test GetPackageInfo()."""
     filename = 'name.dmg'
@@ -1257,55 +1174,6 @@ class SimianClientTest(mox.MoxTestBase):
         '_SimianRequest',
         response,
         'GET', '/pkgsinfo/%s?hash=1' % filename, full_response=True)
-
-  def testPutPackageInfo(self):
-    """Test PutPackageInfo()."""
-    filename = 'some pkg.dmg'
-    quoted_name = 'some%20pkg.dmg'
-    catalogs = ['catalog1', 'catalog2']
-    manifests = ['manifest1', 'manifest2']
-    install_types = ['type1', 'type2']
-    pkginfo = u'<plist>etc\u2665</plist>'
-    pkginfo_utf8 = pkginfo.encode('utf-8')
-    got_hash = 'hash'
-
-    url = '/pkgsinfo/%s?catalogs=%s&manifests=%s&install_types=%s&hash=%s' % (
-        quoted_name, ','.join(catalogs), ','.join(manifests),
-        ','.join(install_types), got_hash)
-
-    self.GenericStubTest(
-        self.client.PutPackageInfo,
-        [filename, pkginfo, catalogs, manifests, install_types, got_hash],
-        '_SimianRequest', 'PUT', url, pkginfo_utf8)
-
-  def testPutPackageInfoWhenSetNoManifests(self):
-    """Test PutPackageInfo()."""
-    filename = 'some pkg.dmg'
-    quoted_name = 'some%20pkg.dmg'
-    catalogs = ['catalog1', 'catalog2']
-    manifests = ''
-    install_types = ['type1', 'type2']
-    pkginfo = u'<plist>etc\u2665</plist>'
-    pkginfo_utf8 = pkginfo.encode('utf-8')
-    got_hash = 'hash'
-
-    url = '/pkgsinfo/%s?catalogs=%s&manifests=%s&install_types=%s&hash=%s' % (
-        quoted_name, ','.join(catalogs), manifests,
-        ','.join(install_types), got_hash)
-
-    self.GenericStubTest(
-        self.client.PutPackageInfo,
-        [filename, pkginfo, catalogs, manifests, install_types, got_hash],
-        '_SimianRequest', 'PUT', url, pkginfo_utf8)
-
-  def testDeletePackage(self):
-    """Test DeletePackage()."""
-    filename = 'foo'
-
-    self.GenericStubTest(
-        self.client.DeletePackage,
-        [filename],
-        '_SimianRequest', 'POST', '/deletepkg', {'filename': filename})
 
   def testDownloadPackage(self):
     """Test DownloadPackage()."""
@@ -1394,78 +1262,6 @@ class SimianClientTest(mox.MoxTestBase):
 
     self.mox.ReplayAll()
     self.client.UploadFile(file_path, 'foo-file-type')
-    self.mox.VerifyAll()
-
-  def testIsPackageUploadNecessary(self):
-    """Test _IsPackageUploadNecessary()."""
-    filename = 'filename'
-    pkginfo = 'pkginfo'
-    self.assertTrue(self.client._IsPackageUploadNecessary(filename, pkginfo))
-
-  def testUploadPackageWhenUploadNecessary(self):
-    """Test UploadPackage()."""
-    file_path = '/path/to/filename.dmg'
-    filename = 'filename.dmg'
-    description = 'foo package description!!'
-    display_name = 'Foo Package'
-    pkginfo = 'pkginfo'
-    catalogs = ['catalog1', 'catalog2']
-    manifests = ['manifest1', 'manifest2']
-    install_types = ['managed_installs', 'managed_updates']
-    params = {
-        'pkginfo': pkginfo,
-        'catalogs': ','.join(catalogs),
-        'manifests': ','.join(manifests),
-        'install_types': ','.join(install_types),
-    }
-    self.mox.StubOutWithMock(
-        self.client, 'PutPackage', self.mox.CreateMockAnything())
-    self.mox.StubOutWithMock(self.client, '_IsPackageUploadNecessary')
-
-    self.client._IsPackageUploadNecessary(file_path, pkginfo).AndReturn(True)
-    self.client.PutPackage(
-        filename, params, input_filename=file_path).AndReturn('Success')
-
-    self.mox.ReplayAll()
-    r = self.client.UploadPackage(
-        file_path, description, display_name, catalogs, manifests,
-        install_types, pkginfo)
-    self.assertEqual(r[0], 'Success')
-    self.assertEqual(r[1], filename)
-    self.assertEqual(r[2], catalogs)
-    self.assertEqual(r[3], manifests)
-    self.assertEqual(len(r), 4)
-    self.mox.VerifyAll()
-
-  def testUploadPackageWhenUploadNotNecessary(self):
-    """Test UploadPackage()."""
-    file_path = '/path/to/filename.dmg'
-    filename = 'filename.dmg'
-    description = 'foo package description!!'
-    display_name = 'Foo Package'
-    pkginfo = 'pkginfo'
-    catalogs = ['catalog1', 'catalog2']
-    manifests = ['manifest1', 'manifest2']
-    install_types = ['managed_installs', 'managed_updates']
-
-    self.mox.StubOutWithMock(
-        self.client, 'PutPackageInfo', self.mox.CreateMockAnything())
-    self.mox.StubOutWithMock(self.client, '_IsPackageUploadNecessary')
-
-    self.client._IsPackageUploadNecessary(file_path, pkginfo).AndReturn(False)
-    self.client.PutPackageInfo(
-        filename, pkginfo, catalogs, manifests, install_types).AndReturn(
-            'Success')
-
-    self.mox.ReplayAll()
-    r = self.client.UploadPackage(
-        file_path, description, display_name, catalogs, manifests,
-        install_types, pkginfo)
-    self.assertEqual(r[0], 'Success')
-    self.assertEqual(r[1], filename)
-    self.assertEqual(r[2], catalogs)
-    self.assertEqual(r[3], manifests)
-    self.assertEqual(len(r), 4)
     self.mox.VerifyAll()
 
 

@@ -16,10 +16,13 @@
 #
 """auth module tests."""
 
+import httplib
 import logging
 logging.basicConfig(filename='/dev/null')
 
 from google.apputils import app
+from simian.auth import gaeserver
+from simian.mac import urls as gae_main
 from tests.simian.mac.common import test
 from simian.mac.munki.handlers import auth
 
@@ -169,6 +172,7 @@ class AuthModuleTest(test.RequestHandlerTest):
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()
+
 
 
 def main(argv):

@@ -21,34 +21,6 @@ class Error(Exception):
   """Base Error."""
 
 
-def IsHttps(rh=None):
-  """Check for https in request connection.
-
-  If not https, setup a redirect to the https page.
-
-  Args:
-    rh: webapp.RequestHandler, optional, to set redirect() on
-  Returns:
-    False if the current connection is not HTTPS
-    True if the current connection is HTTPS
-  Raises:
-    Error: if rh is specified and a URL to redirect to cannot be determined
-  """
-  if os.environ.get('HTTPS', None) == 'on':
-    return True
-
-  if rh is not None:
-    if not os.environ.get('SERVER_NAME', None):
-      raise Error('Cannot determine current site URL')
-
-    rh.redirect('https://%s%s' % (
-        os.environ['SERVER_NAME'],
-        os.environ.get('PATH_INFO', '/'))
-        )
-
-  return False
-
-
 def IsBlobstore():
   """Check if Blobstore is the request connection source.
 

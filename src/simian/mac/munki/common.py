@@ -103,7 +103,7 @@ def _SaveFirstConnection(client_id, computer):
 def LogClientConnection(
     event, client_id, user_settings=None, pkgs_to_install=None,
     apple_updates_to_install=None, ip_address=None, report_feedback=None,
-    computer=None, delay=0):
+    computer=None, delay=0, cert_fingerprint=None):
   """Logs a host checkin to Simian.
 
   Args:
@@ -117,6 +117,7 @@ def LogClientConnection(
     report_feedback: dict ReportFeedback commands sent to the client.
     computer: optional models.Computer object.
     delay: int. if > 0, LogClientConnection call is deferred this many seconds.
+    cert_fingerprint: optional str Client certificate fingerprint.
   """
   if delay:
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
@@ -125,7 +126,8 @@ def LogClientConnection(
         LogClientConnection, event, client_id, user_settings=user_settings,
         pkgs_to_install=pkgs_to_install, ip_address=ip_address,
         apple_updates_to_install=apple_updates_to_install,
-        report_feedback=report_feedback, _name=deferred_name, _countdown=delay)
+        report_feedback=report_feedback, _name=deferred_name, _countdown=delay,
+        cert_fingerprint=cert_fingerprint)
     return
 
   if not client_id['uuid']:
@@ -134,7 +136,8 @@ def LogClientConnection(
 
   def __UpdateComputerEntity(
       event, _client_id, _user_settings, _pkgs_to_install,
-      _apple_updates_to_install, _ip_address, _report_feedback, c=None):
+      _apple_updates_to_install, _ip_address, _report_feedback, c=None,
+      cert_fingerprint=None):
     """Update the computer entity, or create a new one if it doesn't exists."""
     now = datetime.datetime.utcnow()
     is_new_client = False
@@ -158,6 +161,7 @@ def LogClientConnection(
     c.user_disk_free = _client_id['user_disk_free']
     c.runtype = _client_id['runtype']
     c.ip_address = _ip_address
+    c.cert_fingerprint = cert_fingerprint
 
     last_notified_datetime = _client_id['last_notified_datetime']
     if last_notified_datetime:  # might be None
@@ -244,7 +248,8 @@ def LogClientConnection(
     db.run_in_transaction(
         __UpdateComputerEntity,
         event, client_id, user_settings, pkgs_to_install,
-        apple_updates_to_install, ip_address, report_feedback, c=computer)
+        apple_updates_to_install, ip_address, report_feedback, c=computer,
+        cert_fingerprint=cert_fingerprint)
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError) as e:
     logging.warning(
         'LogClientConnection put() error %s: %s', e.__class__.__name__, str(e))

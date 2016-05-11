@@ -408,6 +408,7 @@ class Computer(db.Model):
   # The number of preflight connections since the last successful postflight
   # connection. Resets to 0 when a postflight connection is posted.
   preflight_count_since_postflight = db.IntegerProperty(default=0)
+  cert_fingerprint = db.StringProperty()
 
   def _GetUserSettings(self):
     """Returns the user setting dictionary, or None."""

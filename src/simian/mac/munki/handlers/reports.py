@@ -282,10 +282,12 @@ class Reports(handlers.AuthenticationHandler):
               models.PreflightExitLog, uuid, computer=computer,
               exit_reason=client_exit)
 
+      cert_fingerprint = None
+
       common.LogClientConnection(
           report_type, client_id, user_settings, pkgs_to_install,
           apple_updates_to_install, computer=computer, ip_address=ip_address,
-          report_feedback=report_feedback)
+          report_feedback=report_feedback, cert_fingerprint=cert_fingerprint)
 
 
     elif report_type == 'install_report':

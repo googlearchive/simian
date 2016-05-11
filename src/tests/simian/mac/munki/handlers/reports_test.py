@@ -23,6 +23,7 @@ import mox
 import stubout
 
 from google.apputils import app
+from simian.auth import gaeserver
 from tests.simian.mac.common import test
 from simian.mac.munki.handlers import reports
 
@@ -323,7 +324,7 @@ class HandlersTest(test.RequestHandlerTest):
     reports.common.LogClientConnection(
         report_type, client_id_dict, user_settings, pkgs_to_install,
         apple_updates_to_install, computer=mock_computer, ip_address=ip_address,
-        report_feedback=report_feedback)
+        report_feedback=report_feedback, cert_fingerprint=None)
 
 
     self.mox.ReplayAll()

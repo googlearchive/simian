@@ -667,7 +667,7 @@ class X509Certificate(BaseDataObject):
       }
     """
     cert = tlslite_bridge.X509()
-    cert.parseBinary(bytes_str)
+    cert.parseBinary(bytearray(bytes_str))
     return {
         'public_key': cert.publicKey,
     }

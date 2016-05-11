@@ -1219,23 +1219,33 @@ class HttpsAuthClient(HttpsClient):
           ' '.join(self._auth1.ErrorOutput())))
 
     # Success
-    sanitized_headers = response.headers.copy()
+    self._cookie_token = self._GetAuthTokenFromHeaders(response.headers)
+
+  def _GetAuthTokenFromHeaders(self, headers):
+    """Parses headers dict to return string auth token.
+
+    Args:
+      headers: HTTP response headers in dict-like object.
+    Returns:
+      string Simian Auth Token.
+    Raises:
+      SimianClientError: no token was found.
+    """
+    sanitized_headers = headers.copy()
     del sanitized_headers['set-cookie']
     logging.info('headers = %s', sanitized_headers)
 
-    tokens = response.headers.get('set-cookie', None)
+    tokens = headers.get('set-cookie', None)
     if tokens is None:
       raise SimianClientError('No token supplied on cookie')
 
     tokens = tokens.split(',')  # split multiple cookies
     for token in tokens:
       if token.startswith(auth.AUTH_TOKEN_COOKIE):
-        self._cookie_token = token
         logging.debug('Found cookie token.')
-        break
+        return token
 
-    if self._cookie_token is None:
-      raise SimianClientError('No recognizable token found in cookies')
+    raise SimianClientError('No recognizable token found in cookies')
 
 
 class SimianClient(HttpsAuthClient):
@@ -1309,38 +1319,6 @@ class SimianClient(HttpsAuthClient):
     else:
       return os.getenv('LOGNAME')
 
-  def _SimianFormUpload(self, url, name, params, input_filename, input_file):
-    """Make a form/multipart POST request and return the body if successful.
-
-    Args:
-      url: str, url to connect to, like '/foo/1'
-      name: str, name of file being uploaded
-      params: dict of params to send with the request.
-      input_filename: as DoMultipart()
-      input_file: as DoMultipart()
-    Returns:
-      Response object if the request did not result in an error
-    Raises:
-      SimianServerError: if the Simian server returned an error
-    """
-    name = str(name.encode('utf-8'))
-    new_params = params.copy()
-    new_params['name'] = name
-    new_params['user'] = '%s@%s' % (self._user, AUTH_DOMAIN)
-    for k, v in new_params.iteritems():
-      if type(v) is unicode:
-        new_params[k] = str(v.encode('utf-8'))
-    response = self.DoMultipart(
-        url, new_params,
-        name,
-        input_filename=input_filename,
-        input_file=input_file)
-
-    if not response.IsError():
-      return response
-    else:
-      raise SimianServerError(response.status, response.body)
-
   def GetCatalog(self, name):
     """Get a catalog."""
     return self._SimianRequest('GET', '/catalog/%s' % name)
@@ -1361,65 +1339,6 @@ class SimianClient(HttpsAuthClient):
     return self._SimianRequest(
         'GET', '/pkgs/%s' % urllib.quote(name),
         output_filename=output_filename)
-
-  def PutPackage(self, filename, params, input_filename=None, input_file=None):
-    """Put a package file contents.
-
-    Read the documentation at
-        https://cloud.google.com/
-            appengine/docs/python/tools/webapp/blobstorehandlers
-
-    for more information about why this method looks strange.  BlobStore
-    upload requires a multipart/form POST to a dynamic URL.
-
-    Args:
-      filename: str, package filename
-      params: dict of params to send with the request.
-      input_filename: str, optional, filename to upload
-      input_file: file, optional, file handle to read from
-    Returns:
-      str UUID for the uploaded payload
-    Raises:
-      Error: if input is invalid
-      SimianServerError: if an error occured on the Simian server
-      SimianClientError: if an error occured on the this client
-    """
-    if not input_file and not input_filename:
-      raise Error('Must supply input_file or input_filename')
-
-    # obtain the URL to POST to
-    logging.debug('Getting POST URL....')
-    post_url = self._SimianRequest('GET', URL_UPLOADPKG)
-    logging.debug('Received POST URL: %s', post_url)
-    (unused_scheme, netloc, path, unused_query, unused_fragment
-    ) = urlparse.urlsplit(post_url)
-
-    if netloc != self.netloc:
-      raise SimianClientError(
-          'Upload package URL is different host: %s (%s)' % (
-              netloc, self.netloc))
-
-    logging.debug('Uploading package...')
-    # send the file contents
-    post_url = path
-    response = self._SimianFormUpload(
-        post_url, filename, params,
-        input_file=input_file, input_filename=input_filename)
-
-    # upon success OR a controlled failure a redirect will occur
-    redirect_url = response.headers.get('location', None)
-    (unused_scheme, unused_netloc, path, query, unused_fragment
-    ) = urlparse.urlsplit(redirect_url)
-    redirect_url = '%s?%s' % (path, query)
-
-    if not response.IsRedirect() or not redirect_url:
-      # something happened which the server did not handle properly
-      raise SimianClientError(
-          ('Unexpected response from upload: %s' % str(response)))
-
-    # return the resulting blobstore ID
-    result = self._SimianRequest('GET', redirect_url)
-    return result
 
   def GetPackageInfo(self, filename, get_hash=False):
     """Get package info.
@@ -1449,54 +1368,6 @@ class SimianClient(HttpsAuthClient):
     else:
       return response.body
 
-  def PutPackageInfo(
-      self, filename, pkginfo, catalogs=None, manifests=None,
-      install_types=None, got_hash=None):
-    """Put new/updated package info.
-
-    Args:
-      filename: str unique filename for pkginfo.
-      pkginfo: str XML pkginfo.
-      catalogs: optional, list of str catalogs to target.
-      manifests: optional, list of str manifests to target
-      install_types: optional, list of str install types.
-      got_hash: optional, str, sha256 hash of pkginfo retrieved earlier.
-        if supplied, the server will only update the new pkginfo if the
-        hash for the current pkginfo on the server matches this hash.
-    Returns:
-      str body from response.
-    Raises:
-      SimianServerError: if the Simian server returned an error (status != 200)
-    """
-    filename = urllib.quote(filename)
-    pkginfo = pkginfo.encode('utf-8')
-    opts = []
-    if catalogs is not None:
-      opts.append('catalogs=%s' % ','.join(catalogs))
-    if manifests is not None:
-      opts.append('manifests=%s' % ','.join(manifests))
-    if install_types is not None:
-      opts.append('install_types=%s' % ','.join(install_types))
-    if got_hash is not None:
-      opts.append('hash=%s' % got_hash)
-    url = '/pkgsinfo/%s?%s' % (
-        filename, '&'.join(opts))
-    return self._SimianRequest('PUT', url, pkginfo)
-
-  def DeletePackage(self, filename):
-    """Deletes a package.
-
-    Note: this also deletes the pkginfo associated with the package.
-
-    Args:
-      filename: str filename of the package to delete.
-    Returns:
-      str body from response.
-    Raises:
-      SimianServerError: if the Simian server returned an error (status != 200)
-    """
-    return self._SimianRequest('POST', '/deletepkg', {'filename': filename})
-
   def DownloadPackage(self, filename):
     """Downloads a package.
 
@@ -1512,61 +1383,6 @@ class SimianClient(HttpsAuthClient):
     return self._SimianRequest(
         'GET', '/pkgs/%s' % urllib.quote(filename),
         output_filename=filename)
-
-  def _IsPackageUploadNecessary(self, filename, upload_pkginfo):
-    """Returns True if the package file should be uploaded.
-
-    This method helps the client decide whether to upload the entire package
-    and package info, or just new package info.  It compares the sha256 hash
-    of the existing package on the server with the one of the package file
-    which would potentially be uploaded.  If the existing package info is
-    not obtainable or not parseable the hash value cannot be compared, so
-    True is returned to force an upload.
-
-    Args:
-      filename: str, package filename
-      upload_pkginfo: package info of package being uploaded
-    Returns:
-      True if the package file and package info should be uploaded
-      False if the package file is same, so just upload package info
-    """
-    return True
-
-  def UploadPackage(
-      self, filename, description, display_name, catalogs, manifests,
-      install_types, pkginfo):
-    """Uploads a Munki PackageInfo plist along with a Package.
-
-    Args:
-      filename: str file name to upload.
-      description: str description.
-      display_name: str human readable display name.
-      catalogs: list of str catalog names.
-      manifests: list of str manifest names.
-      install_types: list of str install types.
-      pkginfo: str package info.
-    Returns:
-      Tuple. (Str response body from upload, filename,
-              list of catalogs, list of manifests)
-    """
-    file_path = filename
-    filename = os.path.basename(filename)  # filename should be name only
-    if not manifests:
-      manifests = []
-
-    if self._IsPackageUploadNecessary(file_path, pkginfo):
-      params = {
-          'pkginfo': pkginfo,
-          'catalogs': ','.join(catalogs),
-          'manifests': ','.join(manifests),
-          'install_types': ','.join(install_types),
-      }
-      response = self.PutPackage(filename, params, input_filename=file_path)
-    else:
-      response = self.PutPackageInfo(
-          filename, pkginfo, catalogs, manifests, install_types)
-
-    return response, filename, catalogs, manifests
 
   def GetPackageMetadata(
       self, install_types=None, catalogs=None, filename=None):
@@ -1655,6 +1471,7 @@ class SimianAuthClient(SimianClient):
   def __init__(self, hostname=None, port=None, root_ok=None):
     super(SimianAuthClient, self).__init__(hostname, port, root_ok=True)
 
+
   def GetAuthToken(self):
     """Obtain a token from the server.
 
@@ -1662,6 +1479,7 @@ class SimianAuthClient(SimianClient):
       token str
     """
     self.DoSimianAuth()
+
     return self._cookie_token
 
   def SetAuthToken(self, token):

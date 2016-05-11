@@ -31,10 +31,6 @@ from simian.mac.common import util
 from simian.mac.munki import handlers
 
 
-# TODO(user): port unit tests, as this module was largely lifted from
-#             //mac/munki/handlers/uploadpkg.py
-
-
 class UploadPackage(
     admin.AdminHandler,
     blobstore_handlers.BlobstoreUploadHandler):
@@ -56,11 +52,6 @@ class UploadPackage(
       mode: optionally, 'success' or 'error'
       key: optionally, blobstore key that was uploaded
     """
-    if not handlers.IsHttps(self):
-      # TODO(user): Does blobstore support https yet? If so, we can
-      # enforce security in app.yaml and not do this check here.
-      return
-
     if not auth.HasPermission(auth.UPLOAD):
       self.error(403)
       return
@@ -162,9 +153,9 @@ class UploadPackage(
       return
 
     old_blobstore_key = None
-    if p.blob_info:
+    if p.blobstore_key:
       # a previous blob exists.  delete it when the update has succeeded.
-      old_blobstore_key = p.blob_info.key()
+      old_blobstore_key = p.blobstore_key
 
     p.blob_info = blob_info
 

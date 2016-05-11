@@ -22,13 +22,11 @@ from simian import settings
 from simian.mac.munki.handlers import applesus
 from simian.mac.munki.handlers import auth
 from simian.mac.munki.handlers import catalogs
-from simian.mac.munki.handlers import deletepkg
 from simian.mac.munki.handlers import manifests
 from simian.mac.munki.handlers import pkgs
 from simian.mac.munki.handlers import pkgsinfo
 from simian.mac.munki.handlers import reports
 from simian.mac.munki.handlers import uploadfile
-from simian.mac.munki.handlers import uploadpkg
 
 
 class RedirectToAdmin(webapp2.RequestHandler):
@@ -55,10 +53,6 @@ app = webapp2.WSGIApplication([
     (r'/pkgsinfo/?$', pkgsinfo.PackagesInfo),
     # GET munki pkginfo, PUT updated pkginfo
     (r'/pkgsinfo/([\w\-\_\.\=\|\%]+)$', pkgsinfo.PackagesInfo),
-    # POST to delete a munki pkginfo/package pair.
-    (r'/deletepkg$', deletepkg.DeletePackage),
-    # POST to upload a munki pkginfo/package pair.
-    (r'/uploadpkg$', uploadpkg.UploadPackage),
     # POST reports from munki.
     (r'/reports$', reports.Reports),
     # PUT uploadfile from munki.

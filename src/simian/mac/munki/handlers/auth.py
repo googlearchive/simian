@@ -16,6 +16,7 @@
 #
 """Module to handle /auth"""
 
+import base64
 import logging
 import os
 
@@ -61,10 +62,12 @@ class Auth(handlers.AuthenticationHandler):
     # For now we don't need this, so just return False (not blocked).
     return False
 
+
   def get(self):
-    """GET"""
-    session = gaeserver.DoMunkiAuth()
+    """GET."""
     logout = self.request.get('logout')
+
+    session = gaeserver.DoMunkiAuth()
     if logout:
       gaeserver.LogoutSession(session)
 
