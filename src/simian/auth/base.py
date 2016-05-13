@@ -683,7 +683,13 @@ class Auth1(AuthBase):
     data_bytes = array.array('B')
     data_bytes.fromstring(datastr)
     sig_bytes = self._key.hashAndSign(data_bytes)
-    return sig_bytes.tostring()
+
+    if isinstance(sig_bytes, bytearray):
+      # tlslite 0.4.9
+      return str(sig_bytes)
+    else:
+      # tlslite 0.3.8 array.array
+      return sig_bytes.tostring()
 
   def LoadSelfKey(self, keystr):
     """Load a key and keep it as this instance's key.
