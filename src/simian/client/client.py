@@ -79,7 +79,8 @@ _CIPHER_LIST = ':'.join([
     'ECDHE-ECDSA-AES128-SHA256',
     'ECDHE-RSA-AES128-SHA256',
 ])
-_SSL_VERSION = 'tlsv1_2'
+# apple include old openssl version 0.9.8 which does not support tlsv1.2
+_SSL_VERSION = 'sslv23'
 
 
 class Error(Exception):
