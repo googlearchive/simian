@@ -71,16 +71,8 @@ if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
 URL_UPLOADPKG = '/uploadpkg'
 
-_CIPHER_LIST = ':'.join([
-    'ECDHE-ECDSA-AES128-GCM-SHA256',
-    'ECDHE-RSA-AES128-GCM-SHA256',
-    'ECDHE-ECDSA-CHACHA20-POLY1305',
-    'ECDHE-RSA-CHACHA20-POLY1305',
-    'ECDHE-ECDSA-AES128-SHA256',
-    'ECDHE-RSA-AES128-SHA256',
-])
-# apple include old openssl version 0.9.8 which does not support tlsv1.2
 _SSL_VERSION = 'sslv23'
+_CIPHER_LIST = None
 
 
 class Error(Exception):
@@ -388,7 +380,8 @@ class HTTPSMultiBodyConnection(MultiBodyConnection, httplib.HTTPSConnection):
     server_address = ((self.host, self.port))
 
     ctx = SSL.Context(_SSL_VERSION)
-    ctx.set_cipher_list(_CIPHER_LIST)
+    if _CIPHER_LIST:
+      ctx.set_cipher_list(_CIPHER_LIST)
 
     if hasattr(self, '_ca_cert_chain'):
       self._LoadCACertChain(ctx)
