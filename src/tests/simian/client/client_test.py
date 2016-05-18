@@ -384,7 +384,8 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mbc._ca_cert_chain = 'cert chain foo'
 
     client.SSL.Context(client._SSL_VERSION).AndReturn(context)
-    context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
+    if client._CIPHER_LIST:
+      context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
 
     self.mbc._LoadCACertChain(context).AndReturn(None)
 
@@ -407,7 +408,8 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(client.SSL, 'Context')
 
     client.SSL.Context(client._SSL_VERSION).AndReturn(context)
-    context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
+    if client._CIPHER_LIST:
+      context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
 
     self.mox.ReplayAll()
     self.assertRaises(client.SimianClientError, self.mbc.connect)
