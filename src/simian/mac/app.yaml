@@ -114,12 +114,12 @@ handlers:
   secure: always
   login: required
 
-- url: /.*/admin/css
+- url: .*/admin/css
   static_dir: simian/mac/admin/css
   secure: always
   login: required
 
-- url: /.*/admin/js
+- url: .*/admin/js
   static_dir: simian/mac/admin/js
   secure: always
   login: required
