@@ -28,7 +28,8 @@ except ImportError:
   # __init__ in tlslite imports all avaliable api.
   # part of it relies on fcntl which is not avaliable on appengine.
   # we don't use this api, so safely stub out fcntl for appengine
-  if os.environ.get('SERVER_SOFTWARE', '').startswith('Google App Engine'):
+  if (os.environ.get('SERVER_SOFTWARE', '').startswith('Google App Engine') or
+      os.environ.get('SERVER_SOFTWARE', '').startswith('Development')):
     logging.warning('stub out fcntl')
     sys.modules['fcntl'] = 1
   from tlslite.x509 import X509
