@@ -20,7 +20,6 @@ import webapp2
 
 from simian import settings
 from simian.mac.api import dynamic_manifest
-from simian.mac.api import info
 from simian.mac.api import packages
 
 
@@ -38,8 +37,6 @@ app = webapp2.WSGIApplication([
      dynamic_manifest.DynamicManifest),
     (r'/api/dynamic_manifest/([^/]+)/([^/]+)/([^/]+)/?',
      dynamic_manifest.DynamicManifest),
-    (r'/api/info/?', info.InfoHandler),
-    (r'/api/info/([^/]+)/?', info.InfoHandler),
     (r'/api/packages/?', packages.PackageInfo),
     (r'/api/?$', ServeHello),
 ], debug=settings.DEBUG)

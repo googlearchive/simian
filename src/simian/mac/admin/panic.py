@@ -16,6 +16,7 @@
 #
 """Panic mode handler."""
 
+import httplib
 
 from google.appengine.api import users
 
@@ -44,6 +45,7 @@ class AdminPanic(admin.AdminHandler):
     self.Render(
         'panic.html', {'modes': modes, 'report_type': 'panic'})
 
+  @admin.AdminHandler.XsrfProtected('panic')
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
@@ -66,7 +68,7 @@ class AdminPanic(admin.AdminHandler):
         enabled = None
 
       if enabled is None:
-        self.error(400)
+        self.error(httplib.BAD_REQUEST)
       else:
         try:
           common.SetPanicMode(mode, enabled)
@@ -78,4 +80,4 @@ class AdminPanic(admin.AdminHandler):
 
           self.redirect('/admin/panic')
         except ValueError:
-          self.error(400)
+          self.error(httplib.BAD_REQUEST)

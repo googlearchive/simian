@@ -1096,7 +1096,6 @@ class Auth1Client(Auth1):
         #logging.debug('S= %s', sig)
 
         self._AddOutput({'m': out_m, 's': sig})
-
       except _Error, e:
         self._session.DeleteById('cn')
         self._AddError(str(e))

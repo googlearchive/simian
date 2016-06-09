@@ -16,6 +16,7 @@
 #
 """IP Blacklist admin handler."""
 
+import httplib
 import re
 from simian.mac import admin
 from simian.mac import models
@@ -29,7 +30,7 @@ class IPBlacklist(admin.AdminHandler):
   def get(self):
     """GET handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
     ips = {}
     try:
@@ -44,19 +45,20 @@ class IPBlacklist(admin.AdminHandler):
          'infopanel': 'Subnet format required (e.g. 192.168.1.0/24)'}
     self.Render('list_edit.html', d)
 
+  @admin.AdminHandler.XsrfProtected('ip_blacklist')
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
     values = self.request.get_all('item_0', None)
     comments = self.request.get_all('item_1', None)
     if values and (not comments or len(values) != len(comments)):
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       return
     is_ip = re.compile(IP_REGEX)
     if not all(map(is_ip.match, values)):
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write('Malformed IP')
       return
     ips = dict(zip(values, comments))

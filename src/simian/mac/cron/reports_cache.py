@@ -21,6 +21,7 @@ Classes:
 """
 
 import datetime
+import httplib
 import logging
 import time
 import webapp2
@@ -82,7 +83,7 @@ class ReportsCache(webapp2.RequestHandler):
       self._GenerateMsuUserSummary(**kwargs)
     else:
       logging.warning('Unknown ReportsCache cron requested: %s', name)
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _GenerateMsuUserSummary(self, since_days=None, now=None):
     """Generate summary of MSU user data.

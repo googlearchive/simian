@@ -16,6 +16,7 @@
 #
 """Admin handler."""
 
+import httplib
 import urllib
 
 from simian.mac import admin
@@ -36,29 +37,7 @@ DEFAULT_MSU_LOG_EVENT_LIMIT = 25
 class Misc(admin.AdminHandler):
   """"Handler for /admin."""
 
-  def post(self, report=None, uuid=None):
-    """Misc post handler."""
-    if not self.IsAdminUser() and not auth.IsSupportUser():
-      self.response.set_status(403)
-      return
-
-    if report not in ['clientlog']:
-      self.response.set_status(404)
-      return
-
-    action = self.request.get('action')
-    if action == 'delete_client_log':
-      key = uuid  # for /admin/clientlog/ it's really the uuid_logname
-      l = models.ClientLogFile.get_by_key_name(key)
-      if not l:
-        self.response.set_status(404)
-        return
-      l.delete()
-      return
-    else:
-      self.response.set_status(404)
-
-    self.redirect('/admin/%s/%s' % (report, uuid))
+  XSRF_PROTECTION = False
 
   def get(self, report=None, uuid=None):
     """Misc get handler."""
@@ -99,20 +78,21 @@ class Misc(admin.AdminHandler):
         self.response.out.write(l.log_file)
       else:
         self.response.out.write('Log not found')
-        self.response.set_status(404)
+        self.response.set_status(httplib.NOT_FOUND)
     elif report == 'maintenance':
       if not self.IsAdminUser():
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         return
+      # TODO(user): move into separate handler
       action = uuid
       if action == 'update_installs_schema':
         maintenance.UpdateInstallLogSchema()
       elif action == 'rebuild_install_counts':
         maintenance.RebuildInstallCounts()
       else:
-        self.response.set_status(404)
+        self.response.set_status(httplib.NOT_FOUND)
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _DisplayInstallsForPackage(self, pkg):
     """Displays a list of installs of a particular package."""
@@ -250,7 +230,7 @@ class Misc(admin.AdminHandler):
       uuid: str, computer uuid to display
     """
     if not uuid:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
     manifest = common.GetComputerManifest(uuid=uuid, packagemap=True)
     manifest_str = manifest['plist'].GetXml()

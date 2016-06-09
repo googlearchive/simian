@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 """ACL Groups admin handler."""
-
+import httplib
 import re
 from simian.mac import admin
 from simian.mac import models
@@ -31,7 +31,7 @@ class ACLGroups(admin.AdminHandler):
   def get(self, group=None):
     """GET handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
 
     if group:
@@ -49,10 +49,11 @@ class ACLGroups(admin.AdminHandler):
       d = {'report_type': 'acl_groups', 'groups': group_data}
       self.Render('acl_groups.html', d)
 
+  @admin.AdminHandler.XsrfProtected('acl_groups')
   def post(self, group=None):
     """POST handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
 
     if group:
@@ -63,7 +64,7 @@ class ACLGroups(admin.AdminHandler):
         if is_email.match(member):
           members.append(member)
         else:
-          self.error(400)
+          self.error(httplib.BAD_REQUEST)
           self.response.out.write('malformed email')
           return
       models.KeyValueCache.MemcacheWrappedSet(group, 'text_value',

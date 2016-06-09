@@ -36,16 +36,8 @@ from simian.auth import base
 logging.basicConfig(filename='/dev/null')
 
 
-class BaseModuleTest(mox.MoxTestBase):
+class BaseModuleTest(basetest.TestCase):
   """Test the 'base' module."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testConstants(self):
     self.assertTrue(base.MSG_SEP == ' ')

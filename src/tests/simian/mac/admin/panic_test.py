@@ -16,8 +16,12 @@
 #
 """panic module tests."""
 
+import httplib
 import logging
 
+
+import mock
+import stubout
 
 from django.conf import settings
 settings.configure()
@@ -25,18 +29,22 @@ from google.apputils import app
 from google.apputils import basetest
 import tests.appenginesdk
 from simian.mac.admin import panic
+from simian.mac.admin import xsrf
 from tests.simian.mac.common import test
 
 
+@mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
 class AdminPanicTest(test.RequestHandlerTest):
 
   def GetTestClassInstance(self):
-    return panic.AdminPanic()
+    request = None
+    response = mock.MagicMock()
+    return panic.AdminPanic(request, response)
 
   def GetTestClassModule(self):
     return panic
 
-  def testGet(self):
+  def testGet(self, _):
     """Test get()."""
     self.mox.StubOutWithMock(panic.common, 'IsPanicMode')
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
@@ -56,12 +64,13 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testPost(self):
+  def testPost(self, _):
     """Test post()."""
     mode = 'mode'
     enabled = 'enable'
 
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
+    self.request.get('xsrf_token').AndReturn('token')
     self.c.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn('enable')
@@ -76,7 +85,7 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.c.post()
     self.mox.VerifyAll()
 
-  def testPostWhenVerifyEnable(self):
+  def testPostWhenVerifyEnable(self, _):
     """Test post()."""
     mode = 'mode'
     enabled = 'enable'
@@ -84,6 +93,7 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
 
+    self.request.get('xsrf_token').AndReturn('token')
     self.c.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
@@ -95,7 +105,7 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.c.post()
     self.mox.VerifyAll()
 
-  def testPostWhenVerifyDisable(self):
+  def testPostWhenVerifyDisable(self, _):
     """Test post()."""
     mode = 'mode'
     enabled = 'disable'
@@ -103,6 +113,7 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
 
+    self.request.get('xsrf_token').AndReturn('token')
     self.c.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
@@ -114,7 +125,7 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.c.post()
     self.mox.VerifyAll()
 
-  def testPostWhenInvalidMode(self):
+  def testPostWhenInvalidMode(self, _):
     """Test post()."""
     mode = 'modezzz'
     enabled = 'enable'
@@ -122,18 +133,19 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
 
+    self.request.get('xsrf_token').AndReturn('token')
     self.c.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)
     panic.common.SetPanicMode(mode, True).AndRaise(ValueError)
-    self.MockError(400)
+    self.MockError(httplib.BAD_REQUEST)
 
     self.mox.ReplayAll()
     self.c.post()
     self.mox.VerifyAll()
 
-  def testPostWhenInvalidEnabled(self):
+  def testPostWhenInvalidEnabled(self, _):
     """Test post()."""
     mode = 'mode'
     enabled = 'enablzzZZZe'
@@ -141,11 +153,12 @@ class AdminPanicTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
     self.mox.StubOutWithMock(self.c, 'IsAdminUser')
 
+    self.request.get('xsrf_token').AndReturn('token')
     self.c.IsAdminUser().AndReturn(True)
     self.request.get('mode').AndReturn(mode)
     self.request.get('enabled').AndReturn(enabled)
     self.request.get('verify').AndReturn(True)
-    self.MockError(400)
+    self.MockError(httplib.BAD_REQUEST)
 
     self.mox.ReplayAll()
     self.c.post()

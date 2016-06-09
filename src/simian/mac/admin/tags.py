@@ -16,6 +16,7 @@
 #
 """Tags admin handler."""
 
+import httplib
 import urllib
 
 from google.appengine.ext import db
@@ -38,6 +39,7 @@ class Tags(admin.AdminHandler):
          'report_type': 'tags'}
     self.Render('tags.html', d)
 
+  @admin.AdminHandler.XsrfProtected('tags')
   def post(self):
     """POST handler."""
     can_mod_tags = (
@@ -66,7 +68,7 @@ class Tags(admin.AdminHandler):
         if t:
           t.delete()
         else:
-          self.error(404)
+          self.error(httplib.NOT_FOUND)
           return
         msg = 'Tag successfully deleted.'
     elif action == 'change':
@@ -74,7 +76,7 @@ class Tags(admin.AdminHandler):
       add_tag = self.request.get('add') == '1'
       t = models.Tag.get_by_key_name(tag)
       if not t:
-        self.error(404)
+        self.error(httplib.NOT_FOUND)
         return
 
       key = db.Key.from_path('Computer', uuid)

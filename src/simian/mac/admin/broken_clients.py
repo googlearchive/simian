@@ -16,7 +16,7 @@
 #
 """Broken Clients admin handler."""
 
-
+import httplib
 import re
 
 from simian.mac import admin
@@ -38,10 +38,11 @@ class BrokenClients(admin.AdminHandler):
     auth.DoUserAuth()
     self._DisplayBrokenClients()
 
+  @admin.AdminHandler.XsrfProtected('broken_clients')
   def post(self, uuid=None):
     """POST handler."""
     if not self.IsAdminUser() and not auth.IsSupportUser():
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       return
 
     action = self.request.get('action')

@@ -16,6 +16,7 @@
 #
 """Package Alias admin handler."""
 
+import httplib
 import json
 
 from simian.mac import admin
@@ -27,10 +28,11 @@ from simian.mac.common import auth
 class PackageAlias(admin.AdminHandler):
   """Handler for /admin/package_alias."""
 
+  @admin.AdminHandler.XsrfProtected('manifests_aliases')
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       return
 
     if self.request.get('create_package_alias'):
@@ -38,7 +40,7 @@ class PackageAlias(admin.AdminHandler):
     elif self.request.get('enabled'):
       self._TogglePackageAlias()
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _CreatePackageAlias(self):
     """Creates a new or edits an existing package alias, with verification."""

@@ -30,6 +30,7 @@
         <td>{{ c.likely_fixed }}</td>
         <td>
           <form method="POST" action="/admin/brokenclients">
+            <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
             <input type="hidden" name="uuid" value="{{ c.uuid }}"/>
             <input type="hidden" name="action" value="set_fixed"/>
             <button>Set Client As Fixed</button>
@@ -79,7 +80,7 @@
           {% if c.upload_logs_and_notify %}
             Email: {{ c.upload_logs_and_notify }}
           {% else %}
-            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this);">
+            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this, '{{ xsrf_token }}');">
               Upload logs</button>
           {% endif %}
         </td>
@@ -132,7 +133,7 @@
           {% if c.upload_logs_and_notify %}
             Email: {{ c.upload_logs_and_notify }}
           {% else %}
-            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this);">
+            <button onclick="simian.hostUploadLogs('{{ c.uuid }}', this, '{{ xsrf_token }}');">
               Upload logs</button>
           {% endif %}
         </td>

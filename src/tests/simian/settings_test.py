@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """settings module tests."""
-
-
 
 import os
 import random
@@ -686,109 +682,6 @@ class FilesystemSettingsTest(BaseSettingsTestBase):
 
   def testDir(self):
     """Test _Dir()."""
-    self._TestNotImplemented('_Dir')
-
-
-class DatastoreSettingsTest(BaseSettingsTestBase):
-  """Test DatastoreSettings."""
-
-  def _GetSettingsClassUnderTest(self):
-    return settings.DatastoreSettings
-
-  def _Globals(self):
-    return {'FOO': 1}
-
-  def testPopulateGlobals(self):
-    """Test _PopulateGlobals()."""
-    # This test is indirect because it tests the result of
-    # _PopulateGlobals() rather than actually mocking etc. But, it's
-    # a start.
-    self.assertEqual(self.settings._settings['foo'], 1)
-
-  def testGetWhenDict(self):
-    """Test _Get() when the setting is found in the DictSettings layer."""
-    self.assertEqual(self.settings._Get('foo'), 1)
-
-  def testGetWhenDatastoreModelsNotPresent(self):
-    """Test _Get() when no models can be found for settings."""
-    self._TestNotImplemented('_Get', 'k')
-    self.settings._module.models = None
-    self._TestNotImplemented('_Get', 'k')
-
-  def testGetWhenDatastore(self):
-    """Test _Get() when the setting is in the datastore."""
-    k = 'k'
-    v = 2
-    mtime = 0
-    mock_models = self.mox.CreateMockAnything()
-    mock_settings = self.mox.CreateMockAnything()
-    self.settings._module.models = mock_models
-    mock_models.Settings = mock_settings
-    mock_settings.GetItem(k).AndReturn([v, mtime])
-
-    self.mox.ReplayAll()
-    self.assertEqual(self.settings._Get(k), v)
-    self.mox.VerifyAll()
-
-  def testGetWhenDatastoreNotFound(self):
-    """Test _Get() when the setting is not in the datastore."""
-    k = 'k'
-    mock_models = self.mox.CreateMockAnything()
-    mock_settings = self.mox.CreateMockAnything()
-    self.settings._module.models = mock_models
-    mock_models.Settings = mock_settings
-    mock_settings.GetItem(k).AndReturn((None, None))
-
-    self.mox.ReplayAll()
-    self.assertRaises(AttributeError, self.settings._Get, k)
-    self.mox.VerifyAll()
-
-  def testSet(self):
-    """Test _Set()."""
-    k = 'k'
-    v = 2
-
-    mock_models = self.mox.CreateMockAnything()
-    mock_settings = self.mox.CreateMockAnything()
-    self.settings._module.models = mock_models
-    mock_models.Settings = mock_settings
-    mock_settings.SetItem(k, v)
-
-    self.mox.ReplayAll()
-    self.settings._Set(k, v)
-    self.mox.VerifyAll()
-
-  def testSetWhenDatastoreModelsNotPresent(self):
-    """Test _Set() when no models can be found for settings."""
-    self._TestNotImplemented('_Set', 'k', 1)
-    self.settings._module.models = None
-    self._TestNotImplemented('_Set', 'k', 1)
-
-  def testDir(self):
-    """Test _Dir()."""
-    entity_names = ['ello', 'there', 'ol', 'chap']
-    all_entities = []
-    class Junk(object):
-      pass
-    for entity_name in entity_names:
-      e = Junk()
-      e.name = entity_name
-      all_entities.append(e)
-
-    mock_models = self.mox.CreateMockAnything()
-    mock_settings = self.mox.CreateMockAnything()
-    self.settings._module.models = mock_models
-    mock_models.Settings = mock_settings
-    mock_settings.GetAll().AndReturn(all_entities)
-
-    self.mox.ReplayAll()
-    self.assertEqual(entity_names, self.settings._Dir())
-    self.mox.VerifyAll()
-
-  def testDirWhenDatastoreModelsNotPresent(self):
-    """Test _Dir() when no models can be found for settings."""
-    self._TestNotImplemented('_Dir')
-    self.settings._module.models = None
     self._TestNotImplemented('_Dir')
 
 

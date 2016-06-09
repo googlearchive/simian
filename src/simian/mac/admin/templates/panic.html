@@ -18,6 +18,7 @@
       <td>{{ mode.enabled }}</td>
       <td>
         <form method="POST" action="/admin/panic">
+          <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
           <input type="hidden" name="mode" value="{{ mode.name }}">
           {% if mode.enabled %}
             <input type="submit" name="enabled" value="disable">

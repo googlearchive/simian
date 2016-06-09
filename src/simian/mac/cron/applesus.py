@@ -21,6 +21,7 @@ Classes:
 """
 
 import datetime
+import httplib
 import logging
 import urllib2
 import webapp2
@@ -129,9 +130,9 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
     headers = {'If-Modified-Since': catalog.last_modified_header}
     response = urlfetch.fetch(
         url, headers=headers, deadline=30, validate_certificate=True)
-    if response.status_code == 304:
+    if response.status_code == httplib.NOT_MODIFIED:
       return False
-    elif response.status_code == 200:
+    elif response.status_code == httplib.OK:
       xml = response.content
       # TODO(user): validate response plist here.
       #logging.info(
@@ -181,7 +182,7 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
             'No english distributions exists for product %s; skipping.', key)
         continue  # No english distribution exists :(
       r = urllib2.urlopen(dist_url)
-      if r.code != 200:
+      if r.code != httplib.OK:
         continue
       dist_str = r.read()
       dist = applesus.DistFileDocument()

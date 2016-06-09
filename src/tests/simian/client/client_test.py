@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """client module tests."""
 
-
-
+import httplib
 import logging
 import sys
 
 
-import mox
+from pyfakefs import fake_filesystem
+import M2Crypto
+import mock
 import stubout
 
 from google.apputils import app
@@ -33,25 +32,9 @@ from google.apputils import basetest
 from simian import auth
 from simian.client import client
 
-if hasattr(mox.MockAnything, '__str__'): del(mox.MockAnything.__str__)
-logging.basicConfig(filename='/dev/null')
 
-
-class GenericException(Exception):
-  """A generic exception that can be used for mocks."""
-  pass
-
-
-class ClientModuleTest(mox.MoxTestBase):
+class ClientModuleTest(basetest.TestCase):
   """Test the client module."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testConstants(self):
     for a in [
@@ -61,100 +44,91 @@ class ClientModuleTest(mox.MoxTestBase):
       self.assertTrue(hasattr(client, a))
 
 
-class MultiBodyConnectionTest(mox.MoxTestBase):
+class MultiBodyConnectionTest(basetest.TestCase):
   """Test MultiBodyConnection class."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
+    super(MultiBodyConnectionTest, self).setUp()
     self.stubs = stubout.StubOutForTesting()
     self.mbc = client.MultiBodyConnection()
 
   def tearDown(self):
-    self.mox.UnsetStubs()
+    super(MultiBodyConnectionTest, self).tearDown()
     self.stubs.UnsetAll()
 
   def testSetProgressCallback(self):
     """Test SetProgressCallback()."""
-
     fn = lambda x: 1
 
-    self.mox.ReplayAll()
     self.assertFalse(hasattr(self.mbc, '_progress_callback'))
     self.mbc.SetProgressCallback(fn)
     self.assertEqual(self.mbc._progress_callback, fn)
     self.assertRaises(
         client.Error,
         self.mbc.SetProgressCallback, 1)
-    self.mox.VerifyAll()
 
   def testProgressCallback(self):
     """Test _ProgressCallback()."""
-
-    callback = self.mox.CreateMockAnything()
-    callback(1, 2).AndReturn(None)
-
-    self.mox.ReplayAll()
     self.mbc._ProgressCallback(1, 2)
-    self.mbc._progress_callback = callback
-    self.mbc._ProgressCallback(1, 2)
-    self.mox.VerifyAll()
 
-  def testRequest(self):
+    self.mbc._progress_callback = mock.Mock()
+    self.mbc._ProgressCallback(1, 2)
+
+    self.mbc._progress_callback.assert_called_with(1, 2)
+
+  @mock.patch.object(client.httplib.HTTPConnection, 'request')
+  def testRequest(self, mock_request):
     """Test request()."""
-    f_body = 'x' * 10000
-    f = self.mox.CreateMockAnything()
+    fs = fake_filesystem.FakeFilesystem()
+    fake_os = fake_filesystem.FakeOsModule(fs)
+    fake_open = fake_filesystem.FakeFileOpen(fs)
+
+    file_name = '/f1'
+    file_size = 10000
+    f_body = 'x' * file_size
+    fs.CreateFile(file_name, contents=f_body)
+    fake_file = fake_open(file_name, 'r')
+    self.stubs.Set(client, 'os', fake_os)
+
     method = 'GET'
     url = '/foo'
-    body = ['hello', f]
-    content_length = len(body[0]) + len(f_body)
+    body = ['hello', fake_file]
+    content_length = len(body[0]) + file_size
     headers = {
         'Content-Length': content_length,
     }
 
     self.mbc._is_https = False
 
-    mock_request = self.mox.CreateMockAnything()
-    self.stubs.Set(client.httplib.HTTPConnection, 'request', mock_request)
-    self.mbc.send = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(self.mbc, '_ProgressCallback')
+    self.mbc.send = mock.Mock()
+    self.mbc._ProgressCallback = mock.Mock()
 
-    f.tell().AndReturn(0)
-    f.seek(0, client.SEEK_END).AndReturn(None)
-    f.tell().AndReturn(len(f_body))
-    f.seek(0, client.SEEK_SET).AndReturn(None)
+    inorder_calls = mock.Mock()
+    inorder_calls.attach_mock(mock_request, 'request')
+    inorder_calls.attach_mock(self.mbc.send, 'send')
+    inorder_calls.attach_mock(self.mbc._ProgressCallback, '_ProgressCallback')
 
-    mock_request(
-        self.mbc,
-        method, url, headers=headers).AndReturn(None)
-    self.mbc._ProgressCallback(0, content_length)
-    self.mbc.send(body[0]).AndReturn(None)
-    self.mbc._ProgressCallback(len(body[0]), content_length).AndReturn(None)
-    f.read(8192).AndReturn(f_body[:8192])
-    self.mbc.send(f_body[:8192]).AndReturn(None)
-    self.mbc._ProgressCallback(
-        len(body[0]) + 8192, content_length).AndReturn(None)
-    f.read(8192).AndReturn(f_body[8192:])
-    self.mbc.send(f_body[8192:]).AndReturn(None)
-    self.mbc._ProgressCallback(
-        len(body[0]) + len(f_body), content_length).AndReturn(None)
-    f.read(8192).AndReturn('')
-    self.mbc._ProgressCallback(
-        len(body[0]) + len(f_body), content_length).AndReturn(None)
-
-    self.mox.ReplayAll()
     self.mbc.request(method, url, body=body)
-    self.mox.VerifyAll()
+
+    inorder_calls.assert_has_calls([
+        mock.call.request(self.mbc, method, url, headers=headers),
+        mock.call._ProgressCallback(0, content_length),
+        mock.call.send(body[0]),
+        mock.call._ProgressCallback(len(body[0]), content_length),
+        mock.call.send(f_body[:8192]),
+        mock.call._ProgressCallback(len(body[0]) + 8192, content_length),
+        mock.call.send(f_body[8192:]),
+        mock.call._ProgressCallback(len(body[0]) + file_size, content_length),
+        mock.call._ProgressCallback(len(body[0]) + file_size, content_length)])
 
 
-class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
+class HTTPSMultiBodyConnectionTest(basetest.TestCase):
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
     self.hostname = 'foohost'
     self.mbc = client.HTTPSMultiBodyConnection(self.hostname)
 
   def tearDown(self):
-    self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
   def testParentClassRequestAssumption(self):
@@ -163,64 +137,94 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
     url = '/foo'
     body = None
     headers = {}
-    mock_fn = self.mox.CreateMockAnything()
-    self.stubs.Set(
-        client.httplib.HTTPConnection, '_send_request', mock_fn)
-    mock_fn(method, url, body, headers).AndReturn(-1)
-    self.mox.ReplayAll()
-    c = client.httplib.HTTPConnection(self.hostname)
-    self.assertEqual(None, c.request(method, url))
-    self.mox.VerifyAll()
 
-  def testParentClassSendRequestAssumption(self):
+    with mock.patch.object(
+        client.httplib.HTTPConnection,
+        '_send_request', return_value=-1) as mock_fn:
+      c = client.httplib.HTTPConnection(self.hostname)
+      self.assertEqual(None, c.request(method, url))
+
+      mock_fn.assert_called_once_with(method, url, body, headers)
+
+  @mock.patch.object(client.httplib.HTTPConnection, 'send', autospec=True)
+  @mock.patch.object(client.httplib.HTTPConnection, 'endheaders')
+  @mock.patch.object(client.httplib.HTTPConnection, 'putheader')
+  @mock.patch.object(client.httplib.HTTPConnection, 'putrequest')
+  def testParentClassSendRequestAssumptionEmptyBody(
+      self, putrequest_mock, putheader_mock, endheaders_mock, send_mock):
     """Test assumptions of parent class _send_request()."""
     method = 'GET'
     url = '/foo'
     body1 = None
-    body2 = 'howdy'
     headers = {'foo': 'bar'}
 
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'putrequest')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'putheader')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'endheaders')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
+    inorder_calls = mock.Mock()
+    inorder_calls.attach_mock(putrequest_mock, 'putrequest')
+    inorder_calls.attach_mock(putheader_mock, 'putheader')
+    inorder_calls.attach_mock(endheaders_mock, 'endheaders')
+    inorder_calls.attach_mock(send_mock, 'send')
 
     # with a None body supplied, send() is never called.  on >=2.7
     # endheaders is still called with the body contents, even if they
     # are None.
-    client.httplib.HTTPConnection.putrequest(method, url).AndReturn(None)
-    client.httplib.HTTPConnection.putheader(
-        'foo', headers['foo']).AndReturn(None)
+    c = client.httplib.HTTPConnection(self.hostname)
+    c._send_request(method, url, body1, headers)
+
+    expected = [
+        mock.call.putrequest(method, url),
+        mock.call.putheader('foo', headers['foo'])
+    ]
     if sys.version_info[0] >= 2 and sys.version_info[1] >= 7:
-      client.httplib.HTTPConnection.endheaders(body1).AndReturn(None)
+      expected.append(mock.call.endheaders(body1))
     else:
-      client.httplib.HTTPConnection.endheaders().AndReturn(None)
+      expected.append(mock.call.endheaders())
+
+    inorder_calls.assert_has_calls(expected)
+
+  @mock.patch.object(client.httplib.HTTPConnection, 'send', autospec=True)
+  @mock.patch.object(client.httplib.HTTPConnection, 'endheaders')
+  @mock.patch.object(client.httplib.HTTPConnection, 'putheader')
+  @mock.patch.object(client.httplib.HTTPConnection, 'putrequest')
+  def testParentClassSendRequestAssumption(
+      self, putrequest_mock, putheader_mock, endheaders_mock, send_mock):
+    """Test assumptions of parent class _send_request()."""
+    method = 'GET'
+    url = '/foo'
+    body2 = 'howdy'
+    headers = {'foo': 'bar'}
+
+    inorder_calls = mock.Mock()
+    inorder_calls.attach_mock(putrequest_mock, 'putrequest')
+    inorder_calls.attach_mock(putheader_mock, 'putheader')
+    inorder_calls.attach_mock(endheaders_mock, 'endheaders')
+    inorder_calls.attach_mock(send_mock, 'send')
 
     # with a body supplied, send() is called inside _send_request() on
     # httplib < 2.6. in >=2.7 endheaders() sends the body and headers
     # all at once.
-    client.httplib.HTTPConnection.putrequest(method, url).AndReturn(None)
-    client.httplib.HTTPConnection.putheader(
-        'Content-Length', str(len(body2)))
-    client.httplib.HTTPConnection.putheader(
-        'foo', headers['foo']).AndReturn(None)
+    expected = [
+        mock.call.putrequest(method, url),
+        mock.call.putheader('Content-Length', str(len(body2))),
+        mock.call.putheader('foo', headers['foo'])
+    ]
     if sys.version_info[0] >= 2 and sys.version_info[1] >= 7:
-      client.httplib.HTTPConnection.endheaders(body2).AndReturn(None)
+      expected.append(mock.call.endheaders(body2))
     else:
-      client.httplib.HTTPConnection.endheaders().AndReturn(None)
-      client.httplib.HTTPConnection.send(body2).AndReturn(None)
+      expected.append(mock.call.endheaders())
+      expected.append(mock.send(body2))
 
-    self.mox.ReplayAll()
     c = client.httplib.HTTPConnection(self.hostname)
-    c._send_request(method, url, body1, headers)
     c._send_request(method, url, body2, headers)
-    self.mox.VerifyAll()
+
+    inorder_calls.assert_has_calls(expected)
 
   def testDirectSendTypes(self):
     """Test the DIRECT_SEND_TYPES constant for sane values."""
     self.assertTrue(type(self.mbc.DIRECT_SEND_TYPES) is list)
 
-  def testRequestSimple(self):
+  @mock.patch.object(client.httplib.HTTPConnection, 'request')
+  @mock.patch.object(client.httplib.HTTPConnection, 'send')
+  def testRequestSimple(self, mock_send, mock_request):
     """Test request with one body element."""
     method = 'GET'
     url = '/foo'
@@ -229,17 +233,17 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
         'Content-Length': len(body),
         'Host': self.hostname,
     }
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'request')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
-    client.httplib.HTTPConnection.request(
-        self.mbc,
-        method, url, headers=headers).AndReturn(None)
-    client.httplib.HTTPConnection.send(body).AndReturn(None)
-    self.mox.ReplayAll()
-    self.mbc.request(method, url, body=body)
-    self.mox.VerifyAll()
 
-  def testRequestMultiString(self):
+    self.mbc.request(method, url, body=body)
+
+    mock_request.assert_called_once_with(
+        self.mbc,
+        method, url, headers=headers)
+    mock_send.assert_called_once_with(body)
+
+  @mock.patch.object(client.httplib.HTTPConnection, 'request')
+  @mock.patch.object(client.httplib.HTTPConnection, 'send')
+  def testRequestMultiString(self, send_mock, request_mock):
     """Test request() with multiple body string elements."""
     method = 'GET'
     url = '/foo'
@@ -248,21 +252,24 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
         'Content-Length': sum(map(len, body)),
         'Host': self.hostname,
     }
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'request')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
-    client.httplib.HTTPConnection.request(
-        self.mbc,
-        method, url, headers=headers).AndReturn(None)
     for s in body:
       client.httplib.HTTPConnection.send(s).AndReturn(None)
-    self.mox.ReplayAll()
     self.mbc.request(method, url, body=body)
-    self.mox.VerifyAll()
 
-  def testRequestMultiMixed(self):
+    request_mock.assert_called_once_with(self.mbc, method, url, headers=headers)
+    send_mock.assert_has_calls([mock.call(x) for x in body])
+
+  @mock.patch.object(client.httplib.HTTPConnection, 'send')
+  @mock.patch.object(client.httplib.HTTPConnection, 'request')
+  def testRequestMultiMixed(self, request_mock, send_mock):
     """Test request() with multiple mixed body elements."""
+    filepath = '/somefilename'
     f_body = 'there'
-    f = self.mox.CreateMockAnything()
+    fs = fake_filesystem.FakeFilesystem()
+    fs.CreateFile(filepath, contents=f_body)
+    fake_open = fake_filesystem.FakeFileOpen(fs)
+
+    f = fake_open(filepath)
     method = 'GET'
     url = '/foo'
     body = ['hello', f]
@@ -272,25 +279,12 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
         'Host': self.hostname,
     }
 
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'request')
-    self.mox.StubOutWithMock(client.httplib.HTTPConnection, 'send')
-
-    f.tell().AndReturn(0)
-    f.seek(0, client.SEEK_END).AndReturn(None)
-    f.tell().AndReturn(len(f_body))
-    f.seek(0, client.SEEK_SET).AndReturn(None)
-
-    client.httplib.HTTPConnection.request(
-        self.mbc,
-        method, url, headers=headers).AndReturn(None)
-    client.httplib.HTTPConnection.send(body[0]).AndReturn(None)
-    f.read(8192).AndReturn(f_body)
-    client.httplib.HTTPConnection.send(f_body).AndReturn(None)
-    f.read(8192).AndReturn('')
-
-    self.mox.ReplayAll()
     self.mbc.request(method, url, body=body)
-    self.mox.VerifyAll()
+
+    request_mock.assert_called_once_with(self.mbc, method, url, headers=headers)
+
+    self.assertEqual(2, send_mock.call_count)
+    send_mock.assert_has_calls([mock.call(body[0]), mock.call(f_body)])
 
   def testSetCACertChain(self):
     """Test SetCACertChain()."""
@@ -299,154 +293,143 @@ class HTTPSMultiBodyConnectionTest(mox.MoxTestBase):
 
   def testIsValidCert(self):
     """Test _IsValidCert()."""
-    store = self.mox.CreateMockAnything()
-
-    self.mox.ReplayAll()
-    self.assertEqual(1, self.mbc._IsValidCert(1, store))
-    self.mox.VerifyAll()
+    self.assertEqual(1, self.mbc._IsValidCert(1, 1))
 
   def testIsValidCertOkZero(self):
     """Test _IsValidCert()."""
-    store = self.mox.CreateMockAnything()
-    store.get_current_cert().AndReturn(store)
-    store.get_subject().AndReturn(store)
-    store.__str__().AndReturn('valid')
+    cert = mock.create_autospec(M2Crypto.X509.X509)
+    cert_subject = mock.create_autospec(M2Crypto.X509.X509_Name)
+    store = mock.create_autospec(M2Crypto.X509.X509_Store_Context)
+    store.get_current_cert.return_value = cert
+    cert.get_subject.return_value = cert_subject
+    cert_subject.__str__.return_value = 'valid'
 
-    self.mox.ReplayAll()
     self.assertEqual(0, self.mbc._IsValidCert(0, store))
-    self.mox.VerifyAll()
+    cert_subject.__str__.assert_called()
 
-  def testLoadCACertChain(self):
+  @mock.patch.object(client.tempfile, 'NamedTemporaryFile', autospec=True)
+  def testLoadCACertChain(self, named_temporary_file_mock):
     """Test _LoadCACertChain()."""
-    ctx = self.mox.CreateMockAnything()
-    tf = self.mox.CreateMockAnything()
+    temp_filepath = '/tmp/somefilename'
+    fs = fake_filesystem.FakeFilesystem()
+    fs.CreateFile(temp_filepath)
+    fake_open = fake_filesystem.FakeFileOpen(fs)
+
+    tf = fake_open(temp_filepath, 'w')
+    named_temporary_file_mock.return_value = tf
+
+    ctx = mock.create_autospec(M2Crypto.SSL.Context)
+    ctx.load_verify_locations.return_value = 1
     cert_chain = 'cert chain la la ..'
 
     self.mbc._ca_cert_chain = cert_chain
-    self.mox.StubOutWithMock(client.tempfile, 'NamedTemporaryFile')
 
-    client.tempfile.NamedTemporaryFile().AndReturn(tf)
-    tf.write(cert_chain).AndReturn(None)
-    tf.flush().AndReturn(None)
-    tf.name = '/tmp/somefilename'
-
-    ctx.load_verify_locations(cafile=tf.name).AndReturn(1)
-    ctx.set_verify(
-        client.SSL.verify_peer | client.SSL.verify_fail_if_no_peer_cert,
-        depth=9,
-        callback=self.mbc._IsValidCert).AndReturn(None)
-    tf.close()
-
-    self.mox.ReplayAll()
     self.mbc._LoadCACertChain(ctx)
-    self.mox.VerifyAll()
 
-  def testLoadCACertChainWhenLoadError(self):
+    self.assertEqual(cert_chain, fake_open(temp_filepath, 'r').read())
+
+    # mock 2.0.0 incorrectly binds spec to calls
+    ctx._spec_signature = None
+
+    ctx.assert_has_calls([
+        mock.call.load_verify_locations(cafile=tf.name),
+        mock.call.set_verify(
+            client.SSL.verify_peer | client.SSL.verify_fail_if_no_peer_cert,
+            depth=9, callback=self.mbc._IsValidCert)])
+
+  @mock.patch.object(client.tempfile, 'NamedTemporaryFile', autospec=True)
+  def testLoadCACertChainWhenLoadError(self, named_temporary_file_mock):
     """Test _LoadCACertChain()."""
-    ctx = self.mox.CreateMockAnything()
-    tf = self.mox.CreateMockAnything()
+    temp_filepath = '/tmp/somefilename'
+    fs = fake_filesystem.FakeFilesystem()
+    fs.CreateFile(temp_filepath)
+    fake_open = fake_filesystem.FakeFileOpen(fs)
+
+    tf = fake_open(temp_filepath, 'w')
+    named_temporary_file_mock.return_value = tf
+
     cert_chain = 'cert chain la la ..'
 
     self.mbc._ca_cert_chain = cert_chain
-    self.mox.StubOutWithMock(client.tempfile, 'NamedTemporaryFile')
 
-    client.tempfile.NamedTemporaryFile().AndReturn(tf)
-    tf.write(cert_chain).AndReturn(None)
-    tf.flush().AndReturn(None)
-    tf.name = '/tmp/somefilename'
-
-    ctx.load_verify_locations(cafile=tf.name).AndReturn(-1)
-    tf.close()
-
-    self.mox.ReplayAll()
+    ctx = mock.create_autospec(M2Crypto.SSL.Context)
     self.assertRaises(
         client.SimianClientError, self.mbc._LoadCACertChain, ctx)
-    self.mox.VerifyAll()
+
+    ctx.load_verify_locations.assert_called_once_with(cafile=tf.name)
+
+    self.assertEqual(cert_chain, fake_open(temp_filepath, 'r').read())
 
   def testLoadCACertChainWhenNone(self):
     """Test _LoadCACertChain()."""
-    ctx = self.mox.CreateMockAnything()
-
-    self.mox.ReplayAll()
     self.assertRaises(
-        client.SimianClientError, self.mbc._LoadCACertChain, ctx)
-    self.mox.VerifyAll()
+        client.SimianClientError, self.mbc._LoadCACertChain, mock.MagicMock())
 
-  def testConnect(self):
+  @mock.patch.object(client.SSL, 'Context', autospec=True)
+  @mock.patch.object(client.SSL, 'Connection', autospec=True)
+  def testConnect(self, connection_mock, context_mock):
     """Test connect()."""
-    context = self.mox.CreateMockAnything()
-    conn = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(client, 'SSL')
-    self.mox.StubOutWithMock(client.SSL, 'Context')
-    self.mox.StubOutWithMock(client.SSL, 'Connection')
-    self.mox.StubOutWithMock(self.mbc, '_LoadCACertChain')
+    context = context_mock()
+    conn = connection_mock(context)
+
+    connection_mock.reset_mock()
+    context_mock.reset_mock()
 
     self.mbc._ca_cert_chain = 'cert chain foo'
 
-    client.SSL.Context(client._SSL_VERSION).AndReturn(context)
+    context_mock.return_value = context
+    connection_mock.return_value = conn
+
+    with mock.patch.object(self.mbc, '_LoadCACertChain') as load_ca_chain_mock:
+      self.mbc.connect()
+      self.assertEqual(self.mbc.sock, conn)
+
+      load_ca_chain_mock.assert_called_once_with(context)
+
+    context_mock.assert_called_once_with(client._SSL_VERSION)
+    connection_mock.assert_called_once_with(context)
+
+    conn.connect.assert_called_once_with((self.mbc.host, self.mbc.port))
     if client._CIPHER_LIST:
-      context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
-
-    self.mbc._LoadCACertChain(context).AndReturn(None)
-
-    def __connect(address):  # pylint: disable=g-bad-name
-      self.assertEqual(address, (self.mbc.host, self.mbc.port))
-      return None
-
-    client.SSL.Connection(context).AndReturn(conn)
-    conn.connect = __connect
-
-    self.mox.ReplayAll()
-    self.mbc.connect()
-    self.assertEqual(self.mbc.sock, conn)
-    self.mox.VerifyAll()
+      context.assert_has_calls([mock.call.set_cipher_list(client._CIPHER_LIST)])
 
   def testConnectWhenNoCACertChain(self):
     """Test connect()."""
-    context = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(client, 'SSL')
-    self.mox.StubOutWithMock(client.SSL, 'Context')
+    context = mock.create_autospec(M2Crypto.SSL.Context)
 
-    client.SSL.Context(client._SSL_VERSION).AndReturn(context)
-    if client._CIPHER_LIST:
-      context.set_cipher_list(client._CIPHER_LIST).AndReturn(None)
+    with mock.patch.object(client.SSL, 'Context', return_value=context):
+      self.assertRaises(client.SimianClientError, self.mbc.connect)
 
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, self.mbc.connect)
-    self.mox.VerifyAll()
+      if client._CIPHER_LIST:
+        context.assert_has_calls(
+            [mock.call.set_cipher_list(client._CIPHER_LIST)])
 
 
-class HttpsClientTest(mox.MoxTestBase):
+class HttpsClientTest(basetest.TestCase):
   """Test HttpsClient class."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
+    super(HttpsClientTest, self).setUp()
     self.stubs = stubout.StubOutForTesting()
     self.hostname = 'hostname'
     self.port = None
     self.client = client.HttpsClient(self.hostname)
 
   def tearDown(self):
-    self.mox.UnsetStubs()
+    super(HttpsClientTest, self).tearDown()
     self.stubs.UnsetAll()
 
-  def testInit(self):
+  @mock.patch.object(client.HttpsClient, '_LoadHost')
+  def testInit(self, mock_lh):
     """Test __init__()."""
-    mock_lh = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(self.client, '_LoadHost')
-    self.stubs.Set(client.HttpsClient, '_LoadHost', mock_lh)
-    mock_lh(self.hostname, None, None).AndReturn(None)
-    self.mox.ReplayAll()
     i = client.HttpsClient(self.hostname)
     self.assertEqual(i._progress_callback, None)
     self.assertEqual(i._ca_cert_chain, None)
-    self.mox.VerifyAll()
+
+    mock_lh.assert_called_once_with(self.hostname, None, None)
 
   def testLoadHost(self):
     """Test _LoadHost()."""
-
-    self.mox.ReplayAll()
-
     self.client._LoadHost('host')
     self.assertEqual(self.client.hostname, 'host')
     self.assertEqual(self.client.port, None)
@@ -514,8 +497,6 @@ class HttpsClientTest(mox.MoxTestBase):
     self.assertEqual(self.client.proxy_port, 8)
     self.assertTrue(self.client.proxy_use_https)
 
-    self.mox.VerifyAll()
-
   def testSetCACertChain(self):
     """Test SetCACertChain()."""
     self.client.SetCACertChain('foo')
@@ -523,9 +504,9 @@ class HttpsClientTest(mox.MoxTestBase):
 
   def _TestConnect(self, test_client, hostname, port):
     """Test _Connect()."""
-    m = self.mox.CreateMockAnything()
-    # we stub this out weirdly because the parent class isn't an object,
-    # it's an oldschool Python class.
+    m = mock.Mock()
+    m.return_value = m
+
     test_client._ca_cert_chain = 'cert chain'
     use_https = (
         (not test_client.proxy_hostname and test_client.use_https) or
@@ -534,13 +515,15 @@ class HttpsClientTest(mox.MoxTestBase):
       self.stubs.Set(client, 'HTTPSMultiBodyConnection', m)
     else:
       self.stubs.Set(client, 'HTTPMultiBodyConnection', m)
-    m(hostname, port).AndReturn(m)
+
+    expected = [mock.call(hostname, port)]
     if use_https:
-      m.SetCACertChain('cert chain').AndReturn(None)
-    m.connect().AndReturn(None)
-    self.mox.ReplayAll()
+      expected.append(mock.call.SetCACertChain('cert chain'))
+    expected.append(mock.call.connect())
+
     test_client._Connect()
-    self.mox.VerifyAll()
+
+    m.assert_has_calls(expected)
 
   def testConnect(self):
     self._TestConnect(self.client, self.hostname, self.port)
@@ -556,20 +539,20 @@ class HttpsClientTest(mox.MoxTestBase):
     body = 'howdy sir'
     body_len = len(body)
 
-    conn = self.mox.CreateMockAnything()
-    response = self.mox.CreateMockAnything()
-    conn.getresponse().AndReturn(response)
-    response.getheaders().AndReturn(headers)
+    response = mock.create_autospec(httplib.HTTPResponse)
+    response.getheaders.return_value = headers
+    response.read.side_effect = [body, None]
     response.status = status
-    response.read().AndReturn(body)
+    response.reason = 'OK'
 
-    self.mox.ReplayAll()
+    conn = mock.create_autospec(httplib.HTTPConnection)
+    conn.getresponse.return_value = response
+
     r = self.client._GetResponse(conn)
     self.assertEqual(r.headers, headers)
     self.assertEqual(r.status, status)
     self.assertEqual(r.body, body)
     self.assertEqual(r.body_len, body_len)
-    self.mox.VerifyAll()
 
   def testGetResponseOutputFile(self):
     """Test _GetResponse() sending the body to output_file."""
@@ -577,83 +560,83 @@ class HttpsClientTest(mox.MoxTestBase):
     status = 200
     body = 'howdy sir'
     body_len = len(body)
+    path = '/file'
 
-    conn = self.mox.CreateMockAnything()
-    response = self.mox.CreateMockAnything()
-    output_file = self.mox.CreateMockAnything()
+    fs = fake_filesystem.FakeFilesystem()
+    fs.CreateFile(path)
+    fake_open = fake_filesystem.FakeFileOpen(fs)
+    output_file = fake_open(path, 'w')
 
-    conn.getresponse().AndReturn(response)
-    response.getheaders().AndReturn(headers)
+    response = mock.create_autospec(httplib.HTTPResponse)
+    response.getheaders.return_value = headers
+    response.read.side_effect = [body, None]
     response.status = status
-    response.read(8192).AndReturn(body)
-    output_file.write(body).AndReturn(None)
-    response.read(8192).AndReturn(None)
+    response.reason = 'Ok'
 
-    self.mox.ReplayAll()
+    conn = mock.create_autospec(httplib.HTTPSConnection)
+    conn.getresponse.return_value = response
+
     r = self.client._GetResponse(conn, output_file=output_file)
     self.assertEqual(r.headers, headers)
     self.assertEqual(r.status, status)
     self.assertEqual(r.body, None)
     self.assertEqual(r.body_len, body_len)
-    self.mox.VerifyAll()
+
+    output_file.close()
+    self.assertEqual(body, fake_open(path).read())
 
   def testRequest(self):
     """Test _Request()."""
     method = 'zGET'
     url = u'/url'
     body1 = {'encodeme': 1}
-    body1_encoded = 'encodeme:: 1'
+    body1_encoded = client.urllib.urlencode(body1)
     body2 = 'leave this alone'
     headers = {'User-Agent': 'gzip'}
 
-    conn = self.mox.CreateMockAnything()
+    conn = mock.create_autospec(httplib.HTTPConnection)
 
-    self.stubs.Set(
-        client, 'urllib', self.mox.CreateMockAnything(client.urllib))
-    client.urllib.urlencode(body1).AndReturn(body1_encoded)
-    conn.request(
-        method, str(url), body=body1_encoded, headers=headers).AndReturn(None)
-    conn.request(
-        method, str(url), body=body2, headers=headers).AndReturn(None)
-
-    self.mox.ReplayAll()
     self.client._Request(method, conn, url, body1, headers)
     self.client._Request(method, conn, url, body2, headers)
-    self.mox.VerifyAll()
+
+    conn.request.assert_has_calls([
+        mock.call(method, str(url), body=body1_encoded, headers=headers),
+        mock.call(method, str(url), body=body2, headers=headers)])
 
   def _TestDoRequestResponse(self, test_client, url, req_url):
     """Test _DoRequestResponse()."""
     method = 'zomg'
-    conn = self.mox.CreateMockAnything()
+    conn = mock.create_autospec(httplib.HTTPConnection)
     body = 'body'
     headers = 'headers'
     output_file = None
-    response = self.mox.CreateMockAnything()
+    response = mock.create_autospec(httplib.HTTPResponse)
     response.status = 200
     proxy_use_https = test_client.proxy_use_https
 
-    self.mox.StubOutWithMock(test_client, '_Connect')
-    self.mox.StubOutWithMock(test_client, '_Request')
-    self.mox.StubOutWithMock(test_client, '_GetResponse')
+    with mock.patch.object(test_client, '_Connect', return_value=conn):
+      request_mock = mock.create_autospec(test_client._Request)
+      self.stubs.Set(test_client, '_Request', request_mock)
+      get_response_mock = mock.Mock(return_value=response)
+      self.stubs.Set(test_client, '_GetResponse', get_response_mock)
 
-    test_client._Connect().AndReturn(conn)
-    test_client._Request(
-        method, conn, req_url, body=body, headers=headers).AndReturn(None)
-    test_client._GetResponse(
-        conn, output_file=output_file).AndReturn(response)
+      self.assertEqual(
+          response,
+          test_client._DoRequestResponse(
+              method, url, body, headers, output_file))
+      request_mock.assert_called_once_with(
+          method, conn, req_url, body=body, headers=headers)
+      get_response_mock.assert_called_once_with(conn, output_file=output_file)
 
-    test_client._Connect().AndRaise(client.httplib.HTTPException)
+    conn.assert_not_called()
+    response.assert_not_called()
 
-    self.mox.ReplayAll()
-    self.assertEqual(
-        response,
-        test_client._DoRequestResponse(
-            method, url, body, headers, output_file))
-    self.assertRaises(
-        client.HTTPError,
-        test_client._DoRequestResponse,
-        method, url, body, headers, output_file)
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        test_client, '_Connect', side_effect=client.httplib.HTTPException):
+      self.assertRaises(
+          client.HTTPError,
+          test_client._DoRequestResponse,
+          method, url, body, headers, output_file)
 
   def testDoRequestResponse(self):
     self._TestDoRequestResponse(self.client, '/url', '/url')
@@ -694,7 +677,8 @@ class HttpsClientTest(mox.MoxTestBase):
         NotImplementedError,
         self.client.Do, 'badmethod', '/url')
 
-  def testDo(self):
+  @mock.patch.object(client.time, 'sleep')
+  def testDo(self, mock_sleep):
     """Test Do() with correct arguments and no output_filename."""
     method = 'GET'
     url = 'url'
@@ -703,27 +687,33 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = None
     output_filename = None
 
-    self.mox.StubOutWithMock(client.time, 'sleep')
-    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
     # HTTP 500 should retry.
-    mock_response_fail = self.mox.CreateMockAnything()
+    mock_response_fail = mock.create_autospec(httplib.HTTPResponse)
     mock_response_fail.status = 500
-    client.time.sleep(0).AndReturn(None)
-    self.client._DoRequestResponse(
-        method, url, body=body, headers={}, output_file=output_file).AndReturn(
-            mock_response_fail)
     # HTTP 200 should succeed.
-    mock_response = self.mox.CreateMockAnything()
+    mock_response = mock.create_autospec(httplib.HTTPResponse)
     mock_response.status = 200
-    client.time.sleep(5).AndReturn(None)
-    self.client._DoRequestResponse(
-        method, url, body=body, headers={}, output_file=output_file).AndReturn(
-            mock_response)
-    self.mox.ReplayAll()
-    self.client.Do(method, url, body, headers, output_filename)
-    self.mox.VerifyAll()
 
-  def testDoWithRetryHttp500(self):
+    with mock.patch.object(
+        self.client,
+        '_DoRequestResponse',
+        side_effect=[
+            mock_response_fail, mock_response]) as mock_do_request_response:
+
+      inorder_calls = mock.Mock()
+      inorder_calls.attach_mock(mock_sleep, 'sleep')
+      inorder_calls.attach_mock(mock_do_request_response, '_DoRequestResponse')
+      do_request_response_call = mock.call._DoRequestResponse(
+          method, url, body=body, headers={}, output_file=output_file)
+
+      self.client.Do(method, url, body, headers, output_filename)
+
+      inorder_calls.assert_has_calls([
+          mock.call.sleep(0), do_request_response_call,
+          mock.call.sleep(5), do_request_response_call])
+
+  @mock.patch.object(client.time, 'sleep')
+  def testDoWithRetryHttp500(self, mock_sleep):
     """Test Do() with a HTTP 500, thus a retry."""
     method = 'GET'
     url = 'url'
@@ -732,21 +722,30 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = None
     output_filename = None
 
-    self.mox.StubOutWithMock(client.time, 'sleep')
-    mock_response = self.mox.CreateMockAnything()
+    inorder_calls = mock.Mock()
+    inorder_calls.attach_mock(mock_sleep, 'sleep')
+
+    mock_response = mock.create_autospec(httplib.HTTPResponse)
     mock_response.status = 500
-    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
+    with mock.patch.object(
+        self.client,
+        '_DoRequestResponse',
+        return_value=mock_response) as mock_do_request_response:
+      inorder_calls.attach_mock(mock_do_request_response, '_DoRequestResponse')
+
+      self.client.Do(method, url, body, headers, output_filename)
+
+    expected = []
     for i in xrange(0, client.DEFAULT_HTTP_ATTEMPTS):
-      client.time.sleep(i * 5).AndReturn(None)
-      self.client._DoRequestResponse(
-          method, url, body=body, headers={},
-          output_file=output_file).AndReturn(mock_response)
+      expected += [
+          mock.call.sleep(i * 5),
+          mock.call._DoRequestResponse(
+              method, url, body=body, headers={},
+              output_file=output_file)]
+    inorder_calls.assert_has_calls(expected)
 
-    self.mox.ReplayAll()
-    r = self.client.Do(method, url, body, headers, output_filename)
-    self.mox.VerifyAll()
-
-  def testDoWithRetryHttpError(self):
+  @mock.patch.object(client.time, 'sleep')
+  def testDoWithRetryHttpError(self, mock_sleep):
     """Test Do() with a HTTP 500, thus a retry, but ending with HTTPError."""
     method = 'GET'
     url = 'url'
@@ -755,20 +754,30 @@ class HttpsClientTest(mox.MoxTestBase):
     output_file = None
     output_filename = None
 
-    self.mox.StubOutWithMock(client.time, 'sleep')
-    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
-    for i in xrange(0, client.DEFAULT_HTTP_ATTEMPTS):
-      client.time.sleep(i * 5).AndReturn(None)
-      self.client._DoRequestResponse(
-          method, url, body=body, headers={},
-          output_file=output_file).AndRaise(client.HTTPError)
+    inorder_calls = mock.Mock()
+    inorder_calls.attach_mock(mock_sleep, 'sleep')
 
-    self.mox.ReplayAll()
-    self.assertRaises(
-        client.HTTPError,
-        self.client.Do,
-        method, url, body, headers, output_filename)
-    self.mox.VerifyAll()
+    mock_response = mock.create_autospec(httplib.HTTPResponse)
+    mock_response.status = 500
+    with mock.patch.object(
+        self.client,
+        '_DoRequestResponse',
+        side_effect=client.HTTPError) as mock_do_request_response:
+      inorder_calls.attach_mock(mock_do_request_response, '_DoRequestResponse')
+
+      self.assertRaises(
+          client.HTTPError,
+          self.client.Do,
+          method, url, body, headers, output_filename)
+
+    expected = []
+    for i in xrange(0, client.DEFAULT_HTTP_ATTEMPTS):
+      expected += [
+          mock.call.sleep(i * 5),
+          mock.call._DoRequestResponse(
+              method, url, body=body, headers={},
+              output_file=output_file)]
+    inorder_calls.assert_has_calls(expected)
 
   def testDoWithOutputFilename(self):
     """Test Do() where an output_filename is supplied."""
@@ -776,22 +785,23 @@ class HttpsClientTest(mox.MoxTestBase):
     url = 'url'
     body = None
     headers = {}
-    mock_open = self.mox.CreateMockAnything()
-    output_file = self.mox.CreateMockAnything()
+
+    output_file = mock.create_autospec(file)
+    mock_open = mock.Mock(return_value=output_file)
     output_filename = '/tmpfile'
 
-    mock_response = self.mox.CreateMockAnything()
+    mock_response = mock.create_autospec(httplib.HTTPResponse)
     mock_response.status = 200
-    self.mox.StubOutWithMock(self.client, '_DoRequestResponse')
-    mock_open(output_filename, 'w').AndReturn(output_file)
-    self.client._DoRequestResponse(
-        method, url, body=body, headers={}, output_file=output_file).AndReturn(
-            mock_response)
-    output_file.close().AndReturn(None)
-    self.mox.ReplayAll()
-    self.client.Do(
-        method, url, body, headers, output_filename, _open=mock_open)
-    self.mox.VerifyAll()
+
+    with mock.patch.object(
+        self.client,
+        '_DoRequestResponse',
+        return_value=mock_response) as mock_do_request_response:
+      self.client.Do(
+          method, url, body, headers, output_filename, _open=mock_open)
+
+      mock_do_request_response.assert_called_once_with(
+          method, url, body=body, headers={}, output_file=output_file)
 
   def testDoWithProxy(self):
     """Test Do() with a proxy specified."""
@@ -800,16 +810,18 @@ class HttpsClientTest(mox.MoxTestBase):
     proxy = 'proxyhost:123'
 
     # Working case.
-    mock_response = self.mox.CreateMockAnything()
+    mock_response = mock.create_autospec(httplib.HTTPConnection)
     mock_response.status = 200
     test_client = client.HttpsClient(self.hostname, proxy=proxy)
-    self.mox.StubOutWithMock(test_client, '_DoRequestResponse')
-    test_client._DoRequestResponse(
-        method, url, body=None, headers={}, output_file=None).AndReturn(
-            mock_response)
-    self.mox.ReplayAll()
-    test_client.Do(method, url)
-    self.mox.VerifyAll()
+
+    with mock.patch.object(
+        test_client,
+        '_DoRequestResponse',
+        return_value=mock_response) as mock_do_request_response:
+      test_client.Do(method, url)
+      mock_do_request_response.assert_called_once_with(
+          method, url, body=None, headers={}, output_file=None)
+
     # No port case.
     proxy = 'proxyhost'
     self.assertRaises(
@@ -822,155 +834,100 @@ class HttpsClientTest(mox.MoxTestBase):
         client.HttpsClient, self.hostname, proxy=proxy)
 
 
-class HttpsAuthClientTest(mox.MoxTestBase):
+class HttpsAuthClientTest(basetest.TestCase):
   """Test HttpsAuthClient."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
+    super(HttpsAuthClientTest, self).setUp()
     self.stubs = stubout.StubOutForTesting()
     self.hostname = 'hostname'
     self.port = None
     self.client = client.HttpsAuthClient(self.hostname)
 
+    self.fs = fake_filesystem.FakeFilesystem()
+    fake_os = fake_filesystem.FakeOsModule(self.fs)
+    self.fake_open = fake_filesystem.FakeFileOpen(self.fs)
+    self.stubs.Set(client, 'os', fake_os)
+
   def tearDown(self):
-    self.mox.UnsetStubs()
+    super(HttpsAuthClientTest, self).tearDown()
     self.stubs.UnsetAll()
 
-  def testInit(self):
+  @mock.patch.object(client.HttpsAuthClient, '_LoadRootCertChain')
+  def testInit(self, _):
     """Test __init__()."""
-    self.mox.StubOutWithMock(client.HttpsAuthClient, '_LoadRootCertChain')
-    client.HttpsAuthClient._LoadRootCertChain().AndReturn(None)
-    self.mox.ReplayAll()
     c = client.HttpsAuthClient(self.hostname)
     self.assertEqual(c._auth1, None)
     self.assertEqual(c._cookie_token, None)
-    self.mox.VerifyAll()
 
 
   def testPlatformSetup(self):
     """Test PlatformSetup()."""
-    self.mox.StubOutWithMock(client.platform, 'system')
-    client.platform.system().AndReturn('Darwin')
-    client.platform.system().AndReturn('other')
+    with mock.patch.object(client.platform, 'system', return_value='Darwin'):
+      self.client.facter_cache_path = 'x'
+      self.client._PlatformSetup()
+      self.assertEqual(
+          self.client.facter_cache_path, self.client.FACTER_CACHE_OSX_PATH)
 
-    self.mox.ReplayAll()
-    self.client.facter_cache_path = 'x'
-    self.client._PlatformSetup()
-    self.assertEqual(
-        self.client.facter_cache_path, self.client.FACTER_CACHE_OSX_PATH)
-    self.client.facter_cache_path = 'x'
-    self.client._PlatformSetup()
-    self.assertEqual(
-        self.client.facter_cache_path, self.client.FACTER_CACHE_DEFAULT_PATH)
-    self.mox.VerifyAll()
+    with mock.patch.object(client.platform, 'system', return_value='other'):
+      self.client.facter_cache_path = 'x'
+      self.client._PlatformSetup()
+      self.assertEqual(
+          self.client.facter_cache_path, self.client.FACTER_CACHE_DEFAULT_PATH)
 
   def testGetFacter(self):
     """Test GetFacter()."""
     st_dt = client.datetime.datetime.now()
-    self.client.facter_cache_path = '/x'
-
-    mock_open = self.mox.CreateMockAnything()
-    mock_file = self.mox.CreateMockAnything()
-    stat = self.mox.CreateMockAnything()
-    mock_dt = self.mox.CreateMockAnything()
-
-    self.stubs.Set(client.datetime, 'datetime', mock_dt)
-    self.mox.StubOutWithMock(client.os, 'stat')
-    self.mox.StubOutWithMock(client.os, 'geteuid')
-
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
-
-    stat.st_uid = 0
-    stat.st_mtime = int(st_dt.strftime('%s'))
     facter = {'foo': 'bar', 'one': '1'}
+    file_path = '/x'
     lines = [
         'foo => bar',
         'one => 1',
         'I_am_invalid',
     ]
 
-    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
-    client.os.geteuid().AndReturn(0)
-    client.os.geteuid().AndReturn(0)
-    mock_dt.fromtimestamp(stat.st_mtime).AndReturn(st_dt)
+    fake_file = self.fs.CreateFile(file_path, contents='\n'.join(lines))
+    fake_file.st_uid = 0
+    fake_file.st_mtime = int(st_dt.strftime('%s'))
 
-    mock_open(self.client.facter_cache_path, 'r').AndReturn(mock_file)
-    for line in lines:
-      mock_file.readline().AndReturn(line)
-    mock_file.readline().AndReturn(None)
-    mock_file.close().AndReturn(None)
+    self.client.facter_cache_path = file_path
 
-    self.mox.ReplayAll()
-    self.assertEqual(facter, self.client.GetFacter(open_fn=mock_open))
-    self.mox.VerifyAll()
+    with mock.patch.object(client.os, 'geteuid', return_value=0):
+      self.assertEqual(facter, self.client.GetFacter(open_fn=self.fake_open))
 
   def testGetFacterWhenInsecureFileForRoot(self):
     """Test GetFacter()."""
-    self.client.facter_cache_path = '/x'
+    file_path = '/x'
 
-    mock_open = self.mox.CreateMockAnything()
-    stat = self.mox.CreateMockAnything()
-    mock_dt = self.mox.CreateMockAnything()
+    self.client.facter_cache_path = file_path
 
-    self.mox.StubOutWithMock(client.os, 'stat')
-    self.mox.StubOutWithMock(client.os, 'geteuid')
+    fake_file = self.fs.CreateFile(file_path)
+    fake_file.st_uid = 100
 
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
+    # root
+    with mock.patch.object(client.os, 'geteuid', return_value=0):
+      fake_open = mock.Mock()
+      self.assertEqual({}, self.client.GetFacter(open_fn=fake_open))
+      fake_open.assert_not_called()
 
-    stat.st_uid = 100
+    # same regular user
+    with mock.patch.object(client.os, 'geteuid', return_value=200):
+      fake_open = mock.Mock()
+      self.assertEqual({}, self.client.GetFacter(open_fn=fake_open))
+      fake_open.assert_not_called()
 
-    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
-    client.os.geteuid().AndReturn(0)
-
-    self.mox.ReplayAll()
-    self.assertEqual({}, self.client.GetFacter(open_fn=mock_open))
-    self.mox.VerifyAll()
-
-  def testGetFacterWhenInsecureFileForNonRoot(self):
-    """Test GetFacter()."""
-    self.client.facter_cache_path = '/x'
-
-    mock_open = self.mox.CreateMockAnything()
-    stat = self.mox.CreateMockAnything()
-    mock_dt = self.mox.CreateMockAnything()
-
-    self.stubs.Set(client.datetime, 'datetime', mock_dt)
-    self.mox.StubOutWithMock(client.os, 'stat')
-    self.mox.StubOutWithMock(client.os, 'geteuid')
-
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.facter_cache_path).AndReturn(True)
-
-    stat.st_uid = 100
-
-    client.os.stat(self.client.facter_cache_path).AndReturn(stat)
-    client.os.geteuid().AndReturn(200)
-    client.os.geteuid().AndReturn(200)
-    client.os.geteuid().AndReturn(200)
-
-    self.mox.ReplayAll()
-    self.assertEqual({}, self.client.GetFacter(open_fn=mock_open))
-    self.mox.VerifyAll()
-
-  def testGetFacterWhenCacheDoesNotExist(self):
+  @mock.patch.object(client.os.path, 'isfile', return_value=False)
+  def testGetFacterWhenCacheDoesNotExist(self, _):
     """Test GetFacter() with a nonexistent cache file."""
     self.client.facter_cache_path = '/x'
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    client.os.path.isfile(self.client.facter_cache_path).AndReturn(False)
 
-    self.mox.ReplayAll()
     self.assertEqual({}, self.client.GetFacter())
-    self.mox.VerifyAll()
 
   def testGetFacterWhenCachePathIsNone(self):
     """Test GetFacter() with facter_cache_path is None."""
     self.client.facter_cache_path = None
 
-    self.mox.ReplayAll()
     self.assertEqual({}, self.client.GetFacter())
-    self.mox.VerifyAll()
 
   def testGetAuthTokenFromHeadersSuccess(self):
     token = '%s=123; secure; httponly;' % auth.AUTH_TOKEN_COOKIE
@@ -985,55 +942,38 @@ class HttpsAuthClientTest(mox.MoxTestBase):
         {'set-cookie': ''})
 
 
-class SimianClientTest(mox.MoxTestBase):
+class SimianClientTest(basetest.TestCase):
   """Test SimianClient class."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
     self.hostname = 'hostname'
     self.port = None
     self.client = client.SimianClient(self.hostname)
 
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
   def testInitWithoutHostname(self):
     """Test __init__() without a hostname passed."""
     user = 'foouser'
-    self.mox.StubOutWithMock(
-        client.SimianClient, '_GetLoggedOnUser', self.mox.CreateMockAnything())
-    client.SimianClient._GetLoggedOnUser().AndReturn(user)
 
-    self.mox.ReplayAll()
-    clienttmp = client.SimianClient()
-    self.assertEqual(clienttmp.hostname, client.SERVER_HOSTNAME)
-    self.assertEqual(clienttmp._user, user)
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        client.SimianClient, '_GetLoggedOnUser', return_value=user):
+      clienttmp = client.SimianClient()
+      self.assertEqual(clienttmp.hostname, client.SERVER_HOSTNAME)
+      self.assertEqual(clienttmp._user, user)
 
   def testInitWithHostname(self):
     """Test __init__() with a hostname passed."""
     user = 'foouser'
-    self.mox.StubOutWithMock(
-        client.SimianClient, '_GetLoggedOnUser', self.mox.CreateMockAnything())
-    client.SimianClient._GetLoggedOnUser().AndReturn(user)
-
-    self.mox.ReplayAll()
-    clienttmp = client.SimianClient('foo')
-    self.assertEqual(clienttmp.hostname, 'foo')
-    self.assertEqual(clienttmp._user, user)
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        client.SimianClient, '_GetLoggedOnUser', return_value=user):
+      clienttmp = client.SimianClient('foo')
+      self.assertEqual(clienttmp.hostname, 'foo')
+      self.assertEqual(clienttmp._user, user)
 
   def testInitAsRoot(self):
     """Test __init__() with a hostname passed."""
-    self.mox.StubOutWithMock(
-        client.SimianClient, '_GetLoggedOnUser', self.mox.CreateMockAnything())
-    client.SimianClient._GetLoggedOnUser().AndReturn('root')
-
-    self.mox.ReplayAll()
-    self.assertRaises(client.SimianClientError, client.SimianClient)
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        client.SimianClient, '_GetLoggedOnUser', return_value='root'):
+      self.assertRaises(client.SimianClientError, client.SimianClient)
 
   def testIsDefaultHostClient(self):
     """Test IsDefaultHostClient()."""
@@ -1049,16 +989,15 @@ class SimianClientTest(mox.MoxTestBase):
 
     good_response = client.Response(status=200, body='hello there')
 
-    self.mox.StubOutWithMock(self.client, 'Do')
-    self.client.Do(
-        method, url, body=None, headers=headers,
-        output_filename=output_filename).AndReturn(good_response)
+    with mock.patch.object(
+        self.client, 'Do', return_value=good_response) as do_mock:
+      self.assertEqual(
+          good_response.body,
+          self.client._SimianRequest(method, url, headers=headers))
 
-    self.mox.ReplayAll()
-    self.assertEqual(
-        good_response.body,
-        self.client._SimianRequest(method, url, headers=headers))
-    self.mox.VerifyAll()
+      do_mock.assert_called_once_with(
+          method, url, body=None, headers=headers,
+          output_filename=output_filename)
 
   def testSimianRequestWithError(self):
     """Test _SimianRequest() with an error status returned."""
@@ -1069,16 +1008,15 @@ class SimianClientTest(mox.MoxTestBase):
 
     error_response = client.Response(status=401, body='fooerror')
 
-    self.mox.StubOutWithMock(self.client, 'Do')
-    self.client.Do(
-        method, url, body=None, headers=headers,
-        output_filename=output_filename).AndReturn(error_response)
+    with mock.patch.object(
+        self.client, 'Do', return_value=error_response) as do_mock:
+      self.assertRaises(
+          client.SimianServerError,
+          self.client._SimianRequest, method, url, headers=headers)
 
-    self.mox.ReplayAll()
-    self.assertRaises(
-        client.SimianServerError,
-        self.client._SimianRequest, method, url, headers=headers)
-    self.mox.VerifyAll()
+      do_mock.assert_called_once_with(
+          method, url, body=None, headers=headers,
+          output_filename=output_filename)
 
   def GenericStubTestAndReturn(
       self,
@@ -1087,8 +1025,6 @@ class SimianClientTest(mox.MoxTestBase):
       method_args,
       stub_method_name, stub_method_return, *stub_args, **stub_kwargs):
     """Helper test method.
-
-    TODO(user): Move to common.test.
 
     Args:
       method: method, to invoke in the test
@@ -1099,22 +1035,19 @@ class SimianClientTest(mox.MoxTestBase):
       stub_args: list, args to expect when calling stub_method_name
       stub_kwargs: dict, kwargs to expect when calling stub_method_name
     """
-    self.mox.StubOutWithMock(self.client, stub_method_name)
-    getattr(self.client, stub_method_name)(
-        *stub_args, **stub_kwargs).AndReturn(stub_method_return)
-
-    self.mox.ReplayAll()
-    got_rv = method(*method_args)
-    self.assertEqual(got_rv, method_return)
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        self.client,
+        stub_method_name,
+        return_value=stub_method_return) as m:
+      got_rv = method(*method_args)
+      self.assertEqual(got_rv, method_return)
+      m.assert_called_once_with(*stub_args, **stub_kwargs)
 
   def GenericStubTest(
       self,
       method, method_args,
       stub_method_name, *stub_args, **stub_kwargs):
     """Helper test method.
-
-    TODO(user): Move to common.test.
 
     Args:
       method: method, to invoke in the test
@@ -1154,7 +1087,7 @@ class SimianClientTest(mox.MoxTestBase):
   def testGetPackageInfo(self):
     """Test GetPackageInfo()."""
     filename = 'name.dmg'
-    response = self.mox.CreateMockAnything()
+    response = mock.create_autospec(httplib.HTTPResponse)
     response.body = 'hello'
     self.GenericStubTestAndReturn(
         self.client.GetPackageInfo,
@@ -1167,7 +1100,7 @@ class SimianClientTest(mox.MoxTestBase):
   def testGetPackageInfoWhenHash(self):
     """Test GetPackageInfo()."""
     filename = 'name.dmg'
-    response = self.mox.CreateMockAnything()
+    response = mock.create_autospec(httplib.HTTPResponse)
     response.body = 'body'
     response.headers = {'x-pkgsinfo-hash': 'hash'}
     self.GenericStubTestAndReturn(
@@ -1232,81 +1165,68 @@ class SimianClientTest(mox.MoxTestBase):
         self.client.PostReportBody, [body, True],
         '_SimianRequest', 'POST', url, body_with_feedback)
 
-  def testUploadFile(self):
+  @mock.patch.object(client.os.path, 'isfile', return_value=True)
+  def testUploadFile(self, _):
     """Test UploadFile()."""
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    self.mox.StubOutWithMock(self.client, 'Do')
-
     file_type = 'log'
     file_name = 'file.log'
     file_path = 'path/to/' + file_name
     url = '/uploadfile/%s/%s' % (file_type, file_name)
 
-    mock_open = self.mox.CreateMockAnything()
-    mock_open(file_path, 'r').AndReturn(mock_open)
-    client.os.path.isfile(file_path).AndReturn(True)
-    self.client.Do('PUT', url, mock_open).AndReturn(None)
-    mock_open.close().AndReturn(None)
+    mock_file = mock.create_autospec(file)
+    mock_open = mock.Mock(return_value=mock_file)
 
-    self.mox.ReplayAll()
-    self.client.UploadFile(file_path, file_type, _open=mock_open)
-    self.mox.VerifyAll()
+    with mock.patch.object(self.client, 'Do') as mock_do:
+      self.client.UploadFile(file_path, file_type, _open=mock_open)
+      mock_do.assert_called_once_with('PUT', url, mock_file)
 
-  def testUploadFileWhenLogNotFound(self):
+  @mock.patch.object(client.logging, 'error', autospec=True)
+  @mock.patch.object(client.os.path, 'isfile', return_value=False)
+  def testUploadFileWhenLogNotFound(self, mock_isfile, mock_logging_error):
     """Test UploadFile() when the file is not found."""
-    self.mox.StubOutWithMock(client.os.path, 'isfile')
-    self.mox.StubOutWithMock(client.logging, 'error')
-
     file_path = 'path/to/file.log'
 
-    client.os.path.isfile(file_path).AndReturn(False)
-    client.logging.error('UploadFile file not found: %s', file_path)
-
-    self.mox.ReplayAll()
     self.client.UploadFile(file_path, 'foo-file-type')
-    self.mox.VerifyAll()
+
+    mock_logging_error.assert_called_once_with(
+        'UploadFile file not found: %s', file_path)
+    mock_isfile.assert_called_once_with(file_path)
 
 
-class SimianAuthClientTest(mox.MoxTestBase):
+class SimianAuthClientTest(basetest.TestCase):
   """Test SimianAuthClient class."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
+    super(SimianAuthClientTest, self).setUp()
     self.pac = client.SimianAuthClient()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testGetAuthToken(self):
     """Test GetAuthToken()."""
-    self.mox.StubOutWithMock(self.pac, 'DoSimianAuth')
-    self.pac._cookie_token = 'token'
-    self.pac.DoSimianAuth().AndReturn(None)
-    self.mox.ReplayAll()
-    self.assertEqual(self.pac.GetAuthToken(), 'token')
-    self.mox.VerifyAll()
+    with mock.patch.object(self.pac, 'DoSimianAuth'):
+      self.pac._cookie_token = 'token'
+
+      self.assertEqual(self.pac.GetAuthToken(), 'token')
 
   def testLogoutAuthToken(self):
     """Test LogoutAuthToken()."""
     url = '/auth?logout=True'
-    self.mox.StubOutWithMock(self.pac, '_SimianRequest')
-    self.pac._SimianRequest('GET', url).AndReturn('ok')
 
-    self.mox.ReplayAll()
-    self.assertTrue(self.pac.LogoutAuthToken())
-    self.mox.VerifyAll()
+    with mock.patch.object(self.pac, '_SimianRequest', return_value='ok'):
+      self.assertTrue(self.pac.LogoutAuthToken())
+
+      self.pac._SimianRequest.assert_called_once_with('GET', url)
 
   def testLogoutAuthTokenWhenFail(self):
     """Test LogoutAuthToken()."""
     url = '/auth?logout=True'
-    self.mox.StubOutWithMock(self.pac, '_SimianRequest')
-    self.pac._SimianRequest('GET', url).AndRaise(client.SimianServerError)
 
-    self.mox.ReplayAll()
-    self.assertFalse(self.pac.LogoutAuthToken())
-    self.mox.VerifyAll()
+    with mock.patch.object(
+        self.pac, '_SimianRequest', side_effect=client.SimianServerError):
+      self.assertFalse(self.pac.LogoutAuthToken())
+      self.pac._SimianRequest.assert_called_once_with('GET', url)
+
+
+logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):

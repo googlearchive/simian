@@ -16,6 +16,7 @@
 #
 """Manifest URL handlers."""
 
+import httplib
 import logging
 
 from simian.mac.common import auth
@@ -44,16 +45,16 @@ class Manifests(handlers.AuthenticationHandler):
           client_id=client_id, packagemap=False)
     except common.ManifestNotFoundError, e:
       logging.warning('Invalid manifest requested: %s', str(e))
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
     except common.ManifestDisabledError, e:
       logging.info('Disabled manifest requested: %s', str(e))
-      self.response.set_status(503)
+      self.response.set_status(httplib.SERVICE_UNAVAILABLE)
       return
     except common.Error, e:
       logging.exception(
           '%s, client_id_str=%s', str(e.__class__.__name__), client_id_str)
-      self.response.set_status(503)
+      self.response.set_status(httplib.SERVICE_UNAVAILABLE)
       return
 
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'

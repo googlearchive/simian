@@ -16,6 +16,8 @@
 #
 """Lock Admin handler."""
 
+import httplib
+
 from google.appengine.api import memcache
 
 from simian.mac import admin
@@ -36,6 +38,7 @@ LOCK_TYPES = {
 class LockAdmin(admin.AdminHandler):
   """Handler for /admin/lock_admin."""
 
+  @admin.AdminHandler.XsrfProtected('lock_admin')
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
@@ -43,7 +46,7 @@ class LockAdmin(admin.AdminHandler):
 
     lock_type = self.request.get('lock_type')
     if lock_type not in LOCK_TYPES:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     lock_name = self.request.get('lock_name')

@@ -39,6 +39,8 @@ REPORT_TYPES = [
 class Summary(admin.AdminHandler):
   """Handler for /admin/."""
 
+  XSRF_PROTECTION = False
+
   def get(self):
     """Summary get handler."""
     report_type = self.request.get('filter-type')

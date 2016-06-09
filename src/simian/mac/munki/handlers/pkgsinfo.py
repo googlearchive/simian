@@ -17,6 +17,7 @@
 """PackagesInfo handlers."""
 
 import hashlib
+import httplib
 import logging
 import urllib
 
@@ -71,7 +72,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
       if hash_str:
         lock = 'pkgsinfo_%s' % filename
         if not gae_util.ObtainLock(lock, timeout=5.0):
-          self.response.set_status(403)
+          self.response.set_status(httplib.FORBIDDEN)
           self.response.out.write('Could not lock pkgsinfo')
           return
 
@@ -84,7 +85,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
       else:
         if hash_str:
           gae_util.ReleaseLock(lock)
-        self.response.set_status(404)
+        self.response.set_status(httplib.NOT_FOUND)
         return
 
       if hash_str:
@@ -156,13 +157,13 @@ class PackagesInfo(handlers.AuthenticationHandler):
       mpl.Parse()
     except plist.PlistError, e:
       logging.exception('Invalid pkginfo plist PUT: \n%s\n', self.request.body)
-      self.response.set_status(400)
+      self.response.set_status(httplib.BAD_REQUEST)
       self.response.out.write(str(e))
       return
 
     lock = 'pkgsinfo_%s' % filename
     if not gae_util.ObtainLock(lock, timeout=5.0):
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       self.response.out.write('Could not lock pkgsinfo')
       return
 
@@ -172,7 +173,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
     if pkginfo is None:
       logging.warning(
           'pkginfo "%s" does not exist; PUT only allows updates.', filename)
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       self.response.out.write('Only updates supported')
       gae_util.ReleaseLock(lock)
       return
@@ -183,7 +184,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
         logging.warning(
             'pkginfo "%s" is in stable or testing; change prohibited.',
             filename)
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         self.response.out.write('Changes to pkginfo not allowed')
         gae_util.ReleaseLock(lock)
         return
@@ -193,7 +194,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
     # the client make a non destructive update.
     if hash_str:
       if self._Hash(pkginfo.plist) != hash_str:
-        self.response.set_status(409)
+        self.response.set_status(httplib.CONFLICT)
         self.response.out.write('Update hash does not match')
         gae_util.ReleaseLock(lock)
         return

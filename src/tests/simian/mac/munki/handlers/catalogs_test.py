@@ -16,6 +16,7 @@
 #
 """Munki catalogs module tests."""
 
+import httplib
 import logging
 
 from google.apputils import app
@@ -50,7 +51,7 @@ class CatalogsHandlersTest(test.RequestHandlerTest):
     self.MockDoAnyAuth()
     self.MockModelStaticBase(
         'Catalog', 'MemcacheWrappedGet', name, 'plist_xml').AndReturn(None)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(name)

@@ -20,6 +20,7 @@
       <legend>Add New Manifest Modification</legend>
 
       <input type="hidden" name="add_manifest_mod" value="1" />
+      <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
 
       <div class="formcolumn" style="width: 250px;">
         <label>Mod Type</label>
@@ -139,12 +140,12 @@
         <td>{{ m.user }}</td>
         <td>
           <span class="ajaxtoggle {% if m.enabled %}istrue{% endif %}"
-            {% if is_admin %}onclick="simian.toggleManifestModification('{{ m.key }}', this);"{% endif %}>
+            {% if is_admin %}onclick="simian.toggleManifestModification('{{ m.key }}', this, '{{ xsrf_token }}');"{% endif %}>
           </span>
         </td>
         {% if is_admin %}
         <td><button type="button" name="{{ m.key }}" class="red delete"
-                   onclick="javascript:simian.deleteManifestModification(this);">Delete</button>
+                   onclick="javascript:simian.deleteManifestModification(this, '{{ xsrf_token }}');">Delete</button>
         </td>
         {% endif %}
       </tr>

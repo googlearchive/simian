@@ -18,6 +18,7 @@
 
 import calendar
 import datetime
+import httplib
 import json
 
 from google.appengine.api import memcache
@@ -46,10 +47,11 @@ DEFAULT_APPLESUS_LOG_FETCH = 25
 class AppleSUSAdmin(admin.AdminHandler):
   """Handler for /admin/applesus."""
 
+  @admin.AdminHandler.XsrfProtected('apple_applesus')
   def post(self, report=None, product_id=None):
     """POST handler."""
     if not self.IsAdminUser():
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       return
 
     if report == 'product' and product_id:
@@ -57,7 +59,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     elif self.request.get('regenerate-catalogs'):
       self._RegenerateCatalogs()
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _RegenerateCatalogs(self):
     """Regenerates specified Apple SUS catalogs."""
@@ -81,7 +83,7 @@ class AppleSUSAdmin(admin.AdminHandler):
 
     product = models.AppleSUSProduct.get_by_key_name(product_id)
     if not product:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
 
     data = {
@@ -111,10 +113,10 @@ class AppleSUSAdmin(admin.AdminHandler):
               force_install_after_date, '%Y-%m-%d %H:%M') > tomorrow:
             product.force_install_after_date_str = force_install_after_date
           else:
-            self.error(400)
+            self.error(httplib.BAD_REQUEST)
             return
         except ValueError:
-          self.error(400)
+          self.error(httplib.BAD_REQUEST)
           return
       else:
         product.force_install_after_date = None
@@ -190,7 +192,7 @@ class AppleSUSAdmin(admin.AdminHandler):
       product_id = self.request.get('product_id')
       self._DisplayUpdateLogs(product_id=product_id)
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _DisplayMain(self):
     query = models.AppleSUSProduct.AllActive().order('-apple_mtime')

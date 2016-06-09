@@ -113,8 +113,9 @@ goog.exportSymbol('simian.ajaxSubmit', simian.ajaxSubmit);
 /**
  * Uses XHR to delete a client log file.
  * @param {Element} deleteButton The delete button clicked to call this func.
+ * @param {string} xsrfToken
  */
-simian.deleteClientLogFile = function(deleteButton) {
+simian.deleteClientLogFile = function(deleteButton, xsrfToken) {
   var key = deleteButton.name;
   var success = function(e) {
     var rowIndex = deleteButton.parentNode.parentNode.rowIndex;
@@ -124,8 +125,8 @@ simian.deleteClientLogFile = function(deleteButton) {
   var failure = function(e) {
     alert('Failure deleting the client log; please try again');
   };
-  var params = 'action=delete_client_log';
-  simian.xhr('/admin/clientlog/' + key, params, 'POST', success, failure);
+  var params = 'action=delete_client_log&xsrf_token=' + xsrfToken;
+  simian.xhr('/admin/host/' + key, params, 'POST', success, failure);
 };
 goog.exportSymbol('simian.deleteClientLogFile', simian.deleteClientLogFile);
 
@@ -133,8 +134,9 @@ goog.exportSymbol('simian.deleteClientLogFile', simian.deleteClientLogFile);
 /**
  * Uses XHR to delete a manifest modification.
  * @param {Element} deleteButton The delete button clicked to call this func.
+ * @param {string} xsrfToken
  */
-simian.deleteManifestModification = function(deleteButton) {
+simian.deleteManifestModification = function(deleteButton, xsrfToken) {
   var key = deleteButton.name;
   var success = function(e) {
     var rowIndex = deleteButton.parentNode.parentNode.rowIndex;
@@ -144,7 +146,7 @@ simian.deleteManifestModification = function(deleteButton) {
   var failure = function(e) {
     alert('Failure deleting the manifest mod; please try again');
   };
-  var params = 'delete=1&key=' + key;
+  var params = 'delete=1&key=' + key + '&xsrf_token=' + xsrfToken;
   simian.xhr('/admin/manifest_modifications', params, 'POST', success, failure);
 };
 goog.exportSymbol(
@@ -155,10 +157,11 @@ goog.exportSymbol(
  * Toggles a manifest modification between enabled/disabled.
  * @param {string} key Manifestmodifications key.
  * @param {Element} button The HTML element thats controls the state.
+ * @param {string} xsrfToken
  */
-simian.toggleManifestModification = function(key, button) {
-  var enable = 'key=' + key + '&enabled=1';
-  var disable = 'key=' + key + '&enabled=0';
+simian.toggleManifestModification = function(key, button, xsrfToken) {
+  var enable = 'key=' + key + '&enabled=1&xsrf_token=' + xsrfToken;
+  var disable = 'key=' + key + '&enabled=0&xsrf_token=' + xsrfToken;
   simian.ajaxToggle('/admin/manifest_modifications/', enable, disable, button);
 };
 goog.exportSymbol(
@@ -169,10 +172,11 @@ goog.exportSymbol(
  * Toggles a package alias between enabled/disabled.
  * @param {string} key Package alias key name.
  * @param {Element} button The HTML element thats controls the state.
+ * @param {string} xsrfToken
  */
-simian.togglePackageAlias = function(key, button) {
-  var enable = 'key_name=' + key + '&enabled=1';
-  var disable = 'key_name=' + key + '&enabled=0';
+simian.togglePackageAlias = function(key, button, xsrfToken) {
+  var enable = 'key_name=' + key + '&enabled=1&xsrf_token=' + xsrfToken;
+  var disable = 'key_name=' + key + '&enabled=0&xsrf_token=' + xsrfToken;
   simian.ajaxToggle('/admin/package_alias/', enable, disable, button);
 };
 goog.exportSymbol('simian.togglePackageAlias', simian.togglePackageAlias);
@@ -183,10 +187,11 @@ goog.exportSymbol('simian.togglePackageAlias', simian.togglePackageAlias);
  * @param {string} productId Apple SUS Product ID like 042-1234.
  * @param {string} track Simian track like unstable, testing, or stable.
  * @param {Element} button The button that sets the state.
+ * @param {string} xsrfToken
  */
-applesus.toggleProductTrack = function(productId, track, button) {
-  var enable = 'track=' + track + '&enabled=1';
-  var disable = 'track=' + track + '&enabled=0';
+applesus.toggleProductTrack = function(productId, track, button, xsrfToken) {
+  var enable = 'track=' + track + '&enabled=1&xsrf_token=' + xsrfToken;
+  var disable = 'track=' + track + '&enabled=0&xsrf_token=' + xsrfToken;
   simian.ajaxToggle(
     '/admin/applesus/product/' + productId, enable, disable, button);
 };
@@ -197,8 +202,9 @@ goog.exportSymbol('applesus.toggleProductTrack', applesus.toggleProductTrack);
  * Use XHR to set or unset force_install_after_date on an Apple SUS product.
  * @param {string} productId Apple SUS Product ID like 042-1234.
  * @param {Element} input The input that contains the desired date.
+ * @param {string} xsrfToken
  */
-applesus.setForceInstallAfterDate = function(productId, input) {
+applesus.setForceInstallAfterDate = function(productId, input, xsrfToken) {
   input.disabled = true;
   var success = function(e) {
     input.disabled = false;
@@ -206,7 +212,8 @@ applesus.setForceInstallAfterDate = function(productId, input) {
   var failure = function(e) {
     alert('Failure setting force_install_after_date; please try again');
   };
-  var params = 'force_install_after_date=' + input.value;
+  var params = 'force_install_after_date=' + input.value +
+      '&xsrf_token=' + xsrfToken;
   simian.xhr(
       '/admin/applesus/product/' + productId, params, 'POST', success, failure);
 };
@@ -218,10 +225,13 @@ goog.exportSymbol('applesus.setForceInstallAfterDate',
  * Use XHR to set or unset unattended flag on a given Apple SUS product.
  * @param {string} productId Apple SUS Product ID like 042-1234.
  * @param {Element} button The button that sets the state.
+ * @param {string} xsrfToken
  */
-applesus.toggleProductUnattended = function(productId, button) {
+applesus.toggleProductUnattended = function(productId, button, xsrfToken) {
+  var enable = 'unattended=1&xsrf_token=' + xsrfToken;
+  var disable = 'unattended=0&xsrf_token=' + xsrfToken;
   simian.ajaxToggle('/admin/applesus/product/' + productId,
-      'unattended=1', 'unattended=0', button, 'unattended');
+      enable, disable, button, 'unattended');
 };
 goog.exportSymbol('applesus.toggleProductUnattended',
                    applesus.toggleProductUnattended);
@@ -231,10 +241,11 @@ goog.exportSymbol('applesus.toggleProductUnattended',
  * Use XHR to set or unset manual override on a given Apple SUS product.
  * @param {string} productId Apple SUS Product ID like 042-1234.
  * @param {Element} button The button that sets the state.
+ * @param {string} xsrfToken
  */
-applesus.toggleProductManualOverride = function(productId, button) {
-  var enable = 'manual_override=1';
-  var disable = 'manual_override=0';
+applesus.toggleProductManualOverride = function(productId, button, xsrfToken) {
+  var enable = 'manual_override=1&xsrf_token=' + xsrfToken;
+  var disable = 'manual_override=0&xsrf_token=' + xsrfToken;
   var callback = function(json) {
     goog.dom.setTextContent(goog.dom.$(productId + '-testing-promote-date'),
         json['testing_promote_date'] || '');
@@ -251,11 +262,12 @@ goog.exportSymbol('applesus.toggleProductManualOverride',
 /**
  * Makes AJAX call to /admin/host/uuid with action "upload_logs".
  * @param {string} uuid UUID of the target host.
- * @param {Element} opt_button Button to replace with success msg.
+ * @param {Element=} opt_button Button to replace with success msg.
+ * @param {string} xsrfToken
  */
-simian.hostUploadLogs = function(uuid, opt_button) {
+simian.hostUploadLogs = function(uuid, opt_button, xsrfToken) {
   simian.xhr('/admin/host/' + uuid,
-            'action=upload_logs&uuid=' + uuid,
+            'action=upload_logs&uuid=' + uuid + '&xsrf_token=' + xsrfToken,
             'POST',
             function(e) {
               if (opt_button) {

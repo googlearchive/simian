@@ -17,6 +17,7 @@
 """applesus module tests."""
 
 import datetime
+import httplib
 import logging
 import urlparse
 
@@ -63,7 +64,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     catalog.last_modified_header = 'lmh'
     headers = {'If-Modified-Since': catalog.last_modified_header}
     response = self.mox.CreateMockAnything()
-    response.status_code = 200
+    response.status_code = httplib.OK
     response.content = xml
     response.headers = {'Last-Modified': 'hds'}
 
@@ -88,7 +89,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     catalog.last_modified_header = 'lmh'
     headers = {'If-Modified-Since': catalog.last_modified_header}
     response = self.mox.CreateMockAnything()
-    response.status_code = 304
+    response.status_code = httplib.NOT_MODIFIED
 
     url = applesus.CATALOGS.values()[0]
 
@@ -110,7 +111,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     catalog.last_modified_header = 'lmh'
     headers = {'If-Modified-Since': catalog.last_modified_header}
     response = self.mox.CreateMockAnything()
-    response.status_code = 404
+    response.status_code = httplib.NOT_FOUND
 
     url = applesus.CATALOGS.values()[0]
 
@@ -170,7 +171,7 @@ class AppleSUSCatalogSyncTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(applesus.models, 'AppleSUSProduct')
 
     mock_urllib_return = self.mox.CreateMockAnything()
-    mock_urllib_return.code = 200  # always return 200 for test.
+    mock_urllib_return.code = httplib.OK  # always return 200 for test.
 
     # product_one; add to existing_products so it's skipped.
     mock_existing_product = self.mox.CreateMockAnything()

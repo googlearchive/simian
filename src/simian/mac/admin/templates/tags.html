@@ -9,6 +9,7 @@
   <legend>Add New Tags</legend>
   {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
   <form method="POST">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
     <input type="hidden" name="action" value="create" />
     Tag: <input type="text" name="tag" />
     <button type="submit" style="margin-left: 20px;">Save</button>
@@ -31,6 +32,7 @@
         <td>
           {% if can_mod_tags %}
             <form method="POST">
+              <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
               <input type="hidden" name="action" value="delete" />
               <input type="hidden" name="tag" value="{{ t.key.name }}" />
               <button class="red delete">Delete</button>

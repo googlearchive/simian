@@ -43,7 +43,8 @@ def XsrfTokenGenerate(action, user=None, timestamp=None):
     settings.XSRF_SECRET = secret
   secret = str(secret)  # hmac secrets cannot be unicode.
   h = hmac.new(secret, XSRF_DELIMITER.join([user, action, timestr]))
-  return base64.b64encode(''.join([h.digest(), XSRF_DELIMITER, timestr]))
+  return base64.urlsafe_b64encode(
+      ''.join([h.digest(), XSRF_DELIMITER, timestr]))
 
 
 def XsrfTokenValidate(token, action, user=None, timestamp=None, time_=time):
@@ -54,7 +55,7 @@ def XsrfTokenValidate(token, action, user=None, timestamp=None, time_=time):
     user = users.get_current_user().email()
   if not timestamp:
     try:
-      _, timestr = base64.b64decode(token).split(XSRF_DELIMITER, 1)
+      _, timestr = base64.urlsafe_b64decode(str(token)).split(XSRF_DELIMITER, 1)
       timestamp = float(timestr)
     except (ValueError, TypeError):
       return False

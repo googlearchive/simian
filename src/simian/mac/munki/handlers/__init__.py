@@ -2,6 +2,7 @@
 """Top level __init__ for handlers package."""
 
 import datetime
+import httplib
 import logging
 import os
 import sys
@@ -127,7 +128,7 @@ class AuthenticationHandler(webapp2.RequestHandler):
       exc_type, exc_value, exc_tb = sys.exc_info()
       tb = traceback.format_exception(exc_type, exc_value, exc_tb)
       logging.info('NotAuthenticated exception: %s', ''.join(tb))
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
 
     super(AuthenticationHandler, self).handle_exception(exception, debug_mode)

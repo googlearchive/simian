@@ -16,6 +16,8 @@
 #
 """Catalogs URL handlers."""
 
+import httplib
+
 from simian.mac import models
 from simian.mac.common import auth
 from simian.mac.munki import handlers
@@ -39,4 +41,4 @@ class Catalogs(handlers.AuthenticationHandler):
       self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
       self.response.out.write(catalog)
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)

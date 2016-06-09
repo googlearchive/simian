@@ -16,6 +16,7 @@
 #
 """Munki uploadfile module tests."""
 
+import httplib
 import logging
 
 from google.apputils import app
@@ -82,13 +83,13 @@ class UploadFileHandlerTest(test.RequestHandlerTest):
     mock_session.uuid = uuid
     self.MockDoMunkiAuth(and_return=mock_session)
     uploadfile.main_common.SanitizeUUID(uuid).AndReturn(uuid)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     mock_session = self.mox.CreateMockAnything()
     mock_session.uuid = uuid
     self.MockDoMunkiAuth(and_return=mock_session)
     uploadfile.main_common.SanitizeUUID(uuid).AndReturn(uuid)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.put(file_type='log', file_name='')

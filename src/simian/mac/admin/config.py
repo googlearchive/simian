@@ -16,7 +16,7 @@
 #
 """Configuration settings admin handler."""
 
-
+import httplib
 import json
 import os
 
@@ -43,8 +43,6 @@ PEM = {
 class Config(admin.AdminHandler):
   """Handler for admin/config."""
 
-  XSRF_PROTECT = True
-
   def __init__(self, *args, **kwargs):
     super(Config, self).__init__(*args, **kwargs)
     self._post_pem_upload = {
@@ -68,9 +66,9 @@ class Config(admin.AdminHandler):
   def get(self):
     """GET handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
-    settings = models.Settings.GetAll()
+    settings = models.Settings.GetSettingsWithDescription()
     for name, d in settings.iteritems():
       d['regex'] = settings_module.GetValidationRegex(name)
     pems = self._GetPems()
@@ -84,11 +82,11 @@ class Config(admin.AdminHandler):
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
     xsrf_token = self.request.get('xsrf_token', None)
     if not xsrf.XsrfTokenValidate(xsrf_token, 'config'):
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write(json.dumps(
           {'error': 'Invalid XSRF token. Refresh page and try again.'}))
       return
@@ -117,7 +115,7 @@ class Config(admin.AdminHandler):
             value = int(value)
           setattr(settings_module, setting.upper(), value)
         except (TypeError, ValueError), e:
-          self.error(400)
+          self.error(httplib.BAD_REQUEST)
           self.response.out.write(json.dumps({'error': str(e)}))
         else:
           new_value = getattr(settings_module, setting.upper())
@@ -141,7 +139,7 @@ class Config(admin.AdminHandler):
         self.response.out.write(json.dumps(
             {'values': [{'name': 'value', 'value': value == 'true'}]}))
     else:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write(json.dumps(
           {'error': 'Trying to set invalid setting.'}))
 
@@ -196,7 +194,7 @@ class Config(admin.AdminHandler):
     pem_file = self.request.get('pem_file', None)
 
     if not pem or pem not in PEM:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write('Invalid PEM name.')
       return
 
@@ -210,12 +208,12 @@ class Config(admin.AdminHandler):
 
     if (valid_pems[pem][VALIDATION] == VALID and
         getattr(settings_module, 'pem', None)):
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write('PEM already present.')
       return
 
     if not pem_file:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write('Invalid File.')
       return
 

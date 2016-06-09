@@ -306,9 +306,30 @@ class Settings(base.KeyValueCache):
           },
         }
     """
+    settings = {}
+    for setting in SETTINGS:
+      value, mtime = cls.GetItem(setting)
+      settings[setting] = {
+          'value': value,
+          'mtime': mtime,
+      }
+    for k in cls.all(keys_only=True):
+      setting = k.name()
+      value, mtime = cls.GetItem(setting)
+      settings[setting] = {
+          'value': value,
+          'mtime': mtime,
+      }
+
+    return settings
+
+  @classmethod
+  def GetSettingsWithDescription(cls):
+    """Return a dictionary of settings presented in SETTINGS."""
     settings = SETTINGS.copy()
     for setting in SETTINGS:
       value, mtime = cls.GetItem(setting)
       settings[setting]['value'] = value
       settings[setting]['mtime'] = mtime
+
     return settings

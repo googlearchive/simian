@@ -17,6 +17,8 @@
 """Generates 'Managed Software Update Update' text for MSU releases."""
 
 import datetime
+import httplib
+
 import distutils.version
 
 from google.appengine.api import users
@@ -49,6 +51,8 @@ def GetOSXMajorVersion(os):
 class ReleaseReport(admin.AdminHandler):
   """Handler for /admin/release_report."""
 
+  XSRF_PROTECTION = False
+
   def get(self):
     """GET handler."""
     auth.DoUserAuth()
@@ -72,7 +76,7 @@ class ReleaseReport(admin.AdminHandler):
     try:
       period = datetime.timedelta(days=range_of_days)
     except TypeError:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.response.out.write('invalid date input')
       return
     candidate_items = []
@@ -82,7 +86,7 @@ class ReleaseReport(admin.AdminHandler):
       try:
         start_date = datetime.datetime(date)
       except TypeError:
-        self.error(400)
+        self.error(httplib.BAD_REQUEST)
         self.response.out.write('invalid date input')
         return
     # Get all package logs for the appropriate time range.

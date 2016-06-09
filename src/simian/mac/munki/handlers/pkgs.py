@@ -16,6 +16,7 @@
 #
 """Module to handle /pkgs"""
 
+import httplib
 import logging
 import urllib
 
@@ -66,11 +67,11 @@ class Packages(
     pkg = models.PackageInfo.MemcacheWrappedGet(filename)
 
     if pkg is None or not pkg.blobstore_key:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     if common.IsPanicModeNoPackages():
-      self.error(503)
+      self.error(httplib.SERVICE_UNAVAILABLE)
       return
 
     # Get the Blobstore BlobInfo for this package; memcache wrapped.
@@ -84,7 +85,7 @@ class Packages(
         logging.critical(
             'Failure fetching BlobInfo for %s. Verify the blob exists: %s',
             pkg.filename, pkg.blobstore_key)
-        self.error(404)
+        self.error(httplib.NOT_FOUND)
         return
 
     header_date_str = self.request.headers.get('If-Modified-Since', '')
@@ -132,7 +133,7 @@ class Packages(
       # ETag and/or last modified date.
       if pkg.pkgdata_sha256:
         self.response.headers['ETag'] = str(pkg.pkgdata_sha256)
-      self.response.set_status(304)
+      self.response.set_status(httplib.NOT_MODIFIED)
 
 
 class ClientRepair(Packages):

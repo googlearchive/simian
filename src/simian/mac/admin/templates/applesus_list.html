@@ -7,6 +7,7 @@
 
   {% if is_admin %}
     <form method="POST">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
     <fieldset>
       <legend>Regenerate Catalogs</legend>
       <input type="hidden" name="regenerate-catalogs" value="1"/>
@@ -109,7 +110,7 @@
             <input type="text" name="force_install_after_date"
                    style="width: 10em;"
                    value="{{p.force_install_after_date|date:"Y-m-d H:i"}}"
-                   onchange="applesus.setForceInstallAfterDate('{{ p.product_id }}', this);" />
+                   onchange="applesus.setForceInstallAfterDate('{{ p.product_id }}', this, '{{ xsrf_token }}');" />
           {% else %}
             {{ p.force_install_after_date }}
           {% endif %}
@@ -119,20 +120,20 @@
             <span title="Disabled due to restart requirement">N/A</span>
           {% else %}
             <span class="ajaxtoggle {% if p.unattended %}istrue{% endif %}"
-              {% if is_admin %}onclick="applesus.toggleProductUnattended('{{ p.product_id }}', this);"{% endif %}>
+              {% if is_admin %}onclick="applesus.toggleProductUnattended('{{ p.product_id }}', this, '{{ xsrf_token }}');"{% endif %}>
             </span>
           {% endif %}
         </td>
         <td>
           <span class="ajaxtoggle {% if p.manual_override %}istrue{% endif %}"
-            {% if is_admin %}onclick="applesus.toggleProductManualOverride('{{ p.product_id }}', this);"{% endif %}>
+            {% if is_admin %}onclick="applesus.toggleProductManualOverride('{{ p.product_id }}', this, '{{ xsrf_token }}');"{% endif %}>
           </span>
         </td>
         <td>
           {% for track in tracks reversed %}
             <span class="ajaxtags {% if track in p.tracks %}istrue{% endif %}"
                 {% if is_admin %}
-                  onclick="applesus.toggleProductTrack('{{ p.product_id }}', '{{ track }}', this);"
+                  onclick="applesus.toggleProductTrack('{{ p.product_id }}', '{{ track }}', this, '{{ xsrf_token }}');"
                 {% endif %}
               {% if track == 'testing' and p.testing_promote_date %}
                 >{{ track }} ({{ p.testing_promote_date|date:"b d" }})</span>

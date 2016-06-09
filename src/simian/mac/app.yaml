@@ -2,11 +2,18 @@ application: ###APPID###
 version: 1
 
 runtime: python27
-threadsafe: no
+threadsafe: yes
 api_version: 1
 
 inbound_services:
 - warmup
+
+automatic_scaling:
+   max_concurrent_requests: 3
+   min_pending_latency: 80ms
+   max_pending_latency: 150ms
+   min_idle_instances: 0
+   max_idle_instances: 1
 
 builtins:
 - remote_api: on

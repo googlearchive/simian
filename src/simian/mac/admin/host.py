@@ -16,6 +16,7 @@
 #
 """Host admin handler."""
 
+import httplib
 import json
 
 from google.appengine.api import users
@@ -23,6 +24,7 @@ from google.appengine.api import users
 from simian import settings
 from simian.mac import admin
 from simian.mac import models
+from simian.mac.admin import xsrf
 from simian.mac.common import auth
 from simian.mac.common import util
 
@@ -38,12 +40,12 @@ class Host(admin.AdminHandler):
     if uuid:
       uuid = util.UrlUnquote(uuid)
     else:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
 
     computer = models.Computer.get_by_key_name(uuid)
     if not computer:
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
 
     self_report = bool(auth.DoUserAuthWithSelfReportFallback(
@@ -51,10 +53,11 @@ class Host(admin.AdminHandler):
 
     self._DisplayHost(computer, self_report)
 
+  @admin.AdminHandler.XsrfProtected('host')
   def post(self, uuid=None):
     """POST handler."""
     if not self.IsAdminUser() and not auth.IsSupportUser():
-      self.response.set_status(403)
+      self.response.set_status(httplib.FORBIDDEN)
       return
 
     action = self.request.get('action')
@@ -71,18 +74,25 @@ class Host(admin.AdminHandler):
     elif action == 'upload_logs':
       c = models.Computer.get_by_key_name(uuid)
       if not c:
-        self.response.set_status(404)
+        self.response.set_status(httplib.NOT_FOUND)
         return
       c.upload_logs_and_notify = users.get_current_user().email()
       c.put()
-      self.response.set_status(200)
+      self.response.set_status(httplib.OK)
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(
           json.dumps({'email': c.upload_logs_and_notify}))
       return
-
+    elif action == 'delete_client_log':
+      key = uuid  # for /admin/clientlog/ it's really the uuid_logname
+      l = models.ClientLogFile.get_by_key_name(key)
+      if not l:
+        self.response.set_status(httplib.NOT_FOUND)
+        return
+      l.delete()
+      return
     else:
-      self.response.set_status(400)
+      self.response.set_status(httplib.BAD_REQUEST)
       return
 
     self.redirect('/admin/host/%s?msg=%s' % (uuid, msg))
@@ -118,6 +128,7 @@ class Host(admin.AdminHandler):
 
     tags = {}
     tags_list = []
+    duplicates = []
     if computer:
       # Generate tags data.
       tags_list = models.Tag.GetAllTagNamesForEntity(computer)
@@ -131,6 +142,9 @@ class Host(admin.AdminHandler):
       admin.AddTimezoneToComputerDatetimes(computer)
       computer.connection_dates.reverse()
       computer.connection_datetimes.reverse()
+      duplicates = models.Computer.all().filter(
+          'serial =', computer.serial).fetch(20)
+      duplicates = [e for e in duplicates if e.uuid != computer.uuid]
 
     try:
       uuid_lookup_url = settings.UUID_LOOKUP_URL
@@ -143,6 +157,7 @@ class Host(admin.AdminHandler):
       owner_lookup_url = None
 
     values = {
+        'report_type': 'host',
         'uuid_lookup_url': uuid_lookup_url,
         'owner_lookup_url': owner_lookup_url,
         'client_site_enabled': settings.CLIENT_SITE_ENABLED,
@@ -160,7 +175,9 @@ class Host(admin.AdminHandler):
         'is_support_user': auth.IsSupportUser(),
         'is_security_user': auth.IsSecurityUser(),
         'is_physical_security_user': auth.IsPhysicalSecurityUser(),
-        'self_report': self_report
+        'self_report': self_report,
+        'duplicates': duplicates,
+        'tags_xsrf_token': xsrf.XsrfTokenGenerate('tags'),
     }
 
     if popup:

@@ -17,6 +17,7 @@
 """Munki pkgs module tests."""
 
 import datetime
+import httplib
 import logging
 
 from google.apputils import app
@@ -92,7 +93,7 @@ class PackagesHandlerTest(PackagesTest):
     else:
       if supply_etag:
         self.response.headers['ETag'] = supply_etag
-      self.response.set_status(304)
+      self.response.set_status(httplib.NOT_MODIFIED)
 
     self.mox.ReplayAll()
     self.c.get(filename_quoted)
@@ -131,7 +132,7 @@ class PackagesHandlerTest(PackagesTest):
     if not (nomatch_etag and not mod_since_date):
       pkgs.handlers.IsClientResourceExpired(
           pkg_date, mod_since_date).AndReturn(is_expired)
-    if pkg_etag and status == 304:
+    if pkg_etag and status == httplib.NOT_MODIFIED:
       self.response.headers['ETag'] = str(pkg_etag)
     self.response.set_status(status)
 
@@ -174,7 +175,7 @@ class PackagesHandlerTest(PackagesTest):
     filename = 'badname'
     self.MockDoAnyAuth(and_return='DoMunkiAuth session; no email attr')
     self.MockQueryFilename(filename, None)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.get(filename)
@@ -192,7 +193,7 @@ class PackagesHandlerTest(PackagesTest):
     pkgs.common.IsPanicModeNoPackages().AndReturn(False)
     pkgs.memcache.get('blobinfo_%s' % filename).AndReturn(None)
     pkgs.blobstore.BlobInfo.get(blobstore_key).AndReturn(None)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.get(filename)
@@ -208,7 +209,7 @@ class PackagesHandlerTest(PackagesTest):
     self.MockQueryFilename(filename, blobstore_key)
     self.mox.StubOutWithMock(pkgs.common, 'IsPanicModeNoPackages')
     pkgs.common.IsPanicModeNoPackages().AndReturn(True)
-    self.MockError(503)
+    self.MockError(httplib.SERVICE_UNAVAILABLE)
 
     self.mox.ReplayAll()
     self.c.get(filename)

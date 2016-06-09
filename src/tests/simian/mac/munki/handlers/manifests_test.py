@@ -16,6 +16,7 @@
 #
 """Munki manifests module tests."""
 
+import httplib
 import logging
 
 from google.apputils import app
@@ -66,7 +67,7 @@ class HandlersTest(test.RequestHandlerTest):
     manifests.common.GetComputerManifest(
         client_id=client_id, packagemap=False).AndRaise(
             manifests.common.ManifestNotFoundError)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()
@@ -86,7 +87,7 @@ class HandlersTest(test.RequestHandlerTest):
     manifests.common.GetComputerManifest(
         client_id=client_id, packagemap=False).AndRaise(
             manifests.common.ManifestDisabledError)
-    self.response.set_status(503).AndReturn(None)
+    self.response.set_status(httplib.SERVICE_UNAVAILABLE).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()
@@ -106,7 +107,7 @@ class HandlersTest(test.RequestHandlerTest):
     manifests.common.GetComputerManifest(
         client_id=client_id, packagemap=False).AndRaise(
             manifests.common.Error)
-    self.response.set_status(503).AndReturn(None)
+    self.response.set_status(httplib.SERVICE_UNAVAILABLE).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()

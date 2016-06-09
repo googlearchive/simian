@@ -365,11 +365,12 @@ class PackageInfoTest(mox.MoxTestBase):
 
   def setUp(self):
     self.testbed = testbed.Testbed()
+    self.testbed.activate()
     self.testbed.setup_env(
+        overwrite=True,
         USER_EMAIL='foo@example.com',
         USER_ID='1337',
         USER_IS_ADMIN='0')
-    self.testbed.activate()
     self.testbed.init_user_stub()
 
     mox.MoxTestBase.setUp(self)

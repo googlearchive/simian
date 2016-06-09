@@ -71,6 +71,7 @@
     {% endif %}
     <td>
       <span id="uuid">{{ computer.uuid }}</span>
+      <span id="tags-xsrf-token" style="display: none;">{{ tags_xsrf_token }}</span>
     </td>
     <td>{{ computer.track }}</td>
     <td>{{ computer.client_version }}</td>
@@ -150,7 +151,6 @@
   </div>
 </div>
 
-
 <div class="zippy_toggle sectionheader" title="client_logs">Client Logs</div>
 <div id="client_logs" class="subsection">
 {% if is_admin %}
@@ -164,7 +164,7 @@
       {{ computer.upload_logs_and_notify }}
     </span>
   {% else %}
-    <button onclick="simian.hostUploadLogs('{{ computer.uuid }}', this);" style="margin:8px;">
+    <button onclick="simian.hostUploadLogs('{{ computer.uuid }}', this, '{{ xsrf_token }}');" style="margin:8px;">
       Upload logs on next preflight</button>
   {% endif %}
 
@@ -185,7 +185,7 @@
         <td>{{ log.mtime }}</td>
         <td>{{ log.mtime|timesince }}</td>
         <td><button type="button" name="{{ log.key.name }}" class="red delete"
-                   onclick="javascript:simian.deleteClientLogFile(this);">Delete</button>
+                   onclick="javascript:simian.deleteClientLogFile(this, '{{ xsrf_token }}');">Delete</button>
         </td>
       </tr>
     {% endfor %}
@@ -257,12 +257,27 @@
   <div class="subsubsection">{% include "preflight_exits_list.html" %}</div>
 </div>
 
+<div class="zippy_toggle sectionheader" title="other_entries">Clients with Matching Serial</div>
+<div id="other_entries" class="subsection">
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>UUID</th><th>	Last Preflight</th>
+    </tr>
+    {% for machine in duplicates %}
+      <tr>
+        <td><a href="/admin/host/{{ machine.uuid }}">{{ machine.uuid }}</a></td>
+        <td>{{ machine.preflight_datetime }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
 
 {% if is_admin or is_support_user %}
 <div class="zippy_toggle sectionheader" title="misc_actions">Misc Admin Actions</div>
 <div id="misc_actions" class="subsection">
   {% if computer.active %}
     <form method="POST">
+      <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
       <input type="hidden" name="action" value="set_inactive"/>
       <button>Set Client As Inactive</button>
     </form>

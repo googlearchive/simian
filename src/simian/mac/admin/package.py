@@ -17,6 +17,7 @@
 """Package admin handler."""
 
 import datetime
+import httplib
 import urllib
 
 from google.appengine.api import users
@@ -37,21 +38,19 @@ except ImportError:
 class Package(admin.AdminHandler):
   """Handler for /admin/package."""
 
-  XSRF_PROTECT = True
-
   def get(self, filename=None):
     """GET handler."""
     if not filename:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
     elif not auth.HasPermission(auth.VIEW_PACKAGES):
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
 
     filename = urllib.unquote(filename)
     p = models.PackageInfo.get_by_key_name(filename)
     if not p:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       self.Render(
           'error.html', {'message': 'PackageInfo not found: %s' % filename})
       return
@@ -109,14 +108,14 @@ class Package(admin.AdminHandler):
   def post(self, filename=None):
     """POST handler."""
     if not auth.HasPermission(auth.UPLOAD):
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       self.response.out.write('Access Denied for current user')
       return
 
     xsrf_token = self.request.get('xsrf_token', None)
     report_type = filename and 'package' or 'packages'
     if not xsrf.XsrfTokenValidate(xsrf_token, report_type):
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.Render(
           'error.html',
           {'message': 'Invalid XSRF token. Please refresh and retry.'})
@@ -133,7 +132,7 @@ class Package(admin.AdminHandler):
       # All non-plist updates require an existing PackageInfo entity.
       p = models.PackageInfo.get_by_key_name(filename)
       if not p:
-        self.error(404)
+        self.error(httplib.NOT_FOUND)
         self.Render(
             'error.html', {'message': 'PackageInfo not found: %s' % filename})
         return
@@ -156,7 +155,7 @@ class Package(admin.AdminHandler):
           self._RejectProposal(p, filename)
 
       else:
-        self.error(400)
+        self.error(httplib.BAD_REQUEST)
         self.Render(
             'error.html', {'message': 'No action specified or unknown action.'})
 
@@ -164,7 +163,7 @@ class Package(admin.AdminHandler):
       # No filename was specified, so we're creating a new PackageInfo.
       self.UpdatePackageInfoFromPlist(create_new=True)
     else:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
 
   def _ApproveProposal(self, p, filename):
     if not self.IsAdminUser():
@@ -313,7 +312,7 @@ class Package(admin.AdminHandler):
         force_install_after_date = datetime.datetime.strptime(
             date_string, '%Y-%m-%d %H:%M')
       except ValueError:
-        self.error(400)
+        self.error(httplib.BAD_REQUEST)
         self.Render(
             'error.html',
             {'message': 'invalid force_install date and/or time format'})
@@ -346,12 +345,12 @@ class Package(admin.AdminHandler):
       if settings.EMAIL_ON_EVERY_CHANGE:
         self.NotifyAdminsOfPackageChange(pkginfo, **kwargs)
     except models.PackageInfoLockError:
-      self.error(302)
+      self.error(httplib.FOUND)
       self.Render(
           'error.html',
           {'message': 'PackageInfo was locked; refresh and try again'})
     except models.PackageInfoUpdateError as e:
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       self.Render(
           'error.html', {'message': 'PackageInfoUpdateError: %s' % str(e)})
     else:
@@ -367,7 +366,7 @@ class Package(admin.AdminHandler):
       pkginfo, log = models.PackageInfo.UpdateFromPlist(
           plist_xml, create_new=create_new)
     except models.PackageInfoUpdateError as e:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       self.Render(
           'error.html', {'message': 'PackageInfoUpdateError: %s' % str(e)})
       return

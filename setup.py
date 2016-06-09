@@ -54,10 +54,10 @@ REQUIRE_SETUP = REQUIRE_BASE + [
 
 REQUIRE_TEST = REQUIRE_BASE + [
     'django==1.6',
-    'icalendar>=1.2',
     'mock',
     'mox>=0.5.3',
     'Pillow',  # needed for google_apputils init_all_stubs() (for imging stub)
+    'pyfakefs',
     'unittest2',
     'webapp2',
     'webtest',

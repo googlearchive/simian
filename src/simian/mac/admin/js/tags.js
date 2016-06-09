@@ -26,8 +26,10 @@ simian.createNewTag = function(e) {
   var tag = goog.dom.getTextContent(
       goog.dom.getElementsByTagNameAndClass('b', null, itemContent)[0]);
   var uuid = goog.dom.$('uuid').innerHTML;
+  var xsrfToken = goog.dom.$('tags-xsrf-token').innerHTML;
   // If the tag is checked when this event is fired, it'll be unchecked!
-  var params = 'action=create&tag=' + tag + '&uuid=' + uuid;
+  var params = 'action=create&tag=' + tag + '&uuid=' + uuid +
+      '&xsrf_token=' + xsrfToken;
   var success = function(e) {
     var menu = item.getParent();
     var newItem;
@@ -49,9 +51,11 @@ simian.hostTagClicked = function(e) {
   var item = e.target;
   var tag = item.getCaption();
   var uuid = goog.dom.$('uuid').innerHTML;
+  var xsrfToken = goog.dom.$('tags-xsrf-token').innerHTML;
   // If the tag is checked when this event is fired, it'll be unchecked!
   var addTag = item.isChecked() ? '0' : '1';
-  var params = 'action=change&add=' + addTag + '&tag=' + tag + '&uuid=' + uuid;
+  var params = 'action=change&add=' + addTag + '&tag=' + tag + '&uuid=' + uuid +
+      '&xsrf_token=' + xsrfToken;
   var success = function(e) {};
   var failure = function(e) {
     alert('Failure modifying tag; please refresh and try again.');

@@ -24,7 +24,6 @@ import re
 
 from google.appengine.api import memcache
 from google.appengine.ext import db
-from google.appengine.ext import deferred
 
 from simian.mac.common import ipcalc
 from simian.mac.common import gae_util
@@ -49,40 +48,6 @@ MEMCACHE_SECS = 300
 
 class BaseModel(db.Model):
   """Abstract base model with useful generic methods."""
-
-  @classmethod
-  def MemcacheAddAutoUpdateTask(cls, func, *args, **kwargs):
-    """Sets a memcache auto update task.
-
-    Args:
-      func: str, like "MemcacheWrappedSet"
-      *args: list, optional, arguments to function
-      **kwargs: dict, optional, keyword arguments to function
-    Raises:
-      ValueError: func is not a function of this class or not callable
-    """
-    if not hasattr(cls, func) or not callable(getattr(cls, func)):
-      raise ValueError(func)
-    if not hasattr(cls, '_memcache_auto_update_tasks'):
-      cls._memcache_auto_update_tasks = []
-    cls._memcache_auto_update_tasks.append((func, args, kwargs))
-
-  @classmethod
-  def MemcacheAutoUpdate(cls, _deferred=False):
-    """Run all memcache auto updates.
-
-    Args:
-      _deferred: bool, whether this function has been deferred
-    """
-    if not getattr(cls, '_memcache_auto_update_tasks', None):
-      return
-
-    if not _deferred:
-      deferred.defer(cls.MemcacheAutoUpdate, _deferred=True, _countdown=10)
-      return
-
-    for func, args, kwargs in getattr(cls, '_memcache_auto_update_tasks', []):
-      getattr(cls, func)(*args, **kwargs)
 
   @classmethod
   def DeleteMemcacheWrap(cls, key_name, prop_name=None):
@@ -280,19 +245,6 @@ class BaseModel(db.Model):
       entity.delete()
     memcache_key = 'mwg_%s_%s' % (cls.kind(), key_name)
     memcache.delete(memcache_key)
-
-  def put(self, *args, **kwargs):
-    """Perform datastore put operation.
-
-    Args:
-      *args: list, optional, args to superclass put()
-      **kwargs: dict, optional, keyword args to superclass put()
-    Returns:
-      return value from superclass put()
-    """
-    r = super(BaseModel, self).put(*args, **kwargs)
-    self.MemcacheAutoUpdate()
-    return r
 
 
 class BasePlistModel(BaseModel):

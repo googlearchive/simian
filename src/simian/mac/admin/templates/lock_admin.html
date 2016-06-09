@@ -21,6 +21,7 @@
         <td>{{ l.1 }}</td>
         <td>
           <form action="/admin/lock_admin" method="POST">
+            <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
             <input type="hidden" name="lock_type" value="{{ l.0 }}" />
             <input type="hidden" name="lock_name" value="{{ l.1 }}" />
             <button>Delete</button>

@@ -35,6 +35,7 @@
   <div><h2>{{ title }}</h2> <span class="count" id="itemcount">({{ list|length }})</span></div>
   {% if infopanel %}<div class="infopanel">{{ infopanel }}</div>{% endif %}
   <form method="post" style="display: inline-block">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
     <table id="items" style="margin: 10px;">
       {% if labels %}
         <tr>{% for label in labels %}<th>{{ label }}</th>{% endfor %}</tr>

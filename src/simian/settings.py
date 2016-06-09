@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,29 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Configurable settings module."""
 
-
-
 import ConfigParser
+import importlib
 import logging
 import os
 import re
 import sys
 import types
 
-# pylint disable-msg=g-import-not-at-top
-try:
-  # pylint disable-msg=unused-import
-  from simian.mac import models
-  # pylint enable-msg=unused-import
-except ImportError:
-  models = None
-
 from simian.auth import x509
-# pylint enable-msg=g-import-not-at-top
 
 # If True, all domain users have (readonly) access to web UI. If False, only
 # define admins, support, security, etc. users have access.
@@ -775,6 +763,12 @@ class DatastoreSettings(SimianDictSettings):
   All future _Set() operations only affect the datastore.
   """
 
+  def _Initialize(self):
+    SimianDictSettings._Initialize(self)
+
+    self._module.models = importlib.import_module(
+        'simian.mac.models')
+
   def _PopulateGlobals(self, set_func=None, globals_=None):
     """Populate global variables into the settings dict."""
     # Populate the global variables into the dictionary backed settings via
@@ -801,13 +795,10 @@ class DatastoreSettings(SimianDictSettings):
     except AttributeError:
       pass  # Not a problem, keep trying.
 
-    if hasattr(self._module, 'models') and self._module.models:
-      item, unused_mtime = self._module.models.Settings.GetItem(k)
-      if item is None:
-        raise AttributeError(k)
-      return item
-    else:
-      raise NotImplementedError('missing App Engine')
+    item, unused_mtime = self._module.models.Settings.GetItem(k)
+    if item is None:
+      raise AttributeError(k)
+    return item
 
   def _Set(self, k, v):
     """Set one settings item.
@@ -817,10 +808,7 @@ class DatastoreSettings(SimianDictSettings):
       v: str, value to set.
     """
     self._CheckValidation(k, v)
-    if hasattr(self._module, 'models') and self._module.models:
-      self._module.models.Settings.SetItem(k, v)
-    else:
-      raise NotImplementedError('missing App Engine')
+    self._module.models.Settings.SetItem(k, v)
 
   def _Dir(self):
     """Returns directory of all settings names as a list.
@@ -830,11 +818,8 @@ class DatastoreSettings(SimianDictSettings):
     Raises:
       NotImplementedError: if this method is not implemented.
     """
-    if hasattr(self._module, 'models') and self._module.models:
-      a = self._module.models.Settings.GetAll()
-      return [x.name for x in a]
-    else:
-      raise NotImplementedError('missing App Engine')
+    a = self._module.models.Settings.GetAll()
+    return list(set(DictSettings._Dir(self) + [x for x in a]))  # pylint: disable=protected-access
 
 
 def Setup():

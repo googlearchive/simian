@@ -16,6 +16,7 @@
 #
 """pkgsinfo module tests."""
 
+import httplib
 import logging
 
 import mox
@@ -151,7 +152,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.MockDoAnyAuth()
     self.request.get('hash').AndReturn('1')
     self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0, obtain=False)
-    self.response.set_status(403).AndReturn(None)
+    self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Could not lock pkgsinfo').AndReturn(None)
 
     self.mox.ReplayAll()
@@ -176,7 +177,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
     self.request.get('hash').AndReturn(None)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(filename)
@@ -191,7 +192,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
     self.request.get('hash').AndReturn('1')
     self._MockReleaseLock('pkgsinfo_%s' % filename)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(filename)
@@ -269,7 +270,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.plist.MalformedPlistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400).AndReturn(None)
+    self.response.set_status(httplib.BAD_REQUEST).AndReturn(None)
     self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
@@ -292,7 +293,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.plist.InvalidPlistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400).AndReturn(None)
+    self.response.set_status(httplib.BAD_REQUEST).AndReturn(None)
     self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
@@ -315,7 +316,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     exc = pkgsinfo.PackageDoesNotExistError('foo error')
     mock_mpl.Parse().AndRaise(exc)
-    self.response.set_status(400).AndReturn(None)
+    self.response.set_status(httplib.BAD_REQUEST).AndReturn(None)
     self.response.out.write('foo error').AndReturn(None)
 
     self.mox.ReplayAll()
@@ -345,7 +346,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
 
-    self.response.set_status(403).AndReturn(None)
+    self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Only updates supported')
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
@@ -589,7 +590,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(self.c, '_Hash')
     pkginfo.plist = 'foo'
     self.c._Hash(pkginfo.plist).AndReturn('otherhash')
-    self.response.set_status(409).AndReturn(None)
+    self.response.set_status(httplib.CONFLICT).AndReturn(None)
     self.response.out.write('Update hash does not match').AndReturn(None)
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 
@@ -626,7 +627,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     pkginfo.IsSafeToModify().AndReturn(False)
     mock_mpl.EqualIgnoringManifestsAndCatalogs(pkginfo.plist).AndReturn(
         False)
-    self.response.set_status(403).AndReturn(None)
+    self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Changes to pkginfo not allowed').AndReturn(
         None)
     self._MockReleaseLock('pkgsinfo_%s' % filename)
@@ -668,7 +669,7 @@ class PackagesInfoTest(test.RequestHandlerTest):
     # we've previously tested past hash check, so bail there.
     self.mox.StubOutWithMock(self.c, '_Hash')
     self.c._Hash(pkginfo.plist).AndReturn('otherhash')
-    self.response.set_status(409).AndReturn(None)
+    self.response.set_status(httplib.CONFLICT).AndReturn(None)
     self.response.out.write('Update hash does not match').AndReturn(None)
     self._MockReleaseLock('pkgsinfo_%s' % filename)
 

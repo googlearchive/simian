@@ -17,6 +17,7 @@
 """Munki applesus module tests."""
 
 import datetime
+import httplib
 import logging
 
 from google.apputils import app
@@ -110,7 +111,7 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
 
     self.MockModelStaticBase(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get()
@@ -134,7 +135,7 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
 
     self.MockModelStaticBase(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
-    self.response.set_status(404).AndReturn(None)
+    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
     self.c.get(client_id_str)

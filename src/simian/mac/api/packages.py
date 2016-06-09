@@ -16,6 +16,7 @@
 #
 """API handler for package info."""
 
+import httplib
 import json
 import logging
 import webapp2
@@ -44,10 +45,10 @@ class PackageInfo(webapp2.RequestHandler):
 
     if not API_INFO_KEY:
       logging.warning('API_INFO_KEY is unset; blocking all API info requests.')
-      self.response.set_status(401)
+      self.response.set_status(httplib.UNAUTHORIZED)
       return
     elif key != API_INFO_KEY:
-      self.response.set_status(401)
+      self.response.set_status(httplib.UNAUTHORIZED)
       return
 
     output = {}

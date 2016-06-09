@@ -78,7 +78,6 @@ server_config:
 	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
-	src/simian/util/link_module.sh icalendar
 	VE/bin/python src/simian/util/compile_js.py gae_bundle/simian/mac/admin/js/simian.js
 
 client_config: settings_check
@@ -138,7 +137,6 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
-	-R .eggs/icalendar-*.egg \
 	-R .eggs/pyasn1-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
@@ -165,7 +163,6 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
-	-R .eggs/icalendar-*.egg \
 	-R .eggs/pyasn1-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
@@ -192,7 +189,6 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
-	-R .eggs/icalendar-*.egg \
 	-R .eggs/pyasn1-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
@@ -217,7 +213,6 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
-	-R .eggs/icalendar-*.egg \
 	-R .eggs/pyasn1-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \

@@ -3,6 +3,7 @@
 
 import collections
 import datetime
+import httplib
 import logging
 import os
 import re
@@ -21,6 +22,8 @@ from simian.mac.common import auth
 QUERY_LIMITS = [25, 50, 100, 250, 500, 1000, 2000]
 
 DEFAULT_COMPUTER_FETCH_LIMIT = 25
+CONTENT_SECURITY_POLICY_HEADER = 'Content-Security-Policy'
+_CONTENT_SECURITY_POLICY = "frame-ancestors 'self'"
 
 
 class Error(Exception):
@@ -130,7 +133,33 @@ def GetMenu():
 class AdminHandler(webapp2.RequestHandler):
   """Class for Admin UI request handlers."""
 
-  XSRF_PROTECT = False
+  XSRF_PROTECT = True
+
+  def initialize(self, request, response):
+    super(AdminHandler, self).initialize(request, response)
+    # https://en.wikipedia.org/wiki/Clickjacking
+    self.response.headers.add_header(
+        CONTENT_SECURITY_POLICY_HEADER, _CONTENT_SECURITY_POLICY)
+
+  @classmethod
+  def XsrfProtected(cls, action):
+    """Check XSRF Token."""
+    def Wrap(original_function):
+      """Decorator with captured parameters."""
+      def WrappedFunction(self, *args, **kwargs):
+        """Invoke original function if valid token presented."""
+        xsrf_token = self.request.get('xsrf_token')
+
+        if not xsrf.XsrfTokenValidate(xsrf_token, action):
+          self.error(httplib.BAD_REQUEST)
+          self.Render(
+              'error.html',
+              {'message': 'Invalid XSRF token. Please refresh and retry.'})
+          return
+
+        return original_function(self, *args, **kwargs)
+      return WrappedFunction
+    return Wrap
 
   def handle_exception(self, exception, debug_mode):
     """Handle an exception.
@@ -140,7 +169,7 @@ class AdminHandler(webapp2.RequestHandler):
       debug_mode: True if the application is running in debug mode
     """
     if issubclass(exception.__class__, auth.NotAuthenticated):
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
     else:
       super(AdminHandler, self).handle_exception(exception, debug_mode)

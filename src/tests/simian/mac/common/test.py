@@ -32,6 +32,10 @@ from simian import settings
 from simian.mac.common import auth
 
 
+def GetArgFromCallHistory(mock_fn, call_index=0, arg_index=0):
+  return mock_fn.call_args_list[call_index][0][arg_index]
+
+
 class GenericContainer(test_base.GenericContainer):
   """Generic data container for testing purposes."""
 
@@ -42,13 +46,14 @@ class RequestHandlerTest(test_base.RequestHandlerTest):
   def setUp(self):
     super(RequestHandlerTest, self).setUp()
     self.testbed = testbed.Testbed()
+    self.testbed.activate()
     self.testbed.setup_env(
+        overwrite=True,
         USER_EMAIL='user@example.com',
         USER_ID='123',
         USER_IS_ADMIN='0',
         DEFAULT_VERSION_HOSTNAME='example.appspot.com')
 
-    self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_taskqueue_stub()

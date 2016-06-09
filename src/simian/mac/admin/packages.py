@@ -16,8 +16,8 @@
 #
 """Packages admin handler."""
 
-
 import datetime
+import httplib
 
 from simian.mac import admin
 from simian.mac import common
@@ -31,7 +31,6 @@ DEFAULT_PACKAGE_LOG_FETCH_LIMIT = 25
 class Packages(admin.AdminHandler):
   """Handler for /admin/packages."""
 
-  XSRF_PROTECT = True
   DATASTORE_MODEL = models.PackageInfo
   LOGGING_MODEL = models.AdminPackageLog
   TEMPLATE = 'packages.html'
@@ -69,7 +68,7 @@ class Packages(admin.AdminHandler):
     query = self._GetPackageQuery()
     for p in query:
       if not p.plist:
-        self.error(403)
+        self.error(httplib.FORBIDDEN)
         self.response.out.write('Package %s has a broken plist!' % p.filename)
         return
       pkg = {}
@@ -142,7 +141,7 @@ class Packages(admin.AdminHandler):
       try:
         key_id = int(key_id)
       except ValueError:
-        self.error(404)
+        self.error(httplib.NOT_FOUND)
         return
       log = self.LOGGING_MODEL.get_by_id(key_id)
       if self.request.get('format') == 'xml':

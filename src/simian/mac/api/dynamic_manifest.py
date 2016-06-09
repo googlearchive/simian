@@ -16,6 +16,7 @@
 #
 """DynamicManifest API URL handlers."""
 
+import httplib
 import json
 import logging
 import urllib
@@ -112,12 +113,12 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     if not self.target:
       logging.warning('Target is required but was not specified.')
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
       return
 
     query = self.model.all().filter('%s =' % self.mod_type, self.target)
@@ -126,7 +127,7 @@ class DynamicManifest(handlers.AuthenticationHandler):
 
     mods = [m.Serialize() for m in query]
     if not mods:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     self.response.headers['Content-Type'] = 'application/json'
@@ -143,15 +144,15 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     try:
       self._PutMod()
     except ValueError:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
     except db.Error:
-      self.error(500)
+      self.error(httplib.INTERNAL_SERVER_ERROR)
 
   def delete(self, mod_type=None, target=None, pkg_name=None):
     """DynamicManifest delete handler.
@@ -164,19 +165,19 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     mod = self.model.get_by_key_name(self.key_name)
     if not mod:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     try:
       mod.delete()
     except db.Error:
       logging.exception('error on DynamicManifest.delete()')
-      self.error(500)
+      self.error(httplib.INTERNAL_SERVER_ERROR)
 
   def post(self):
     """DynamicManifest post handler."""
@@ -199,7 +200,7 @@ class DynamicManifest(handlers.AuthenticationHandler):
       pkg_name = models.PackageAlias.ResolvePackageName(pkg_alias)
       if not pkg_name:
         logging.info('Package alias not found: %s', pkg_alias)
-        self.error(404)
+        self.error(httplib.NOT_FOUND)
         return
       logging.debug('Found pkg_name=%s for pkg_alias=%s', pkg_name, pkg_alias)
     else:
@@ -208,7 +209,7 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
 
@@ -218,6 +219,6 @@ class DynamicManifest(handlers.AuthenticationHandler):
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(json.dumps([{'pkg_name': pkg_name}]))
     except ValueError:
-      self.error(400)
+      self.error(httplib.BAD_REQUEST)
     except db.Error:
-      self.error(500)
+      self.error(httplib.INTERNAL_SERVER_ERROR)

@@ -15,6 +15,7 @@
   </div>
   {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
   <form method="POST">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
     <input type="hidden" name="create_package_alias" value="1" />
     Package Alias: <input type="text" name="package_alias" />
     Munki Package Name:
@@ -41,7 +42,7 @@
         <td>{% if a.munki_pkg_name %}{{ a.munki_pkg_name }}{% endif %}</td>
         <td>
           <span class="ajaxtoggle {% if a.enabled %}istrue{% endif %}"
-            {% if is_admin %}onclick="simian.togglePackageAlias('{{ a.key.name }}', this);"{% endif %}>
+            {% if is_admin %}onclick="simian.togglePackageAlias('{{ a.key.name }}', this, '{{ xsrf_token }}');"{% endif %}>
           </span>
         </td>
       </tr>

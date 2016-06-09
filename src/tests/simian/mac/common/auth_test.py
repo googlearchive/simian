@@ -23,6 +23,7 @@ import os
 import tests.appenginesdk
 
 import mock
+import stubout
 import mox
 import stubout
 

@@ -16,6 +16,7 @@
 #
 """UploadFile URL handlers."""
 
+import httplib
 import logging
 
 from google.appengine.ext import deferred
@@ -43,7 +44,7 @@ class UploadFile(handlers.AuthenticationHandler):
 
     if not file_type or not file_name:
       logging.warning('file_type=%s , file_name=%s', file_type, file_name)
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
       return
 
     if file_type == 'log':
@@ -78,7 +79,7 @@ class UploadFile(handlers.AuthenticationHandler):
         deferred.defer(
             SendNotificationEmail, recipients, c, settings.SERVER_HOSTNAME)
     else:
-      self.error(404)
+      self.error(httplib.NOT_FOUND)
 
 
 def SendNotificationEmail(recipients, c, server_fqdn):

@@ -37,77 +37,6 @@ class ModelsModuleTest(mox.MoxTestBase):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testBaseModelMemcacheAddAutoUpdateTask(self):
-    """Test BaseModel.MemcacheAddAutoUpdateTask()."""
-
-    class _BaseModel(models.BaseModel):
-      pass
-
-    # nothing set yet
-    self.assertFalse(hasattr(_BaseModel, '_memcache_auto_update_tasks'))
-
-    # attempt to use a task that doesn't exist
-    self.assertRaises(
-        ValueError,
-        _BaseModel.MemcacheAddAutoUpdateTask,
-        'func', 1, foo='bar')
-    self.assertFalse(hasattr(_BaseModel, '_memcache_auto_update_tasks'))
-
-    # attempt to use non-executable attribute as task
-    _BaseModel.NotAFunction = 1
-    self.assertRaises(
-        ValueError,
-        _BaseModel.MemcacheAddAutoUpdateTask,
-        'NotAFunction', 1, foo='bar')
-    self.assertFalse(hasattr(_BaseModel, '_memcache_auto_update_tasks'))
-
-    # successful
-    _BaseModel.MemcacheAddAutoUpdateTask('ResetMemcacheWrap', 1, foo='bar')
-    self.assertEqual(
-        _BaseModel._memcache_auto_update_tasks,
-        [('ResetMemcacheWrap', (1,), {'foo': 'bar'})])
-
-  def testBaseModelMemcacheAutoUpdate(self):
-    """Test BaseModel.MemcacheAutoUpdate()."""
-
-    class _BaseModel(models.BaseModel):
-      pass
-    _BaseModel.MemcacheAddAutoUpdateTask(
-        'MemcacheWrappedDelete', 1, 2, 3, foo='bar')
-
-    b = _BaseModel()
-    self.mox.StubOutWithMock(_BaseModel, 'MemcacheWrappedDelete', True)
-    _BaseModel.MemcacheWrappedDelete(1, 2, 3, foo='bar').AndReturn(None)
-    self.mox.ReplayAll()
-    b.MemcacheAutoUpdate(_deferred=True)
-    self.mox.VerifyAll()
-
-  def testBaseModelMemcacheAutoUpdateWhenNoTasks(self):
-    """Test BaseModel.MemcacheAutoUpdate() when no tasks."""
-
-    class _BaseModel(models.BaseModel):
-      pass
-
-    b = _BaseModel()
-    self.mox.ReplayAll()
-    b.MemcacheAutoUpdate()
-    self.mox.VerifyAll()
-
-  def testBaseModelMemcacheAutoUpdateWhenNotDeferred(self):
-    """Test BaseModel.MemcacheAutoUpdate() when _deferred not supplied."""
-
-    class _BaseModel(models.BaseModel):
-      pass
-    _BaseModel._memcache_auto_update_tasks = 'exists'
-
-    b = _BaseModel()
-    self.mox.StubOutWithMock(models.deferred, 'defer')
-    models.deferred.defer(
-        b.MemcacheAutoUpdate, _deferred=True, _countdown=10).AndReturn(None)
-    self.mox.ReplayAll()
-    b.MemcacheAutoUpdate()
-    self.mox.VerifyAll()
-
   def testPut(self):
     """Test put()."""
 
@@ -126,8 +55,6 @@ class ModelsModuleTest(mox.MoxTestBase):
       self.mox.StubOutWithMock(__builtins__, 'super')
       __builtins__.super(models.BaseModel, b).AndReturn(mock_func)
       mock_func.put().AndReturn(None)
-    self.mox.StubOutWithMock(b, 'MemcacheAutoUpdate')
-    b.MemcacheAutoUpdate().AndReturn(None)
 
     self.mox.ReplayAll()
     b.put()

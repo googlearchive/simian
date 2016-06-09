@@ -16,6 +16,7 @@
 #
 """Munki dynamic_manifest module tests."""
 
+import httplib
 import logging
 import urllib
 
@@ -208,7 +209,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(self.c, '_ParseParameters')
     self.c._ParseParameters(mod_type, target, pkg_name).AndRaise(
         dyn_man.InvalidModificationType)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.get(mod_type=mod_type, target=target, pkg_name=pkg_name)
@@ -221,7 +222,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     self.MockDoUserAuth(is_admin=True)
     self.request.get_all('install_types').AndReturn([])
-    self.MockError(400)
+    self.MockError(httplib.BAD_REQUEST)
 
     self.mox.ReplayAll()
     self.c.get(mod_type=mod_type, target=target)
@@ -239,7 +240,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.model = mock_query
     self.c.model.all().AndReturn(mock_query)
     mock_query.filter('%s =' % mod_type, target).AndReturn([])
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.get(mod_type=mod_type, target=target)
@@ -284,7 +285,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.MockDoUserAuth(is_admin=True)
     self.request.get_all('install_types').AndReturn([])  # no install_types!!
 
-    self.MockError(400)
+    self.MockError(httplib.BAD_REQUEST)
 
     self.mox.ReplayAll()
     self.c.put(mod_type=mod_type, target=target, pkg_name=pkg_name)
@@ -320,7 +321,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.request.get_all('install_types').AndReturn([])
 
     mock_model.get_by_key_name(key_name).AndReturn(None)
-    self.MockError(404)
+    self.MockError(httplib.NOT_FOUND)
 
     self.mox.ReplayAll()
     self.c.delete(mod_type=mod_type, target=target, pkg_name=pkg_name)
@@ -339,7 +340,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     mock_model.get_by_key_name(key_name).AndReturn(mock_model)
     mock_model.delete().AndRaise(dyn_man.db.Error)
-    self.MockError(500)
+    self.MockError(httplib.INTERNAL_SERVER_ERROR)
 
     self.mox.ReplayAll()
     self.c.delete(mod_type=mod_type, target=target, pkg_name=pkg_name)

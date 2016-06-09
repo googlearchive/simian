@@ -16,6 +16,7 @@
 #
 """Module to handle /admin/uploadpkg."""
 
+import httplib
 import logging
 
 from google.appengine.api import users
@@ -36,6 +37,8 @@ class UploadPackage(
     blobstore_handlers.BlobstoreUploadHandler):
   """Handler for /admin/uploadpkg."""
 
+  XSRF_PROTECTION = False
+
   def get(self):
     """GET Handler.
 
@@ -53,7 +56,7 @@ class UploadPackage(
       key: optionally, blobstore key that was uploaded
     """
     if not auth.HasPermission(auth.UPLOAD):
-      self.error(403)
+      self.error(httplib.FORBIDDEN)
       return
 
     mode = self.request.get('mode')
@@ -63,23 +66,23 @@ class UploadPackage(
       msg = '%s successfully uploaded and is ready for deployment.' % filename
       self.redirect('/admin/package/%s?msg=%s' % (filename, msg))
     elif mode == 'error':
-      self.response.set_status(400)
+      self.response.set_status(httplib.BAD_REQUEST)
       self.response.out.write(msg)
     else:
       filename = self.request.get('filename')
       if not filename:
-        self.response.set_status(404)
+        self.response.set_status(httplib.NOT_FOUND)
         self.response.out.write('Filename required')
         return
 
       p = models.PackageInfo.get_by_key_name(filename)
       if not p:
-        self.response.set_status(400)
+        self.response.set_status(httplib.BAD_REQUEST)
         self.response.out.write(
             'You must first upload a pkginfo for %s' % filename)
         return
       elif p.blob_info:
-        self.response.set_status(400)
+        self.response.set_status(httplib.BAD_REQUEST)
         self.response.out.write('This file already exists.')
         return
 

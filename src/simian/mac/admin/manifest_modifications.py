@@ -16,6 +16,7 @@
 #
 """Manifest Modifications admin handler."""
 
+import httplib
 import json
 
 from google.appengine.api import users
@@ -52,13 +53,14 @@ DEFAULT_MANIFEST_MOD_FETCH_LIMIT = 25
 class ManifestModifications(admin.AdminHandler):
   """Handler for /admin/manifest_modifications."""
 
+  @admin.AdminHandler.XsrfProtected('manifests_admin')
   def post(self):
     """POST handler."""
     if self.request.get('add_manifest_mod'):
       if (not self.IsAdminUser() and
           not auth.IsSupportUser() and
           not auth.IsSecurityUser()):
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         return
       self._AddManifestModification()
     elif self.IsAdminUser() and self.request.get('delete'):
@@ -67,9 +69,9 @@ class ManifestModifications(admin.AdminHandler):
       self._ToggleManifestModification()
     else:
       if not self.IsAdminUser():
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         return
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
 
   def _AddManifestModification(self):
     """Adds a new manifest modification to Datastore."""
@@ -98,12 +100,12 @@ class ManifestModifications(admin.AdminHandler):
       if munki_pkg_name not in munki_pkg_names:
         self.response.out.write(
             'You are not allowed to inject: %s' % munki_pkg_name)
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         return
       elif mod_type not in [k for k, _ in MOD_GROUP_TYPES.get(grp, [])]:
         self.response.out.write(
             'You are not allowed to inject to: %s' % mod_type)
-        self.response.set_status(403)
+        self.response.set_status(httplib.FORBIDDEN)
         return
 
     # Validation.

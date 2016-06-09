@@ -105,7 +105,8 @@ class SettingsModuleTest(mox.MoxTestBase):
     self.assertEqual(p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         p.server_public_cert_pem, self.settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(p.server_private_key_pem,  'foo_server_private_pem')
+    self.assertEqual(
+        p.server_private_key_pem, test_settings.SERVER_PRIVATE_KEY_PEM)
     self.assertEqual(p.required_issuer, self.settings.REQUIRED_ISSUER)
     self.assertTrue(p.ca_id is None)
     self.mox.VerifyAll()
@@ -120,7 +121,8 @@ class SettingsModuleTest(mox.MoxTestBase):
     self.assertEqual(p.ca_public_cert_pem, self.settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         p.server_public_cert_pem, self.settings.SERVER_PUBLIC_CERT_PEM)
-    self.assertEqual(p.server_private_key_pem,  'foo_server_private_pem')
+    self.assertEqual(
+        p.server_private_key_pem, test_settings.SERVER_PRIVATE_KEY_PEM)
     self.assertEqual(p.required_issuer, self.settings.REQUIRED_ISSUER)
     self.assertTrue(p.ca_id is None)
     self.mox.VerifyAll()

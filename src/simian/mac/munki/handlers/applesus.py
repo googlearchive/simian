@@ -16,6 +16,7 @@
 #
 """Apple Software Update Service Catalog URL handlers."""
 
+import httplib
 import logging
 
 from simian.mac import models
@@ -46,7 +47,7 @@ class AppleSUS(handlers.AuthenticationHandler):
     catalog = models.AppleSUSCatalog.MemcacheWrappedGet(catalog_name)
     if not catalog:
       logging.warning('Apple SUS catalog not found: %s', catalog_name)
-      self.response.set_status(404)
+      self.response.set_status(httplib.NOT_FOUND)
       return
 
     header_date_str = self.request.headers.get('If-Modified-Since', '')
@@ -57,4 +58,4 @@ class AppleSUS(handlers.AuthenticationHandler):
       self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
       self.response.out.write(catalog.plist)
     else:
-      self.response.set_status(304)
+      self.response.set_status(httplib.NOT_MODIFIED)
