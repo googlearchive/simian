@@ -1,0 +1,12 @@
+*.pyc
+*.egg
+*.tar
+*.tgz
+.eggs
+gae_bundle
+src/simian.egg-info/
+src/simian/mac/admin/js/simian.js
+test
+tmpcontents
+tmppkgs
+VE
