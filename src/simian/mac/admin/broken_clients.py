@@ -21,6 +21,7 @@ import re
 
 from simian.mac import admin
 from simian.mac import models
+from simian.mac.admin import xsrf
 from simian.mac.common import auth
 
 
@@ -111,4 +112,5 @@ class BrokenClients(admin.AdminHandler):
          'report_type': 'broken_clients',
          'truncated': i >= fetch_limit,
          'preflight_count_broken_threshold': PREFLIGHT_COUNT_BROKEN_THRESHOLD,
+         'host_xsrf_token': xsrf.XsrfTokenGenerate('host'),
         })

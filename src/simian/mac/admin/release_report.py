@@ -36,7 +36,8 @@ OSX_VERSIONS = {
     '9': 'Mavericks (OS X 10.9)',
     '10': 'Yosemite (OS X 10.10)',
     '11': 'El Capitan (OS X 10.11)',
-    }
+    '12': 'Sierra (macOS 10.12)',
+}
 
 
 def GetOSXMajorVersion(os):

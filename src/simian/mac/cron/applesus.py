@@ -41,13 +41,26 @@ from simian.mac.munki import plist
 # Note: The unit test applesus_test enforces the existence and format of this
 # variable.
 CATALOGS = {
-    '10.5': 'https://swscan.apple.com/content/catalogs/others/index-leopard.merged-1.sucatalog.gz',
-    '10.6': 'https://swscan.apple.com/content/catalogs/others/index-leopard-snowleopard.merged-1.sucatalog.gz',
-    '10.7': 'https://swscan.apple.com/content/catalogs/others/index-lion-snowleopard-leopard.merged-1.sucatalog.gz',
-    '10.8': 'https://swscan.apple.com/content/catalogs/others/index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
-    '10.9': 'https://swscan.apple.com/content/catalogs/others/index-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
-    '10.10': 'https://swscan.apple.com/content/catalogs/others/index-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog',
-    '10.11': 'https://swscan.apple.com/content/catalogs/others/index-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'
+    '10.5': ('https://swscan.apple.com/content/catalogs/others/'
+             'index-leopard.merged-1.sucatalog.gz'),
+    '10.6': ('https://swscan.apple.com/content/catalogs/others/'
+             'index-leopard-snowleopard.merged-1.sucatalog.gz'),
+    '10.7': ('https://swscan.apple.com/content/catalogs/others/'
+             'index-lion-snowleopard-leopard.merged-1.sucatalog.gz'),
+    '10.8': ('https://swscan.apple.com/content/catalogs/others/'
+             'index-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog'),
+    '10.9': ('https://swscan.apple.com/content/catalogs/others/'
+             'index-10.9-mountainlion-lion-snowleopard-leopard.'
+             'merged-1.sucatalog'),
+    '10.10': ('https://swscan.apple.com/content/catalogs/others/'
+              'index-10.10-10.9-mountainlion-lion-snowleopard-leopard.'
+              'merged-1.sucatalog'),
+    '10.11': ('https://swscan.apple.com/content/catalogs/others/'
+              'index-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.'
+              'merged-1.sucatalog'),
+    '10.12': ('https://swscan.apple.com/content/catalogs/others/'
+              'index-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-'
+              'leopard.merged-1.sucatalog')
 }
 
 RESTART_REQUIRED_FOOTER = '* denotes restart required'

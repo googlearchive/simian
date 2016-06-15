@@ -1,4 +1,4 @@
-*.pyc
+*.py[cdo]
 *.egg
 *.tar
 *.tgz
