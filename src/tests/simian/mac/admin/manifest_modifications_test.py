@@ -46,7 +46,7 @@ class ManifestModificationsModuleTest(basetest.TestCase):
         overwrite=True,
         USER_EMAIL='user@example.com',
         USER_ID='123',
-        USER_IS_ADMIN='1',
+        USER_IS_ADMIN='0',
         DEFAULT_VERSION_HOSTNAME='example.appspot.com')
 
     self.testbed.init_all_stubs()
