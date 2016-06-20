@@ -96,7 +96,7 @@ def SendNotificationEmail(recipients, c, server_fqdn):
   body.append('Hostname: %s' % c.hostname)
   body.append('Client Version: %s' % c.client_version)
   body.append('OS Version: %s' % c.os_version)
-  body.append('Site / Office: %s / %s' % (c.site, c.office))
+  body.append('Site: %s' % c.site)
   body.append('Track / Config Track: %s / %s' % (c.track, c.config_track))
   body.append('Serial Number: %s' % c.serial)
   body.append('Last preflight: %s' % c.preflight_datetime)

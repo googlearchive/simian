@@ -50,7 +50,7 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     client_id = {
         'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
-        'office': 'foooffice', 'site': 'foosite'
+        'site': 'foosite'
     }
     class MockComputer(object):
       serial = common.DUPE_SERIAL_NUMBER_EXCEPTIONS[0]
@@ -65,7 +65,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEqual(mock_entity.computer, mock_computer)
     self.assertEqual(mock_entity.owner, client_id['owner'])
     self.assertEqual(mock_entity.hostname, client_id['hostname'])
-    self.assertEqual(mock_entity.office, client_id['office'])
     self.assertEqual(mock_entity.site, client_id['site'])
     self.mox.VerifyAll()
 
@@ -79,7 +78,7 @@ class CommonModuleTest(test.RequestHandlerTest):
 
     client_id = {
         'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
-        'office': 'foooffice', 'site': 'foosite'
+        'site': 'foosite'
     }
 
     mock_computer = self.mox.CreateMockAnything()
@@ -142,7 +141,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     track = 'footrack'
     config_track = 'footrack'
     site = 'NYC'
-    office = 'US-NYC-FOO'
     os_version = '10.6.3'
     client_version = '0.6.0.759.0'
     on_corp = True
@@ -160,7 +158,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'track': track, 'config_track': config_track, 'os_version': os_version,
         'client_version': client_version, 'on_corp': on_corp,
         'last_notified_datetime': last_notified_datetime_str,
-        'site': site, 'office': office, 'uptime': uptime,
+        'site': site, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
         'runtype': runtype,
     }
@@ -193,7 +191,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(track, mock_computer.track)
     self.assertEquals(config_track, mock_computer.config_track)
     self.assertEquals(site, mock_computer.site)
-    self.assertEquals(office, mock_computer.office)
     self.assertEquals(os_version, mock_computer.os_version)
     self.assertEquals(client_version, mock_computer.client_version)
     self.assertEquals(
@@ -217,7 +214,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     track = 'footrack'
     config_track = 'footrack'
     site = 'NYC'
-    office = 'US-NYC-FOO'
     os_version = '10.6.3'
     client_version = '0.6.0.759.0'
     on_corp = True
@@ -232,7 +228,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'track': track, 'config_track': config_track, 'os_version': os_version,
         'client_version': client_version, 'on_corp': on_corp,
         'last_notified_datetime': last_notified_datetime_str,
-        'site': site, 'office': office, 'uptime': uptime,
+        'site': site, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
         'runtype': runtype,
     }
@@ -270,7 +266,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(track, mock_computer.track)
     self.assertEquals(config_track, mock_computer.config_track)
     self.assertEquals(site, mock_computer.site)
-    self.assertEquals(office, mock_computer.office)
     self.assertEquals(os_version, mock_computer.os_version)
     self.assertEquals(client_version, mock_computer.client_version)
     self.assertEquals(
@@ -304,7 +299,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     track = 'footrack'
     config_track = 'footrack'
     site = 'NYC'
-    office = 'US-NYC-FOO'
     os_version = '10.6.3'
     client_version = '0.6.0.759.0'
     on_corp = True
@@ -320,7 +314,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'track': track, 'config_track': config_track, 'os_version': os_version,
         'client_version': client_version, 'on_corp': on_corp,
         'last_notified_datetime': last_notified_datetime_str,
-        'site': site, 'office': office, 'uptime': uptime,
+        'site': site, 'uptime': uptime,
         'root_disk_free': root_disk_free, 'user_disk_free': user_disk_free,
         'runtype': runtype,
     }
@@ -356,7 +350,6 @@ class CommonModuleTest(test.RequestHandlerTest):
     self.assertEquals(track, mock_computer.track)
     self.assertEquals(config_track, mock_computer.config_track)
     self.assertEquals(site, mock_computer.site)
-    self.assertEquals(office, mock_computer.office)
     self.assertEquals(os_version, mock_computer.os_version)
     self.assertEquals(client_version, mock_computer.client_version)
     self.assertEquals(
@@ -404,7 +397,7 @@ class CommonModuleTest(test.RequestHandlerTest):
         'uuid=6c3327e9-6405-4f05-8374-142cbbd260c9|owner=foouser|'
         'hostname=foohost|serial=1serial2|config_track=fooconfigtrack|track=%s|'
         'os_version=10.6.3|client_version=0.6.0.759.0|on_corp=0|'
-        'last_notified_datetime=2010-01-01|site=NYC|office=US-NYC-FOO|'
+        'last_notified_datetime=2010-01-01|site=NYC|'
         'uptime=123.0|root_disk_free=456|user_disk_free=789|applesus=false|'
         'runtype=auto|mgmt_enabled=true'
     )
@@ -416,7 +409,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         u'serial': u'1serial2',
         u'config_track': u'fooconfigtrack',
         u'site': u'NYC',
-        u'office': u'US-NYC-FOO',
         u'os_version': u'10.6.3',
         u'client_version': u'0.6.0.759.0',
         u'on_corp': False,
@@ -940,7 +932,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         'config_track': 'config_track',
         'track': 'track',
         'site': 'site',
-        'office': 'office',
         'os_version': 'os_version',
         'client_version': 'client_version',
         'on_corp': True,
@@ -1037,7 +1028,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         'config_track': 'config_track',
         'track': 'track',
         'site': 'site',
-        'office': 'office',
         'os_version': 'os_version',
         'client_version': 'client_version',
         'on_corp': True,
@@ -1090,7 +1080,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         'config_track': 'config_track',
         'track': 'track',
         'site': 'site',
-        'office': 'office',
         'os_version': 'os_version',
         'client_version': 'client_version',
         'on_corp': True,
@@ -1135,7 +1124,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         'config_track': 'config_track',
         'track': 'track',
         'site': 'site',
-        'office': 'office',
         'os_version': 'os_version',
         'client_version': 'client_version',
         'on_corp': True,
@@ -1179,7 +1167,6 @@ class CommonModuleTest(test.RequestHandlerTest):
         'config_track': 'config_track',
         'track': 'track',
         'site': 'site',
-        'office': 'office',
         'os_version': 'os_version',
         'client_version': 'client_version',
         'on_corp': True,

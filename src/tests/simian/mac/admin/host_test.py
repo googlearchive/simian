@@ -54,14 +54,14 @@ class HostModuleTest(basetest.TestCase):
     models.Computer(
         active=True, hostname='host1', serial=self.common_serial,
         uuid='UUID1', key_name='UUID1', owner='zaspire', client_version='2.3.1',
-        os_version='10.11', site='NYC', office='office1', track='stable',
+        os_version='10.11', site='NYC', track='stable',
         config_track='stable', connections_on_corp=1, connections_off_corp=0,
         uptime=90000.0, root_disk_free=0, user_disk_free=10).put()
 
     models.Computer(
         active=True, hostname='new-host1', serial=self.common_serial,
         uuid='NEWUUID1==', key_name='NEWUUID1==', owner='zerocool',
-        os_version='10.11', site='NYC', office='office1', track='stable',
+        os_version='10.11', site='NYC', track='stable',
         config_track='stable', connections_on_corp=1, connections_off_corp=0,
         uptime=90000.0, root_disk_free=0, user_disk_free=10,
         client_version='2.7.1').put()
@@ -70,7 +70,7 @@ class HostModuleTest(basetest.TestCase):
         active=True, hostname='host10', serial=str(uuid.uuid4()),
         uuid='UUID2', key_name='UUID2', owner='zerocool',
         client_version='2.3.2', os_version='10.11', site='MTV',
-        office='office0', track='stable', config_track='stable',
+        track='stable', config_track='stable',
         connections_on_corp=1, connections_off_corp=1,
         uptime=90000.0, root_disk_free=0, user_disk_free=10).put()
 

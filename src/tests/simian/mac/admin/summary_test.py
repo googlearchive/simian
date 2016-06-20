@@ -58,7 +58,7 @@ class SummaryModuleTest(basetest.TestCase):
     models.Computer(
         active=True, hostname='host1', serial=str(uuid.uuid4()),
         uuid=str(uuid.uuid4()), owner='zaspire', client_version='2.3.1',
-        os_version='10.11', site='NYC', office='office1', track='stable',
+        os_version='10.11', site='NYC', track='stable',
         config_track='stable', connection_dates=[today],
         connections_on_corp=1, connections_off_corp=0, uptime=90000.0,
         root_disk_free=0, user_disk_free=10, preflight_datetime=today).put()
@@ -67,7 +67,7 @@ class SummaryModuleTest(basetest.TestCase):
     models.Computer(
         active=True, hostname='host10', serial=str(uuid.uuid4()),
         uuid=str(uuid.uuid4()), owner='zerocool', client_version='2.3.2',
-        os_version='10.11', site='MTV', office='office0', track='stable',
+        os_version='10.11', site='MTV', track='stable',
         config_track='stable', connection_dates=[five_days_ago],
         connections_on_corp=1, connections_off_corp=1, uptime=90000.0,
         root_disk_free=0, user_disk_free=10,
@@ -77,7 +77,7 @@ class SummaryModuleTest(basetest.TestCase):
     models.Computer(
         active=False, hostname='host2', serial=str(uuid.uuid4()),
         uuid=str(uuid.uuid4()), owner='zerocool', client_version='2.3.1',
-        os_version='10.11', site='MTV', office='office0', track='stable',
+        os_version='10.11', site='MTV', track='stable',
         config_track='stable', connection_dates=[long_ago],
         connections_on_corp=1, connections_off_corp=1, uptime=90000.0,
         root_disk_free=0, user_disk_free=10,
@@ -87,7 +87,7 @@ class SummaryModuleTest(basetest.TestCase):
     models.Computer(
         active=True, hostname='xyz-macbook', serial=str(uuid.uuid4()),
         uuid=str(uuid.uuid4()), owner='zerocool', client_version='2.3.3',
-        os_version='10.10', site='MTV', office='office0', track='unstable',
+        os_version='10.10', site='MTV', track='unstable',
         config_track='unstable', connection_dates=[today],
         connections_on_corp=0, connections_off_corp=100, uptime=90000.0,
         root_disk_free=0, user_disk_free=10, preflight_datetime=today).put()

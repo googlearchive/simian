@@ -24,7 +24,7 @@
      {% if owner_lookup_url %}
      <th>Owner Details</th>
      {% endif %}
-     {% if client_site_enabled %}<th>Site</th><th>Office</th>{% endif %}
+     {% if client_site_enabled %}<th>Site</th>{% endif %}
      <th>Config Track</th>
      <th>OS Version</th><th>HDD Bytes Free</th><th>Uptime</th>
   </tr>
@@ -46,7 +46,6 @@
     {% endif %}
     {% if client_site_enabled %}
       <td>{{ computer.site|default_if_none:"&nbsp;" }}</td>
-      <td>{{ computer.office|default_if_none:"&nbsp;" }}</td>
     {% endif %}
     <td>{{ computer.config_track }}</td>
     <td>{{ computer.os_version }}</td>

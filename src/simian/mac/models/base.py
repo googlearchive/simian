@@ -337,7 +337,6 @@ class Computer(db.Model):
   client_version = db.StringProperty()  # i.e. 0.6.0.759.0.
   os_version = db.StringProperty()  # i.e. 10.5.3, 10.6.1, etc.
   site = db.StringProperty()  # string site or campus name. i.e. NYC.
-  office = db.StringProperty()  # string office name. i.e. US-NYC-FOO.
   # Simian track (i.e. Munki)
   track = db.StringProperty()  # i.e. stable, testing, unstable
   # Configuration track (i.e. Puppet)
@@ -1137,5 +1136,4 @@ class FirstClientConnection(BaseModel):
   owner = db.StringProperty()
   hostname = db.StringProperty()
   emailed = db.DateTimeProperty()
-  office = db.StringProperty()
   site = db.StringProperty()

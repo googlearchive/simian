@@ -78,7 +78,6 @@ SETTINGS_FACTER = {
     'configtrack': settings.CONFIGTRACK,
     'simiantrack': settings.SIMIANTRACK,
     'site': settings.SITE,
-    'location': settings.LOCATION,
     'applesus': settings.APPLESUS,
 }
 
@@ -95,7 +94,6 @@ sp_local_host_name => %(sp_local_host_name)s
 configtrack => %(configtrack)s
 simiantrack => %(simiantrack)s
 site => %(site)s
-location => %(location)s
 applesus => %(applesus)s""" % facts
 
 

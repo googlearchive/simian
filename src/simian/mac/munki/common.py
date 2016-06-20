@@ -33,7 +33,7 @@ from simian.mac.munki import plist as plist_module
 
 CLIENT_ID_FIELDS = {
     'uuid': str, 'owner': str, 'hostname': str, 'serial': str,
-    'config_track': str, 'track': str, 'site': str, 'office': str,
+    'config_track': str, 'track': str, 'site': str,
     'os_version': str, 'client_version': str, 'on_corp': bool,
     'last_notified_datetime': str, 'uptime': float, 'root_disk_free': int,
     'user_disk_free': int, 'applesus': bool, 'runtype': str,
@@ -84,7 +84,6 @@ def _SaveFirstConnection(client_id, computer):
   e.computer = computer
   e.owner = client_id['owner']
   e.hostname = client_id['hostname']
-  e.office = client_id['office']
   e.site = client_id['site']
   e.put()
 
@@ -152,7 +151,6 @@ def LogClientConnection(
     c.owner = _client_id['owner']
     c.track = _client_id['track']
     c.site = _client_id['site']
-    c.office = _client_id['office']
     c.config_track = _client_id['config_track']
     c.client_version = _client_id['client_version']
     c.os_version = _client_id['os_version']
@@ -551,7 +549,6 @@ def GetComputerManifest(uuid=None, client_id=None, packagemap=False):
         'config_track': c.config_track,
         'track': c.track,
         'site': c.site,
-        'office': c.office,
         'os_version': c.os_version,
         'client_version': c.client_version,
         # TODO(user): Fix this; it may not be accurate.

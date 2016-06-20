@@ -424,7 +424,6 @@ def GetClientIdentifier(runtype=None):
   applesus = facts.get('applesus', 'true').lower() == 'true'
 
   site = facts.get('site', None)
-  office = facts.get('location', None)
 
   os_version = platform.mac_ver()[0]  # tuple like: ('10.6.3', (...), 'i386')
 
@@ -497,7 +496,6 @@ def GetClientIdentifier(runtype=None):
       'applesus': applesus,
       'mgmt_enabled': mgmt_enabled,
       'site': site,
-      'office': office,
       'os_version': os_version,
       'client_version': GetClientVersion(),
       'on_corp': on_corp,

@@ -53,7 +53,7 @@
       <tr class="multi-header">
          <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
          <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
-         <th>Site</th><th>Office</th><th>Last Preflight</th>
+         <th>Site</th><th>Last Preflight</th>
          <th>Last On Corp Preflight</th><th>Last IP Address</th>
          <th>Upload Logs</th>
       </tr>
@@ -68,7 +68,6 @@
         <td>{{ c.os_version }}</td>
         <td>{{ c.client_version }}</td>
         <td>{{ c.site }}</td>
-        <td>{{ c.office }}</td>
         <td>{{ c.preflight_datetime|timesince }}</td>
         <td>{{ c.last_on_corp_preflight_datetime|timesince }}</td>
         {% if is_admin or is_security_user %}
@@ -103,7 +102,7 @@
       <tr class="multi-header">
          <th>Hostname</th><th>UUID</th><th>Owner</th><th>Track</th>
          <th>Config Track</th><th>OS Version</th><th>Munki Version</th>
-         <th>Site</th><th>Office</th><th>Preflight Count</th>
+         <th>Site</th><th>Preflight Count</th>
          <th>Last Preflight</th><th>Last Postflight</th>
          <th>Last On Corp Preflight</th><th>Last IP Address</th>
          <th>Upload Logs</th>
@@ -119,7 +118,6 @@
         <td>{{ c.os_version }}</td>
         <td>{{ c.client_version }}</td>
         <td>{{ c.site }}</td>
-        <td>{{ c.office }}</td>
         <td>{{ c.preflight_count_since_postflight }}</td>
         <td>{{ c.preflight_datetime|timesince }}</td>
         <td>{{ c.postflight_datetime|timesince }}</td>
