@@ -22,147 +22,124 @@ import logging
 
 import mock
 import stubout
+import webtest
+
+from google.appengine.ext import testbed
 
 from django.conf import settings
 settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 import tests.appenginesdk
+from simian.mac import admin
+from simian.mac.admin import main as gae_main
 from simian.mac.admin import panic
 from simian.mac.admin import xsrf
+from simian.mac.common import auth
 from tests.simian.mac.common import test
+from simian.mac.munki import common
 
 
 @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
-class AdminPanicTest(test.RequestHandlerTest):
+class AdminPanicTest(basetest.TestCase):
 
-  def GetTestClassInstance(self):
-    request = None
-    response = mock.MagicMock()
-    return panic.AdminPanic(request, response)
+  def setUp(self):
+    super(AdminPanicTest, self).setUp()
 
-  def GetTestClassModule(self):
-    return panic
+    self.testapp = webtest.TestApp(gae_main.app)
 
-  def testGet(self, _):
-    """Test get()."""
-    self.mox.StubOutWithMock(panic.common, 'IsPanicMode')
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
-    self.mox.StubOutWithMock(self.c, 'Render')
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
 
-    self.c.IsAdminUser().AndReturn(True)
+    self.testbed.init_all_stubs()
+
+  def tearDown(self):
+    super(AdminPanicTest, self).tearDown()
+    self.testbed.deactivate()
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(admin.template, 'render', return_value='html:)')
+  def testGet(self, render_mock, *_):
+    self.testapp.get('/admin/panic', status=httplib.OK)
+
     modes = []
-
     for mode in panic.common.PANIC_MODES:
-      panic.common.IsPanicMode(mode).AndReturn(False)
       modes.append({'name': mode, 'enabled': False})
 
-    self.c.Render(
-        'panic.html', {'modes': modes, 'report_type': 'panic'})
+    render_mock.assert_called_once()
+    self.assertEqual(
+        modes, test.GetArgFromCallHistory(render_mock, arg_index=1)['modes'])
 
-    self.mox.ReplayAll()
-    self.c.get()
-    self.mox.VerifyAll()
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(admin.template, 'render', return_value='html:)')
+  def testPost(self, render_mock, *_):
+    mode = 'Mod1'
+    self.testapp.post('/admin/panic', {'mode': mode, 'enabled': 'enable'})
 
-  def testPost(self, _):
-    """Test post()."""
-    mode = 'mode'
-    enabled = 'enable'
+    render_mock.assert_called_once()
+    self.assertTrue(
+        test.GetArgFromCallHistory(
+            render_mock).endswith('panic_set_verify.html'))
+    self.assertEqual(
+        {'name': mode, 'enabled': 'enable'},
+        test.GetArgFromCallHistory(render_mock, arg_index=1)['mode'])
 
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
-    self.request.get('xsrf_token').AndReturn('token')
-    self.c.IsAdminUser().AndReturn(True)
-    self.request.get('mode').AndReturn(mode)
-    self.request.get('enabled').AndReturn('enable')
-    self.request.get('verify').AndReturn(None)
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testPostWhenVerifyEnable(self, *_):
+    mode = 'no_packages'
 
-    self.mox.StubOutWithMock(self.c, 'Render')
-    self.c.Render(
-        'panic_set_verify.html',
-        {'mode': {'name': mode, 'enabled': enabled}, 'report_type': 'panic'})
+    resp = self.testapp.post(
+        '/admin/panic', {'mode': mode, 'enabled': 'enable', 'verify': 1},
+        status=httplib.FOUND)
 
-    self.mox.ReplayAll()
-    self.c.post()
-    self.mox.VerifyAll()
+    self.assertTrue(resp.headers['Location'].endswith('/admin/panic'))
+    self.assertTrue(common.IsPanicMode(mode))
 
-  def testPostWhenVerifyEnable(self, _):
-    """Test post()."""
-    mode = 'mode'
-    enabled = 'enable'
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testPostWhenVerifyDisable(self, *_):
+    mode = 'no_packages'
+    common.SetPanicMode(mode, True)
 
-    self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
+    resp = self.testapp.post(
+        '/admin/panic', {'mode': mode, 'enabled': 'disable', 'verify': 1},
+        status=httplib.FOUND)
 
-    self.request.get('xsrf_token').AndReturn('token')
-    self.c.IsAdminUser().AndReturn(True)
-    self.request.get('mode').AndReturn(mode)
-    self.request.get('enabled').AndReturn(enabled)
-    self.request.get('verify').AndReturn(True)
-    panic.common.SetPanicMode(mode, True).AndReturn(None)
-    self.MockRedirect('/admin/panic')
+    self.assertTrue(resp.headers['Location'].endswith('/admin/panic'))
+    self.assertFalse(common.IsPanicMode(mode))
 
-    self.mox.ReplayAll()
-    self.c.post()
-    self.mox.VerifyAll()
-
-  def testPostWhenVerifyDisable(self, _):
-    """Test post()."""
-    mode = 'mode'
-    enabled = 'disable'
-
-    self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
-
-    self.request.get('xsrf_token').AndReturn('token')
-    self.c.IsAdminUser().AndReturn(True)
-    self.request.get('mode').AndReturn(mode)
-    self.request.get('enabled').AndReturn(enabled)
-    self.request.get('verify').AndReturn(True)
-    panic.common.SetPanicMode(mode, False).AndReturn(None)
-    self.MockRedirect('/admin/panic')
-
-    self.mox.ReplayAll()
-    self.c.post()
-    self.mox.VerifyAll()
-
-  def testPostWhenInvalidMode(self, _):
-    """Test post()."""
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testPostWhenInvalidMode(self, *_):
     mode = 'modezzz'
-    enabled = 'enable'
+    self.testapp.post(
+        '/admin/panic', {'mode': mode, 'enabled': 'disable', 'verify': 1},
+        status=httplib.BAD_REQUEST)
 
-    self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
-
-    self.request.get('xsrf_token').AndReturn('token')
-    self.c.IsAdminUser().AndReturn(True)
-    self.request.get('mode').AndReturn(mode)
-    self.request.get('enabled').AndReturn(enabled)
-    self.request.get('verify').AndReturn(True)
-    panic.common.SetPanicMode(mode, True).AndRaise(ValueError)
-    self.MockError(httplib.BAD_REQUEST)
-
-    self.mox.ReplayAll()
-    self.c.post()
-    self.mox.VerifyAll()
-
-  def testPostWhenInvalidEnabled(self, _):
-    """Test post()."""
-    mode = 'mode'
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testPostWhenInvalidEnabled(self, *_):
+    mode = 'no_packages'
     enabled = 'enablzzZZZe'
+    common.SetPanicMode(mode, True)
 
-    self.mox.StubOutWithMock(panic.common, 'SetPanicMode')
-    self.mox.StubOutWithMock(self.c, 'IsAdminUser')
+    self.testapp.post(
+        '/admin/panic', {'mode': mode, 'enabled': enabled, 'verify': 1},
+        status=httplib.BAD_REQUEST)
 
-    self.request.get('xsrf_token').AndReturn('token')
-    self.c.IsAdminUser().AndReturn(True)
-    self.request.get('mode').AndReturn(mode)
-    self.request.get('enabled').AndReturn(enabled)
-    self.request.get('verify').AndReturn(True)
-    self.MockError(httplib.BAD_REQUEST)
+  def testPostAccessDenied(self, *_):
+    mode = 'no_packages'
+    common.SetPanicMode(mode, True)
 
-    self.mox.ReplayAll()
-    self.c.post()
-    self.mox.VerifyAll()
+    self.testapp.post(
+        '/admin/panic', {'mode': mode, 'enabled': 'disable', 'verify': 1},
+        status=httplib.FORBIDDEN)
+
+  def testGetAccessDenied(self, *_):
+    self.testapp.get('/admin/panic', status=httplib.FORBIDDEN)
 
 
 logging.basicConfig(filename='/dev/null')

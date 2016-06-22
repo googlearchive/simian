@@ -32,6 +32,7 @@ class AdminPanic(admin.AdminHandler):
   def get(self):
     """GET handler."""
     if not self.IsAdminUser():
+      self.error(httplib.FORBIDDEN)
       return
 
     modes = []
@@ -49,6 +50,7 @@ class AdminPanic(admin.AdminHandler):
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
+      self.error(httplib.FORBIDDEN)
       return
 
     mode = self.request.get('mode')
@@ -72,11 +74,11 @@ class AdminPanic(admin.AdminHandler):
       else:
         try:
           common.SetPanicMode(mode, enabled)
-          if mail:
-            user = users.get_current_user()
-            subject = 'Panic Mode Update by %s' % user
-            body = '%s has set \'%s\' for Panic Mode.\n' % (user, enabled)
-            mail.SendMail(settings.EMAIL_ADMIN_LIST, subject, body)
+
+          user = users.get_current_user()
+          subject = 'Panic Mode Update by %s' % user
+          body = '%s has set \'%s\' for Panic Mode.\n' % (user, enabled)
+          mail.SendMail(settings.EMAIL_ADMIN_LIST, subject, body)
 
           self.redirect('/admin/panic')
         except ValueError:
