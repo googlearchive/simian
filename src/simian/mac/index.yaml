@@ -245,3 +245,21 @@ indexes:
   - name: user
   - name: mtime
     direction: desc
+
+- kind: GroupManifestModification
+  properties:
+  - name: group_key_name
+  - name: mtime
+    direction: desc
+
+- kind: GroupManifestModification
+  properties:
+  - name: value
+  - name: mtime
+    direction: desc
+
+- kind: GroupManifestModification
+  properties:
+  - name: user
+  - name: mtime
+    direction: desc

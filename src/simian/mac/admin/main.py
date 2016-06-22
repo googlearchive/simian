@@ -25,6 +25,7 @@ from simian.mac.admin import acl_groups
 from simian.mac.admin import applesus
 from simian.mac.admin import broken_clients
 from simian.mac.admin import config
+from simian.mac.admin import groups
 from simian.mac.admin import host
 from simian.mac.admin import ip_blacklist
 from simian.mac.admin import lock_admin
@@ -83,6 +84,7 @@ app = webapp2.WSGIApplication([
     (r'/admin/proposals/([\w\-]+)/?', packages.PackageProposals),
 
     (r'/admin/tags/?$', tags.Tags),
+    (r'/admin/groups/?$', groups.Groups),
 
     (r'/admin/uploadpkg/?$', uploadpkg.UploadPackage),
 

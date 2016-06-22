@@ -29,6 +29,7 @@
                         {% if not search_type %}selected{% endif %}>Username</option>
                 <option value="uuid" {% ifequal search_type "uuid" %}selected{% endifequal %}>UUID</option>
                 <option value="tag" {% ifequal search_type "tag" %}selected{% endifequal %}>Tag</option>
+                <option value="group" {% ifequal search_type "group" %}selected{% endifequal %}>Group</option>
               </select>
             </td>
             <td>

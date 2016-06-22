@@ -128,6 +128,8 @@ class Host(admin.AdminHandler):
 
     tags = {}
     tags_list = []
+    groups = {}
+    groups_list = []
     duplicates = []
     if computer:
       # Generate tags data.
@@ -138,6 +140,15 @@ class Host(admin.AdminHandler):
         if tag not in tags:
           tags[tag] = False
       tags = json.dumps(tags, sort_keys=True)
+
+      # Generate groups data.
+      groups_list = models.Group.GetAllGroupNamesForUser(computer.owner)
+      for group in groups_list:
+        groups[group] = True
+      for group in models.Group.GetAllGroupNames():
+        if group not in groups:
+          groups[group] = False
+      groups = json.dumps(groups, sort_keys=True)
 
       admin.AddTimezoneToComputerDatetimes(computer)
       computer.connection_dates.reverse()
@@ -170,6 +181,8 @@ class Host(admin.AdminHandler):
         'preflight_exits': exits,
         'tags': tags,
         'tags_list': tags_list,
+        'groups': groups,
+        'groups_list': groups_list,
         'host_report': True,
         'limit': SINGLE_HOST_DATA_FETCH_LIMIT,
         'is_support_user': auth.IsSupportUser(),
@@ -178,6 +191,7 @@ class Host(admin.AdminHandler):
         'self_report': self_report,
         'duplicates': duplicates,
         'tags_xsrf_token': xsrf.XsrfTokenGenerate('tags'),
+        'groups_xsrf_token': xsrf.XsrfTokenGenerate('groups'),
     }
 
     if popup:

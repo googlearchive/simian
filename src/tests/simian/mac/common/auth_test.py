@@ -154,7 +154,7 @@ class AuthModuleTest(mox.MoxTestBase):
     auth.models.KeyValueCache.MemcacheWrappedGet(
         'oauth_users', 'text_value').AndReturn(None)
 
-    auth.oauth.get_current_user().AndReturn(mock_user)
+    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
     mock_user.email().AndReturn(email)
 
     self.mox.ReplayAll()
@@ -173,7 +173,7 @@ class AuthModuleTest(mox.MoxTestBase):
     auth.settings.OAUTH_USERS = []
     oauth_users = [email]
 
-    auth.oauth.get_current_user().AndReturn(mock_user)
+    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     auth.IsAdminUser(email).AndReturn(True)
     auth.models.KeyValueCache.MemcacheWrappedGet(
@@ -188,7 +188,8 @@ class AuthModuleTest(mox.MoxTestBase):
     """Test DoOAuthAuth() where OAuth was not used at all."""
     self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
 
-    auth.oauth.get_current_user().AndRaise(auth.oauth.OAuthRequestError)
+    auth.oauth.get_current_user(
+        auth.OAUTH_SCOPE).AndRaise(auth.oauth.OAuthRequestError)
 
     self.mox.ReplayAll()
     self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
@@ -202,7 +203,7 @@ class AuthModuleTest(mox.MoxTestBase):
     mock_user = self.mox.CreateMockAnything()
     email = 'foouser@example.com'
 
-    auth.oauth.get_current_user().AndReturn(mock_user)
+    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     auth.IsAdminUser(email).AndReturn(False)
 
@@ -219,7 +220,7 @@ class AuthModuleTest(mox.MoxTestBase):
     email = 'foouser@example.com'
     auth.settings.OAUTH_USERS = []
 
-    auth.oauth.get_current_user().AndReturn(mock_user)
+    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
     mock_user.email().AndReturn(email)
     auth.models.KeyValueCache.MemcacheWrappedGet(
         'oauth_users', 'text_value').AndReturn(None)

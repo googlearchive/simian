@@ -40,6 +40,7 @@ MOD_TYPES = (
     ('site', 'Site'),
     ('os_version', 'OS Version'),
     ('tag', 'Tag'),
+    ('group', 'Group'),
 )
 # A dictionary of the allowed manifest modification types for each group.
 MOD_GROUP_TYPES = {

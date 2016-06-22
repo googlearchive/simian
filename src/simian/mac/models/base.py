@@ -970,6 +970,41 @@ class Tag(BaseModel):
     return cls.GetAllTagNamesForKey(entity.key())
 
 
+class Group(BaseModel):
+  """A generic string group that references a list of string users."""
+  ALL_GROUPS_MEMCACHE_KEY = 'all_groups'
+
+  modifier = db.UserProperty(auto_current_user=True)
+  mrtime = db.DateTimeProperty(auto_now=True)
+  users = db.StringListProperty()
+
+  def put(self, *args, **kwargs):
+    """Ensure groups memcache entries are purged when a new one is created."""
+    memcache.delete(self.ALL_GROUPS_MEMCACHE_KEY)
+    return super(Group, self).put(*args, **kwargs)
+
+  def delete(self, *args, **kwargs):
+    """Ensure groups memcache entries are purged when one is delete."""
+    memcache.delete(self.ALL_GROUPS_MEMCACHE_KEY)
+    return super(Group, self).delete(*args, **kwargs)
+
+  @classmethod
+  def GetAllGroupNames(cls):
+    """Returns a list of all group names."""
+    groups = memcache.get(cls.ALL_GROUPS_MEMCACHE_KEY)
+    if not groups:
+      groups = [key.name() for key in cls.all(keys_only=True)]
+      groups = sorted(groups, key=unicode.lower)
+      memcache.set(cls.ALL_GROUPS_MEMCACHE_KEY, groups)
+    return groups
+
+  @classmethod
+  def GetAllGroupNamesForUser(cls, user):
+    """Returns a list of all group names for a given string user."""
+    return [k.name() for k in
+            cls.all(keys_only=True).filter('users =', user)]
+
+
 class BaseManifestModification(BaseModel):
   """Manifest modifications for dynamic manifest generation."""
 
@@ -1092,12 +1127,21 @@ class TagManifestModification(BaseManifestModification):
   tag_key_name = db.StringProperty()  # Tag Model key_name.
 
 
+class GroupManifestModification(BaseManifestModification):
+  """Manifest modifications for dynamic manifest generation by user group."""
+
+  TARGET_PROPERTY_NAME = 'group_key_name'
+
+  group_key_name = db.StringProperty()  # Group Model key_name.
+
+
 MANIFEST_MOD_MODELS = {
     'owner': OwnerManifestModification,
     'uuid': UuidManifestModification,
     'site': SiteManifestModification,
     'os_version': OSVersionManifestModification,
     'tag': TagManifestModification,
+    'group': GroupManifestModification,
 }
 
 

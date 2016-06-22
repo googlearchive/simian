@@ -109,6 +109,12 @@ class Summary(admin.AdminHandler):
         computers = [db.get(key) for key in tag.keys]
       else:
         computers = []
+    elif report_type == 'group':
+      group = models.Group.get_by_key_name(report_filter)
+      if group:
+        query.filter('owner IN', group.users)
+      else:
+        computers = []
     elif report_type in REPORT_TYPES:
       query.filter('%s =' % report_type, report_filter)
     else:

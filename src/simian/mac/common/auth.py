@@ -42,6 +42,7 @@ ACL_GROUPS = {
 PROPOSE = 'Propose'
 UPLOAD = 'Upload'
 VIEW_PACKAGES = 'ViewPackages'
+OAUTH_SCOPE = 'https://www.googleapis.com/auth/userinfo.email'
 
 
 class Error(Exception):
@@ -200,7 +201,7 @@ def DoOAuthAuth(is_admin=None, require_level=None):
   """
   # TODO(user): make use of require_level.
   try:
-    user = oauth.get_current_user()
+    user = oauth.get_current_user(OAUTH_SCOPE)
   except oauth.OAuthRequestError:
     raise NotAuthenticated('OAuthRequestError')
 

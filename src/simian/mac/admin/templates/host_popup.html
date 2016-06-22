@@ -26,5 +26,9 @@
     <dt>Tags</dt>
     <dd>{{ tags_list|join:", " }}</dd>
     {% endif %}
+    {% if groups_list %}
+    <dt>Groups</dt>
+    <dd>{{ groups_list|join:", " }}</dd>
+    {% endif %}
   </dl>
 {% endif %}

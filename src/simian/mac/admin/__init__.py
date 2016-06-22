@@ -100,6 +100,7 @@ def GetMenu():
            {'type': 'panic', 'url': '/admin/panic', 'name': 'Panic Mode'}
        ]},
       {'type': 'tags', 'url': '/admin/tags', 'name': 'Tags'},
+      {'type': 'groups', 'url': '/admin/groups', 'name': 'Groups'},
 
       {'title': 'Client Reports'},
 

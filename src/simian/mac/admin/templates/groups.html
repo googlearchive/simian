@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Groups{% endblock %}
+
+{% block page-content %}
+<div class="wrap">
+  {% if can_mod_groups %}
+  <fieldset>
+  <legend>Add New Groups</legend>
+  {% if error %}<p style="color: #FF0000;">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
+    <input type="hidden" name="action" value="create" />
+    Group: <input type="text" name="group" />
+    <button type="submit" style="margin-left: 20px;">Create</button>
+  </form>
+  </fieldset>
+
+  <h3>Existing Groups</h3>
+  {% endif %}
+
+  <table class="stats-table">
+    <tr class="multi-header">
+      <th>Groups</th><th>Admin</th><th>Users</th><th>Delete</th>
+    </tr>
+    {% for g in groups %}
+      <tr>
+        <td>{{ g.key.name }}</td>
+        <td>{{ g.user }}</td>
+        <td><a href="/admin?filter-type=group&amp;filter={{ g.key.name|urlencode }}">
+            {{ g.users|length }}</a></td>
+        <td>
+          {% if can_mod_groups %}
+            <form method="POST">
+            <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}" />
+              <input type="hidden" name="action" value="delete" />
+              <input type="hidden" name="group" value="{{ g.key.name }}" />
+              <button class="red delete">Delete</button>
+            </form>
+          {% else %}
+            N/A
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+</div>
+
+{% endblock %}

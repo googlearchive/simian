@@ -658,6 +658,15 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
         tag_mods.extend(
             models.TagManifestModification.MemcacheWrappedGetAllFilter(t))
 
+  group_mods = []
+  if client_id['owner']:
+    owner_groups = models.Group.GetAllGroupNamesForUser(client_id['owner'])
+    if owner_groups:
+      for group in owner_groups:
+        g = (('group_key_name =', group),)
+        group_mods.extend(
+            models.GroupManifestModification.MemcacheWrappedGetAllFilter(g))
+
   def __ApplyModifications(manifest, mod, plist):
     """Applies a manifest modification if the manifest matches mod manifest.
 
@@ -676,7 +685,8 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
       plist_module.UpdateIterable(
           plist, install_type, mod.value, default=[], op=_ModifyList)
 
-  if site_mods or owner_mods or os_version_mods or uuid_mods or tag_mods:
+  if (site_mods or owner_mods or os_version_mods or uuid_mods or tag_mods
+      or group_mods):
     if type(plist) is str:
       plist = plist_module.MunkiManifestPlist(plist)
       plist.Parse()
@@ -689,6 +699,8 @@ def GenerateDynamicManifest(plist, client_id, user_settings=None):
     for mod in uuid_mods:
       __ApplyModifications(manifest, mod, plist)
     for mod in tag_mods:
+      __ApplyModifications(manifest, mod, plist)
+    for mod in group_mods:
       __ApplyModifications(manifest, mod, plist)
 
   if user_settings:

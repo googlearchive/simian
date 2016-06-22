@@ -38,8 +38,11 @@
       <td>{{ uuid_lookup_url|host_details_link:computer.uuid }}</td>
     {% endif %}
     <td>
-      <a href="/admin?filter-type=owner&filter={{ computer.owner }}"
-        >{{ computer.owner }}</a>
+      <a href="/admin?filter-type=owner&amp;filter={{ computer.owner }}">
+        <span id="owner">{{ computer.owner }}
+        </span>
+      </a>
+      <div id="host-groups"></div>
     </td>
     {% if owner_lookup_url %}
       <td><a href="{{ owner_lookup_url }}{{ computer.owner }}">view</a></td>
@@ -71,6 +74,7 @@
     <td>
       <span id="uuid">{{ computer.uuid }}</span>
       <span id="tags-xsrf-token" style="display: none;">{{ tags_xsrf_token }}</span>
+      <span id="groups-xsrf-token" style="display: none;">{{ groups_xsrf_token }}</span>
     </td>
     <td>{{ computer.track }}</td>
     <td>{{ computer.client_version }}</td>
@@ -290,6 +294,7 @@
   simian.zippyfy('content');
   {% if is_admin or is_security_user or is_physical_security_user %}
     simian.initHostTags({{ tags|safe }});
+    simian.initHostGroups({{ groups|safe }});
   {% endif %}
 </script>
 {% endblock %}
