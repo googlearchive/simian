@@ -28,7 +28,7 @@ CLOSURE_SERVICE_DOMAIN = 'closure-compiler.appspot.com'
 
 BASE_URL = 'https://raw.githubusercontent.com/google/simian/master/src/simian/mac/admin/js/'
 
-JS_FILES = ['main.js', 'forms.js', 'menu.js', 'net.js', 'tags.js']
+JS_FILES = ['main.js', 'forms.js', 'menu.js', 'net.js', 'tags.js', 'groups.js']
 CODE_URLS = [BASE_URL + f for f in JS_FILES]
 
 output_js_file = sys.argv[1]
