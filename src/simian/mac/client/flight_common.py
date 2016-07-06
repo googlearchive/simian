@@ -191,7 +191,7 @@ def Exec(cmd, env=None, timeout=0, waitfor=0):
   Returns:
     Tuple. (Integer return code, string standard out, string standard error).
   """
-  if isinstance(cmd, basestring):
+  if isinstance(cmd, str):
     shell = True
   else:
     shell = False
@@ -524,7 +524,7 @@ def DictToStr(d, delimiter=DELIMITER):
     if value is None:
       out.append('%s=' % key)
     else:
-      if isinstance(value, basestring):
+      if isinstance(value, str):
         value = value.decode('utf-8')
       out.append('%s=%s' % (key, value))
   return delimiter.join(out).encode('utf-8')

@@ -16,13 +16,21 @@
 #
 """maint module tests."""
 
+import httplib
 import logging
+import mock
+import stubout
 import mox
 import stubout
 
+from django.conf import settings
+settings.configure()
 from google.apputils import app
+from google.apputils import resources
+from simian.mac import models
 from tests.simian.mac.common import test
 from simian.mac.cron import maintenance as maint
+from simian.mac.cron.main import app as gae_app
 
 
 class AuthSessionCleanupTest(test.RequestHandlerTest):
@@ -86,63 +94,31 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
 
   def testGet(self):
     """Test get()."""
-    pkginfo1 = self.mox.CreateMockAnything()
-    pkginfo1.name = 'name1'
-    pkginfo1.filename = 'filename1'
-    pkginfo1.plist = 'plist1'
-    pkginfo1.version = '1.2.3'
-    pkg1_munki_name = '%s-%s' % (pkginfo1.name, pkginfo1.version)
-    pkginfo1.munki_name = pkg1_munki_name
-    pkg1_lock = 'pkgsinfo_%s' % pkginfo1.filename
-    mock_pl1 = self.mox.CreateMockAnything()
-    pkginfo1.plist = mock_pl1
+    plist_file = (
+        'simian/mac/common/testdata/testpackage.plist')
+    plist = open('src/tests/' + plist_file).read()
+    pkg1_munki_name = 'testpackage-1'
+    models.PackageInfo(filename='filename1', _plist=plist).put()
 
-    pkginfos = [pkginfo1]
+    with mock.patch.object(models.ReportsCache, 'GetInstallCounts') as m:
+      m.return_value = ({
+          pkg1_munki_name: {
+              'install_count': 3,
+              'applesus': True,
+              'duration_count': 2,
+              'duration_total_seconds': 50,
+              'duration_seconds_avg': int((50)/2),
+          }
+      }, 0)
+      resp = gae_app.get_response(
+          '/cron/maintenance/update_avg_install_durations')
+    self.assertEqual(httplib.OK, resp.status_int)
 
-    install_counts = {
-        pkg1_munki_name: {
-            'install_count': 3,
-            'applesus': True,
-            'duration_count': 2,
-            'duration_total_seconds': 50,
-            'duration_seconds_avg': int((50)/2),
-         },
-    }
-
-    pkg1_avg_duration_text = maint.models.PackageInfo.AVG_DURATION_TEXT % (
-        install_counts[pkg1_munki_name]['duration_count'],
-        install_counts[pkg1_munki_name]['duration_seconds_avg'])
-    pkg1_desc = 'This pkg is cool!'
-    pkg1_desc_updated = '%s\n\n%s' % (pkg1_desc, pkg1_avg_duration_text)
-
-    # Start with the description lacking avg duration text.
-    pkginfo1.description = pkg1_desc
-
-    self.mox.StubOutWithMock(maint.models.ReportsCache, 'GetInstallCounts')
-    self.mox.StubOutWithMock(maint.models.PackageInfo, 'all')
-    self.mox.StubOutWithMock(maint.gae_util, 'ObtainLock')
-    self.mox.StubOutWithMock(maint.gae_util, 'ReleaseLock')
-    self.mox.StubOutWithMock(maint.models.Catalog, 'all')
-    self.mox.StubOutWithMock(maint.models.Catalog, 'Generate')
-
-    maint.models.ReportsCache.GetInstallCounts().AndReturn(
-        (install_counts, None))
-    maint.models.PackageInfo.all().AndReturn(pkginfos)
-    maint.gae_util.ObtainLock(pkg1_lock, timeout=5.0).AndReturn(True)
-    mock_pl1.__getitem__('description').AndReturn(pkg1_desc)
-    mock_pl1.__getitem__('description').AndReturn(pkg1_desc_updated)
-    pkginfo1.put().AndReturn(None)
-    maint.gae_util.ReleaseLock(pkg1_lock).AndReturn(None)
-
-    delay = 0
-    for track in maint.common.TRACKS:
-      delay += 5
-      maint.models.Catalog.Generate(track, delay=delay)
-
-    self.mox.ReplayAll()
-    self.c.get()
-    self.assertEqual(pkginfo1.description, pkg1_desc_updated)
-    self.mox.VerifyAll()
+    pkg_info = models.PackageInfo().all().fetch(1)[0]
+    self.assertEqual(
+        'test package\n\n'
+        '2 users have installed this with an average duration of 25 seconds.',
+        pkg_info.plist['description'])
 
 
 class VerifyPackagesCleanupTest(test.RequestHandlerTest):

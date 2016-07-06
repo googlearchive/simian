@@ -23,10 +23,14 @@ import random
 import mox
 import stubout
 
+from google.appengine.ext import deferred
+from google.appengine.ext import testbed
+
 from django.conf import settings
 settings.configure()
 from google.apputils import app
 from google.apputils import basetest
+from simian.mac import models
 from simian.mac.cron import reports_cache
 
 
@@ -79,9 +83,15 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_all_stubs()
+
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
+
+    self.testbed.deactivate()
 
   def _GenDatetimes(self, *add_seconds):
     """Generate a random datetime and additional datetimes after it.
@@ -748,57 +758,68 @@ class ReportsCacheCleanupTest(mox.MoxTestBase):
 
   def testGenerateTrendingInstallsCache(self):
     """Tests _GenerateTrendingInstallsCache."""
-    self.mox.StubOutWithMock(reports_cache.models.InstallLog, 'all')
-    self.mox.StubOutWithMock(reports_cache.gae_util, 'QueryIterator')
-    self.mox.StubOutWithMock(
-        reports_cache.models.ReportsCache, 'SetTrendingInstalls')
-
-    install_one = self.mox.CreateMockAnything()
-    install_one.package = 'package_one'
-    install_two = self.mox.CreateMockAnything()
-    install_two.package = 'package_two'
-    install_three = self.mox.CreateMockAnything()
-    install_three.package = 'package_three'
-    install_four = self.mox.CreateMockAnything()
-    install_four.package = 'package_four'
-    installs = [
-        install_one, install_one, install_two, install_three, install_four]
-
-    mock_query = self.mox.CreateMockAnything()
-    reports_cache.models.InstallLog.all().AndReturn(mock_query)
-    mock_query.filter(
-        'mtime >', mox.IsA(reports_cache.datetime.datetime)).AndReturn(
-            mock_query)
-    reports_cache.gae_util.QueryIterator(mock_query).AndReturn(installs)
-
-    install_one.IsSuccess().AndReturn(True)
-    install_one.IsSuccess().AndReturn(True)
-    install_two.IsSuccess().AndReturn(False)
-    install_three.IsSuccess().AndReturn(False)
-    install_four.IsSuccess().AndReturn(True)
-
+    package1_name = 'package1'
+    package2_name = 'package2'
+    package3_name = 'package3'
+    package4_name = 'package4'
     expected_trending = {
         'success': {
             'packages': [
-                 (install_one.package, 2, 66.666666666666657),
-                 (install_four.package, 1, 33.333333333333329),
-             ],
-             'total': 3,
+                [package1_name, 10, 66.666666666666657],
+                [package4_name, 5, 33.333333333333329],
+            ],
+            'total': 15,
         },
         'failure': {
             'packages': [
-                 (install_two.package, 1, 50.0),
-                 (install_three.package, 1, 50.0),
-             ],
-             'total': 2,
-         },
+                [package2_name, 10, 40.0],
+                [package1_name, 10, 40.0],
+                [package3_name, 5, 20.0],
+            ],
+            'total': 25,
+        },
     }
-    reports_cache.models.ReportsCache.SetTrendingInstalls(
-        1, mox.SameElementsAs(expected_trending))
 
-    self.mox.ReplayAll()
+    for i in range(10):
+      models.InstallLog(package=package1_name, status='0').put()
+      models.InstallLog(package=package1_name, status='1').put()
+      models.InstallLog(package=package2_name, status='-1').put()
+      if i % 2:
+        models.InstallLog(package=package3_name, status='-1').put()
+        models.InstallLog(package=package4_name, status='0').put()
+
     reports_cache._GenerateTrendingInstallsCache(1)
-    self.mox.VerifyAll()
+
+    taskqueue_stub = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+    tasks = taskqueue_stub.get_filtered_tasks()
+    self.assertEqual(1, len(tasks))
+    deferred.run(tasks[0].payload)
+    self.assertEqual(1, len(taskqueue_stub.get_filtered_tasks()))
+
+    self.assertEqual(
+        expected_trending,
+        reports_cache.models.ReportsCache.GetTrendingInstalls(1)[0])
+
+  def testGenerateComputersSummaryCache(self):
+    today = datetime.datetime.now()
+    models.Computer(
+        active=True, hostname='xyz-macbook', serial='SERIAL',
+        uuid='UUID', owner='zerocool', client_version='2.3.3',
+        os_version='10.10', site='MTV', track='unstable',
+        config_track='unstable', connection_dates=[today],
+        connections_on_corp=0, connections_off_corp=100, uptime=90000.0,
+        root_disk_free=0, user_disk_free=10, preflight_datetime=today).put()
+
+    reports_cache._GenerateComputersSummaryCache()
+
+    taskqueue_stub = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+    tasks = taskqueue_stub.get_filtered_tasks()
+    self.assertEqual(1, len(tasks))
+    deferred.run(tasks[0].payload)
+    self.assertEqual(1, len(taskqueue_stub.get_filtered_tasks()))
+
+    self.assertEqual(
+        100, models.ReportsCache.GetStatsSummary()[0]['conns_off_corp'])
 
 
 logging.basicConfig(filename='/dev/null')

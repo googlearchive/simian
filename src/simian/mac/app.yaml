@@ -1,5 +1,6 @@
 application: ###APPID###
 version: 1
+instance_class: F1
 
 runtime: python27
 threadsafe: yes
@@ -10,8 +11,8 @@ inbound_services:
 
 automatic_scaling:
    max_concurrent_requests: 3
-   min_pending_latency: 80ms
-   max_pending_latency: 150ms
+   min_pending_latency: 100ms
+   max_pending_latency: 450ms
    min_idle_instances: 0
    max_idle_instances: 1
 

@@ -31,7 +31,6 @@ Functions:
 
 
 
-import array
 import base64
 import datetime
 import hashlib
@@ -233,16 +232,6 @@ class X509Certificate(BaseDataObject):
   BaseDataObject.CreateGetMethod('MayActAsCA', 'may_act_as_ca')
   BaseDataObject.CreateGetMethod('KeyUsage', 'key_usage')
   BaseDataObject.CreateGetMethod('SubjectAltName', 'subject_alt_name')
-
-  def _StrToArray(self, s):
-    """Return an array of bytes for a string.
-
-    Args:
-      s: str
-    Returns:
-      array.array instance
-    """
-    return array.array('B', s)
 
   def _CertTimestampToDatetime(self, ts):
     """Convert a timestamp from a x509 cert into a Python datetime.
@@ -761,15 +750,15 @@ class X509Certificate(BaseDataObject):
     if not other_cert.GetMayActAsCA():
       raise CertificateValueError('Other cert is not a CA cert')
 
-    sig = self._StrToArray(self.GetSignatureData())
-    fields = self._StrToArray(self.GetFieldsData())
+    sig = tlslite_bridge.StrToArray(self.GetSignatureData())
+    fields = tlslite_bridge.StrToArray(self.GetFieldsData())
     pk = other_cert.GetPublicKey()
 
     if self._cert['sig_algorithm'] == OID_SHA256_WITH_RSA_ENC:
       # tlslite doesn't support SHA256, so manually construct bytes to verify.
       fields_digest = hashlib.sha256(fields).digest()
-      hash_bytes = self._StrToArray(fields_digest)
-      prefix_bytes = self._StrToArray([
+      hash_bytes = tlslite_bridge.StrToArray(fields_digest)
+      prefix_bytes = tlslite_bridge.StrToArray([
           48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32])
       return pk.verify(sig, prefix_bytes + hash_bytes)
     else:

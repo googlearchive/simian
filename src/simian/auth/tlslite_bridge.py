@@ -16,6 +16,7 @@
 #
 """Bridge to support tlslite 0.4.* and 0.3.8."""
 
+import array
 import logging
 import os
 import sys
@@ -23,11 +24,13 @@ import sys
 # pylint: disable=unused-import,g-import-not-at-top
 try:
   from tlslite.X509 import X509
+  _RETURN_ARRAY = True
 except ImportError:
   # tlslite 0.4.0+
   # __init__ in tlslite imports all avaliable api.
   # part of it relies on fcntl which is not avaliable on appengine.
   # we don't use this api, so safely stub out fcntl for appengine
+  _RETURN_ARRAY = False
   if (os.environ.get('SERVER_SOFTWARE', '').startswith('Google App Engine') or
       os.environ.get('SERVER_SOFTWARE', '').startswith('Development')):
     logging.warning('stub out fcntl')
@@ -35,3 +38,17 @@ except ImportError:
   from tlslite.x509 import X509
 
 from tlslite.utils.keyfactory import parsePEMKey
+
+
+def StrToArray(s):
+  """Return an array of bytes or bytearray for a string.
+
+  Return type depends on tlslite version
+  Args:
+    s: str
+  Returns:
+    array.array/bytearray instance
+  """
+  if _RETURN_ARRAY:
+    return array.array('B', s)
+  return bytearray(s)

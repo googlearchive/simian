@@ -367,7 +367,7 @@ class PackageInfo(BaseMunkiModel):
     """
     ret = super(PackageInfo, self).delete(*args, **kwargs)
     for catalog in self.catalogs:
-      Catalog.Generate(catalog)
+      Catalog.Generate(catalog, delay=1)
     if self.blobstore_key:
       gae_util.SafeBlobDel(self.blobstore_key)
     return ret
@@ -406,7 +406,7 @@ class PackageInfo(BaseMunkiModel):
 
     changed_catalogs = set(original_catalogs + pkginfo.catalogs)
     for track in sorted(changed_catalogs, reverse=True):
-      Catalog.Generate(track)
+      Catalog.Generate(track, delay=1)
 
     # Log admin pkginfo put to Datastore.
     user = users.get_current_user().email()

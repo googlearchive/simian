@@ -102,14 +102,14 @@ class SummaryModuleTest(basetest.TestCase):
     trending['failure']['packages'].append(('office', 132, 99.9))
     reports_cache.SetTrendingInstalls(24, trending)
 
-    models.ReportsCache.SetStatsSummary(summary.GetComputerSummary())
-
   def tearDown(self):
     super(SummaryModuleTest, self).tearDown()
     self.testbed.deactivate()
 
   def testGetComputerSummary(self):
-    s = summary.GetComputerSummary()
+    computers = models.Computer.all().filter('active =', True).fetch(500)
+    s = summary.PrepareComputerSummaryForTemplate(
+        summary.GetComputerSummary(computers))
     self.assertEqual(2, dict(s['sites_histogram'])['MTV'])
     self.assertEqual(2, dict(s['os_versions'])['10.11'])
     self.assertEqual(1, dict(s['client_versions'])['2.3.3'])

@@ -18,6 +18,7 @@
 
 
 
+import array
 import types
 from google.apputils import app
 from google.apputils import basetest
@@ -25,6 +26,7 @@ import mox
 import stubout
 from pyasn1.type import univ
 from simian.auth import x509
+from simian.auth import tlslite_bridge
 
 
 class Error(Exception):
@@ -363,12 +365,10 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.VerifyAll()
 
   def testStrToArray(self):
-    """Test _StrToArray()."""
-    self.mox.StubOutWithMock(x509.array, 'array', True)
-    x509.array.array('B', 's').AndReturn('ary')
-    self.mox.ReplayAll()
-    self.assertEqual('ary', self.x._StrToArray('s'))
-    self.mox.VerifyAll()
+    """Test StrToArray()."""
+    r = tlslite_bridge.StrToArray('12313')
+    self.assertEqual(5, len(r))
+    self.assertTrue(isinstance(r, bytearray) or isinstance(r, array.array))
 
   def testCertTimestampToDatetimeWhenBadTimestamp(self):
     """Test _CertTimestampToDatetime()."""
@@ -1158,7 +1158,7 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testIsSignedBy(self):
     """Test IsSignedBy()."""
-    self.mox.StubOutWithMock(self.x, '_StrToArray')
+    self.mox.StubOutWithMock(tlslite_bridge, 'StrToArray')
     self.mox.StubOutWithMock(self.x, 'GetSignatureData')
     self.mox.StubOutWithMock(self.x, 'GetFieldsData')
     mock_othercert = self.mox.CreateMockAnything()
@@ -1167,8 +1167,8 @@ class X509CertificateTest(mox.MoxTestBase):
     mock_othercert.GetPublicKey().AndReturn(mock_othercert)  # lazy re-use
     self.x.GetSignatureData().AndReturn('sigdata')
     self.x.GetFieldsData().AndReturn('fieldsdata')
-    self.x._StrToArray('sigdata').AndReturn('arysigdata')
-    self.x._StrToArray('fieldsdata').AndReturn('aryfieldsdata')
+    tlslite_bridge.StrToArray('sigdata').AndReturn('arysigdata')
+    tlslite_bridge.StrToArray('fieldsdata').AndReturn('aryfieldsdata')
     mock_othercert.hashAndVerify('arysigdata', 'aryfieldsdata').AndReturn(True)
 
     self.mox.ReplayAll()

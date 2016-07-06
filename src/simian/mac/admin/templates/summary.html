@@ -126,18 +126,6 @@
       </table>
     </div>
 
-
-    <div id="offcorp" style="float: left; margin: 5px;">
-      <table class="barChart" title="% Off Corp / % of Clients">
-        {% for p in summary.off_corp_conns_histogram %}
-          <tr>
-            <td>{{ p.0 }}%</td>
-            <td>{{ p.1|floatformat }}%</td>
-          </tr>
-        {% endfor %}
-      </table>
-    </div>
-
     <div style="clear:both"></div>
   </div>
 

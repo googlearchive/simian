@@ -120,7 +120,8 @@ def LogClientConnection(
   """
   if delay:
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-    deferred_name = 'log-client-conn-%s-%s' % (client_id['uuid'], now_str)
+    deferred_name = 'log-client-conn-%s-%s' % (
+        client_id['uuid'].replace('=', ''), now_str)
     deferred.defer(
         LogClientConnection, event, client_id, user_settings=user_settings,
         pkgs_to_install=pkgs_to_install, ip_address=ip_address,
@@ -281,7 +282,7 @@ def WriteClientLog(model, uuid, **kwargs):
   except (db.Error, apiproxy_errors.Error, runtime.DeadlineExceededError):
     logging.warning('WriteClientLog put() failure; deferring...')
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
-    deferred_name = 'write-client-log-%s-%s' % (uuid, now_str)
+    deferred_name = 'write-client-log-%s-%s' % (uuid.replace('=', ''), now_str)
     deferred.defer(
         WriteClientLog, model, uuid,
         _name=deferred_name, _countdown=5, **kwargs)

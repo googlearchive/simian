@@ -57,8 +57,7 @@ class ReportsCache(webapp2.RequestHandler):
     """Handle GET."""
 
     if name == 'summary':
-      summary = summary_module.GetComputerSummary()
-      models.ReportsCache.SetStatsSummary(summary)
+      _GenerateComputersSummaryCache()
     elif name == 'installcounts':
       _GenerateInstallCounts()
     elif name == 'trendinginstalls':
@@ -289,32 +288,35 @@ def _GenerateInstallCounts():
     deferred.defer(_GenerateInstallCounts)
 
 
-def _GenerateTrendingInstallsCache(since_hours=None):
-  """Generates trending install and failure data."""
-  trending = {'success': {}, 'failure': {}}
-  total_success = 0
-  total_failure = 0
-  if not since_hours:
-    since_hours = 1
-  dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=since_hours * 60)
-  query = models.InstallLog.all().filter('mtime >', dt)
-  for install in gae_util.QueryIterator(query):
-    pkg = install.package.encode('utf-8')
-    if install.IsSuccess():
-      trending['success'][pkg] = trending['success'].setdefault(pkg, 0) + 1
-      total_success += 1
-    else:
-      trending['failure'][pkg] = trending['failure'].setdefault(pkg, 0) + 1
-      total_failure += 1
+def _GenerateTrendingInstallsCacheDeferCallback(
+    since_hours, query, cursor, total_success, total_failure,
+    trending):
+  """Defer task for _GenerateTrendingInstallsCache."""
+  installs = query.with_cursor(cursor).fetch(
+      summary_module.DEFAULT_COMPUTER_FETCH_LIMIT)
+  if installs:
+    for install in installs:
+      pkg = install.package.encode('utf-8')
+      if install.IsSuccess():
+        trending['success'][pkg] = trending['success'].setdefault(pkg, 0) + 1
+        total_success += 1
+      else:
+        trending['failure'][pkg] = trending['failure'].setdefault(pkg, 0) + 1
+        total_failure += 1
+
+    deferred.defer(
+        _GenerateTrendingInstallsCacheDeferCallback, since_hours, query,
+        query.cursor(), total_success, total_failure, trending)
+    return
 
   # Get the top trending installs and failures.
   success = sorted(
-      trending['success'].items(), key=lambda i: i[1], reverse=True)
+      trending['success'].items(), key=lambda i: (i[1], i[0]), reverse=True)
   success = success[:TRENDING_INSTALLS_LIMIT]
   success = [(pkg, count, float(count) / total_success * 100)
              for pkg, count in success]
   failure = sorted(
-      trending['failure'].items(), key=lambda i: i[1], reverse=True)
+      trending['failure'].items(), key=lambda i: (i[1], i[0]), reverse=True)
   failure = failure[:TRENDING_INSTALLS_LIMIT]
   failure = [(pkg, count, float(count) / total_failure * 100)
              for pkg, count in failure]
@@ -323,6 +325,19 @@ def _GenerateTrendingInstallsCache(since_hours=None):
       'failure': {'packages': failure, 'total': total_failure},
   }
   models.ReportsCache.SetTrendingInstalls(since_hours, trending)
+
+
+def _GenerateTrendingInstallsCache(since_hours=None):
+  """Generates trending install and failure data."""
+  if not since_hours:
+    since_hours = 1
+
+  trending = {'success': {}, 'failure': {}}
+  dt = datetime.datetime.utcnow() - datetime.timedelta(minutes=since_hours * 60)
+  query = models.InstallLog.all().filter('mtime >', dt)
+
+  _GenerateTrendingInstallsCacheDeferCallback(
+      since_hours, query, None, 0, 0, trending)
 
 
 def IsTimeDelta(dt1, dt2, seconds=None, minutes=None, hours=None, days=None):
@@ -355,3 +370,16 @@ def IsTimeDelta(dt1, dt2, seconds=None, minutes=None, hours=None, days=None):
 
   if ((delta.days * 86400) + delta.seconds) <= dseconds:
     return delta
+
+
+def _GenerateComputersSummaryCache(cursor=None, summary=None):
+  query = models.Computer.AllActive().with_cursor(cursor)
+
+  computers = query.fetch(summary_module.DEFAULT_COMPUTER_FETCH_LIMIT)
+  if computers:
+    summary = summary_module.GetComputerSummary(
+        computers, initial_summary=summary)
+    deferred.defer(_GenerateComputersSummaryCache, query.cursor(), summary)
+    return
+  models.ReportsCache.SetStatsSummary(
+      summary_module.PrepareComputerSummaryForTemplate(summary))

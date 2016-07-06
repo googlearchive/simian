@@ -611,7 +611,7 @@ class PackageInfoTest(mox.MoxTestBase):
         changed_catalogs = pkginfo.catalogs
 
     for catalog in sorted(changed_catalogs, reverse=True):
-      models.Catalog.Generate(catalog).AndReturn(None)
+      models.Catalog.Generate(catalog, delay=1).AndReturn(None)
 
     self.mox.StubOutWithMock(models.users, 'get_current_user')
     mock_user = self.mox.CreateMockAnything()

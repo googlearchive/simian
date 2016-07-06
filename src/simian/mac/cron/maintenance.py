@@ -62,7 +62,7 @@ class UpdateAverageInstallDurations(webapp2.RequestHandler):
     """Handle GET."""
     pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
 
-    for p in models.PackageInfo.all():
+    for p in gae_util.QueryIterator(models.PackageInfo.all()):
       if not p.plist:
         continue  # skip over pkginfos without plists.
 

@@ -16,8 +16,8 @@
 #
 """Admin UI summary generating module."""
 
+import copy
 import datetime
-import gc
 import urllib
 
 from  distutils import version as distutils_version
@@ -138,7 +138,8 @@ class Summary(admin.AdminHandler):
     except AttributeError:
       owner_lookup_url = None
 
-    summary = GetComputerSummary(computers=computers)
+    summary = PrepareComputerSummaryForTemplate(
+        GetComputerSummary(computers=computers))
     values = {
         'computers': computers, 'summary': summary, 'report_type': 'search',
         'search_type': report_type, 'search_term': report_filter,
@@ -148,145 +149,23 @@ class Summary(admin.AdminHandler):
     self.Render('summary.html', values)
 
 
-def GetComputerSummary(computers=None, query=None):
-  """Generates a summary overview of all computers in a given query.
-
-  Args:
-    computers: optional, list of Computer objects to generate a summary of.
-      OR
-    query: optional, db.Query object, if neither computer not query are passed,
-        query defaults to models.Computer.AllActive().
-  Returns:
-    dict, stats summary data used to pass to summary template.
-  """
-  if computers is None and query is None:
-    query = models.Computer.AllActive()
-
-  total_client_count = 0
-  summary = {
-      'active': {},
-      'all_pkgs_installed': {},
-      'all_pkgs_installed_percent': {},
-      'all_apple_updates_installed': {},
-      'all_apple_updates_installed_percent': {},
-      'conns_on_corp': None,
-      'conns_off_corp': None,
-      'conns_on_corp_percent': None,
-      'conns_off_corp_percent': None,
-      'tracks': {},
-      'os_versions': {},
-      'client_versions': {},
-      'off_corp_conns_histogram': {},
-      'sites_histogram': {},
-  }
-  os_versions = {}
-  client_versions = {}
-  connections_on_corp = 0
-  connections_off_corp = 0
-  off_corp_connections_histogram = {}
-
-  # initialize active counts dictionaries.
-  for days in ACTIVE_DAY_COUNTS:
-    summary['active'][days] = 0
-    summary['all_pkgs_installed'][days] = 0
-    summary['all_apple_updates_installed'][days] = 0
-    for track in common.TRACKS:
-      summary['tracks'][track] = {}
-      summary['tracks'][track][days] = 0
-
-  # intialize corp connections histogram buckets.
-  for i in xrange(0, 10):
-    bucket = ' %s0-%s9' % (i, i)
-    off_corp_connections_histogram[bucket] = 0
-  off_corp_connections_histogram['100'] = 0
-  off_corp_connections_histogram[' -never-'] = 0
-
-  # even though Tasks can now run up to 10 minutes, Datastore queries are
-  # still limited to 30 seconds (2010-10-27). Treating a QuerySet as an
-  # iterator also trips this restriction, so fetch 500 at a time.
-  while True:
-    if query:
-      computers = query.fetch(500)
-    gc.collect()
-    if not computers:
-      break
-
-    for c in computers:
-      total_client_count += 1
-      if c.connections_off_corp:
-        # calculate percentage off corp.
-        percent_off_corp = (float(c.connections_off_corp) / (
-            c.connections_off_corp + c.connections_on_corp))
-        # group into buckets; 0-9, 10-19, 20-29, ..., 90-99, 100.
-        bucket_number = int(percent_off_corp * 10)
-        if bucket_number == 10:  # bucket 100% into their own
-          bucket = '100'
-        else:
-          bucket = ' %s0-%s9' % (bucket_number, bucket_number)
-      else:
-        bucket = ' -never-'
-      off_corp_connections_histogram[bucket] += 1
-
-      # copy property values to new str, so computer object isn't kept in
-      # memory for the sake of dict key storage.
-      os_version = str(c.os_version)
-      client_version = str(c.client_version)
-      site = str(c.site)
-
-      connections_on_corp += c.connections_on_corp
-      connections_off_corp += c.connections_off_corp
-      os_versions[os_version] = os_versions.get(os_version, 0) + 1
-      client_versions[client_version] = (
-          client_versions.get(client_version, 0) + 1)
-
-      for days in ACTIVE_DAY_COUNTS:
-        if IsWithinPastXHours(c.preflight_datetime, days * 24):
-          summary['active'][days] += 1
-          track_count = summary['tracks'][c.track].get(days, 0)
-          summary['tracks'][c.track][days] = track_count + 1
-          if c.all_pkgs_installed:
-            summary['all_pkgs_installed'][days] += 1
-          if getattr(c, 'all_apple_updates_installed', False):
-            summary['all_apple_updates_installed'][days] += 1
-        else:
-          break
-
-      summary['sites_histogram'][site] = (
-          summary['sites_histogram'].get(site, 0) + 1)
-
-    if query:
-      cursor = str(query.cursor())
-      computers = None
-      gc.collect()
-      query.with_cursor(cursor)  # queue up the next fetch
-    else:
-      # if there was no query, we finished iterating through all computers.
-      break
-
-  # Convert connections histogram to percentages.
-  off_corp_connections_histogram_percent = []
-  for bucket, count in DictToList(off_corp_connections_histogram):
-    if not total_client_count:
-      percent = 0
-    else:
-      percent = float(count) / total_client_count * 100
-    off_corp_connections_histogram_percent.append((bucket, percent))
-  summary['off_corp_conns_histogram'] = off_corp_connections_histogram_percent
+def PrepareComputerSummaryForTemplate(s):
+  """Prepare data produced by GetComputerSummary for template."""
+  summary = copy.deepcopy(s)
 
   summary['sites_histogram'] = DictToList(
       summary['sites_histogram'], reverse=True, by_value=True)
-  summary['os_versions'] = DictToList(os_versions, version=True)
-  summary['client_versions'] = DictToList(client_versions, version=True)
+  summary['os_versions'] = DictToList(summary['os_versions'], version=True)
+  summary['client_versions'] = DictToList(
+      summary['client_versions'], version=True)
 
   # set summary connection counts and percentages.
-  summary['conns_on_corp'] = connections_on_corp
-  summary['conns_off_corp'] = connections_off_corp
-  total_connections = connections_on_corp + connections_off_corp
+  total_connections = summary['conns_on_corp'] + summary['conns_off_corp']
   if total_connections:
     summary['conns_on_corp_percent'] = (
-        connections_on_corp * 100.0 / total_connections)
+        summary['conns_on_corp'] * 100.0 / total_connections)
     summary['conns_off_corp_percent'] = (
-        connections_off_corp * 100.0 / total_connections)
+        summary['conns_off_corp'] * 100.0 / total_connections)
   else:
     summary['conns_on_corp_percent'] = 0
     summary['conns_off_corp_percent'] = 0
@@ -302,6 +181,77 @@ def GetComputerSummary(computers=None, query=None):
     return summary
   else:
     return {}
+
+
+def GetComputerSummary(computers, initial_summary=None):
+  """Generates a summary overview of all computers in a given query.
+
+  Args:
+    computers: list of Computer objects to generate a summary of.
+    initial_summary: optional, dict, initial value for summary.
+  Returns:
+    dict, stats summary data.
+  """
+  if not initial_summary:
+    summary = {
+        'active': {},
+        'all_pkgs_installed': {},
+        'all_pkgs_installed_percent': {},
+        'all_apple_updates_installed': {},
+        'all_apple_updates_installed_percent': {},
+        'conns_on_corp': 0,
+        'conns_off_corp': 0,
+        'conns_on_corp_percent': None,
+        'conns_off_corp_percent': None,
+        'tracks': {},
+        'os_versions': {},
+        'client_versions': {},
+        'sites_histogram': {},
+    }
+    # initialize active counts dictionaries.
+    for days in ACTIVE_DAY_COUNTS:
+      summary['active'][days] = 0
+      summary['all_pkgs_installed'][days] = 0
+      summary['all_apple_updates_installed'][days] = 0
+      for track in common.TRACKS:
+        summary['tracks'][track] = {}
+        summary['tracks'][track][days] = 0
+  else:
+    summary = copy.deepcopy(initial_summary)
+
+  # even though Tasks can now run up to 10 minutes, Datastore queries are
+  # still limited to 30 seconds (2010-10-27). Treating a QuerySet as an
+  # iterator also trips this restriction, so fetch 500 at a time.
+  for c in computers:
+    # copy property values to new str, so computer object isn't kept in
+    # memory for the sake of dict key storage.
+    os_version = str(c.os_version)
+    client_version = str(c.client_version)
+    site = str(c.site)
+
+    summary['conns_on_corp'] += c.connections_on_corp
+    summary['conns_off_corp'] += c.connections_off_corp
+    summary['os_versions'][os_version] = summary['os_versions'].get(
+        os_version, 0) + 1
+    summary['client_versions'][client_version] = (
+        summary['client_versions'].get(client_version, 0) + 1)
+
+    for days in ACTIVE_DAY_COUNTS:
+      if IsWithinPastXHours(c.preflight_datetime, days * 24):
+        summary['active'][days] += 1
+        track_count = summary['tracks'][c.track].get(days, 0)
+        summary['tracks'][c.track][days] = track_count + 1
+        if c.all_pkgs_installed:
+          summary['all_pkgs_installed'][days] += 1
+        if getattr(c, 'all_apple_updates_installed', False):
+          summary['all_apple_updates_installed'][days] += 1
+      else:
+        break
+
+    summary['sites_histogram'][site] = (
+        summary['sites_histogram'].get(site, 0) + 1)
+
+  return summary
 
 
 def GetPercentage(number, total):
