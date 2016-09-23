@@ -21,10 +21,10 @@ import httplib
 import logging
 import urllib
 
+from simian.mac.common import datastore_locks
 from simian.auth import gaeserver
 from simian.mac import models
 from simian.mac.common import auth
-from simian.mac.common import gae_util
 from simian.mac.munki import handlers
 from simian.mac.munki import plist
 from simian.mac.munki.handlers import pkgs
@@ -70,8 +70,10 @@ class PackagesInfo(handlers.AuthenticationHandler):
       hash_str = self.request.get('hash')
 
       if hash_str:
-        lock = 'pkgsinfo_%s' % filename
-        if not gae_util.ObtainLock(lock, timeout=5.0):
+        lock = models.GetLockForPackage(filename)
+        try:
+          lock.Acquire(timeout=30, max_acquire_attempts=5)
+        except datastore_locks.AcquireLockError:
           self.response.set_status(httplib.FORBIDDEN)
           self.response.out.write('Could not lock pkgsinfo')
           return
@@ -84,12 +86,12 @@ class PackagesInfo(handlers.AuthenticationHandler):
         self.response.out.write(pkginfo.plist)
       else:
         if hash_str:
-          gae_util.ReleaseLock(lock)
+          lock.Release()
         self.response.set_status(httplib.NOT_FOUND)
         return
 
       if hash_str:
-        gae_util.ReleaseLock(lock)
+        lock.Release()
     else:
       query = models.PackageInfo.all()
 
@@ -161,8 +163,11 @@ class PackagesInfo(handlers.AuthenticationHandler):
       self.response.out.write(str(e))
       return
 
-    lock = 'pkgsinfo_%s' % filename
-    if not gae_util.ObtainLock(lock, timeout=5.0):
+    lock_name = 'pkgsinfo_%s' % filename
+    lock = datastore_locks.DatastoreLock(lock_name)
+    try:
+      lock.Acquire(timeout=30, max_acquire_attempts=5)
+    except datastore_locks.AcquireLockError:
       self.response.set_status(httplib.FORBIDDEN)
       self.response.out.write('Could not lock pkgsinfo')
       return
@@ -175,7 +180,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
           'pkginfo "%s" does not exist; PUT only allows updates.', filename)
       self.response.set_status(httplib.FORBIDDEN)
       self.response.out.write('Only updates supported')
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       return
 
     # If the pkginfo is not modifiable, ensure only manifests have changed.
@@ -186,7 +191,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
             filename)
         self.response.set_status(httplib.FORBIDDEN)
         self.response.out.write('Changes to pkginfo not allowed')
-        gae_util.ReleaseLock(lock)
+        lock.Release()
         return
 
     # If the update parameter asked for a careful update, by supplying
@@ -196,7 +201,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
       if self._Hash(pkginfo.plist) != hash_str:
         self.response.set_status(httplib.CONFLICT)
         self.response.out.write('Update hash does not match')
-        gae_util.ReleaseLock(lock)
+        lock.Release()
         return
 
     # All verification has passed, so let's create the PackageInfo entity.
@@ -210,7 +215,7 @@ class PackagesInfo(handlers.AuthenticationHandler):
       pkginfo.install_types = install_types
     pkginfo.put()
 
-    gae_util.ReleaseLock(lock)
+    lock.Release()
 
     for track in pkginfo.catalogs:
       models.Catalog.Generate(track, delay=1)

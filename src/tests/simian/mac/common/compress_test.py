@@ -18,7 +18,7 @@
 
 import hashlib
 
-import mox
+import mock
 import stubout
 
 from google.apputils import app
@@ -26,24 +26,10 @@ from google.apputils import basetest
 from simian.mac.common import compress
 
 
-class ZipModuleTest(mox.MoxTestBase):
-  """Test the compress module."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
-
-class CompressedTextTest(mox.MoxTestBase):
+class CompressedTextTest(basetest.TestCase):
   """Test the CompressedText object."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
     self.decomp_str = 'hello'
     self.decomp_ustr = u'hello\u2019'
     self.comp_str = (
@@ -51,10 +37,6 @@ class CompressedTextTest(mox.MoxTestBase):
     self.comp_ustr = (
         '%sx\x9c\xcbH\xcd\xc9\xc9\x7f'
         '\xd40\x13\x00\x10\xaa\x04\x10' % compress.MAGIC)
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def _GetInstance(self, arg=None, compression_threshold=0, **kwargs):
     """Return an instance of compress.CompressedText to test."""
@@ -115,16 +97,14 @@ class CompressedTextTest(mox.MoxTestBase):
     new_arg = 'Foo\xef\xbf\xbd\x01\x01 Bar'
 
     ct = self._GetInstance()
-    self.stubs.Set(ct, '_IsCompressed', self.mox.CreateMockAnything())
-    self.stubs.Set(ct, '_Compress', self.mox.CreateMockAnything())
 
-    ct._IsCompressed(arg).AndReturn(False)
-    ct._Compress(new_arg).AndReturn('compressed_arg')
+    with mock.patch.object(
+        ct, '_Compress', return_value='compressed_arg') as mock_compress:
+      with mock.patch.object(ct, '_IsCompressed', return_value=False):
+        ct.Update(arg, encoding='utf-8')
+        self.assertEqual(ct._value, 'compressed_arg')
 
-    self.mox.ReplayAll()
-    ct.Update(arg, encoding='utf-8')
-    self.assertEqual(ct._value, 'compressed_arg')
-    self.mox.VerifyAll()
+      mock_compress.assert_called_once_with(new_arg)
 
   def testCompressed(self):
     """Test Compressed()."""

@@ -82,7 +82,7 @@ class ReleaseReport(admin.AdminHandler):
       return
     candidate_items = []
     if not date:
-      start_date = datetime.datetime.now()
+      start_date = datetime.datetime.utcnow()
     else:
       try:
         start_date = datetime.datetime(date)

@@ -24,6 +24,7 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext.webapp import blobstore_handlers
 
+from simian.mac.common import datastore_locks
 from simian.mac import admin
 from simian.mac import models
 from simian.mac.common import auth
@@ -86,13 +87,20 @@ class UploadPackage(
         self.response.out.write('This file already exists.')
         return
 
+      upload_url = blobstore.create_upload_url(
+          '/admin/uploadpkg', gs_bucket_name=util.GetBlobstoreGSBucket())
+
       values = {
-          'upload_url': blobstore.create_upload_url(
-              '/admin/uploadpkg', gs_bucket_name=util.GetBlobstoreGSBucket()),
+          'upload_url': upload_url,
           'filename': filename,
           'file_size_kbytes': p.plist['installer_item_size'],
       }
       self.Render('upload_pkg_form.html', values)
+
+  def _RedirectWithErrorMsg(self, msg):
+    logging.warning(msg)
+    self.redirect(
+        '/admin/uploadpkg?mode=error&msg=%s' % msg)
 
   def post(self):
     """POST Handler.
@@ -112,8 +120,7 @@ class UploadPackage(
       logging.critical(
           'POST to uploadpkg not from Blobstore: %s', self.request.headers)
       self.redirect('/admin/packages')
-
-    # TODO(user): do we check is admin?
+      return
 
     if not self.get_uploads('file'):
       logging.error('Upload package does not exist.')
@@ -123,36 +130,39 @@ class UploadPackage(
     blobstore_key = str(blob_info.key())
 
     # Obtain a lock on the PackageInfo entity for this package.
-    lock = 'pkgsinfo_%s' % blob_info.filename
-    if not gae_util.ObtainLock(lock, timeout=5.0):
+    lock = models.GetLockForPackage(blob_info.filename)
+    try:
+      lock.Acquire(timeout=30, max_acquire_attempts=5)
+    except datastore_locks.AcquireLockError:
       gae_util.SafeBlobDel(blobstore_key)
-      self.redirect(
-          '/admin/uploadpkg?mode=error&msg=PackageInfo is locked')
+
+      self._RedirectWithErrorMsg('PackageInfo is locked')
       return
 
     p = models.PackageInfo.get_by_key_name(blob_info.filename)
     if not p:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       gae_util.SafeBlobDel(blobstore_key)
-      self.redirect(
-          '/admin/uploadpkg?mode=error&msg=PackageInfo not found')
+
+      self._RedirectWithErrorMsg('PackageInfo not found')
       return
 
     if not p.IsSafeToModify():
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       gae_util.SafeBlobDel(blobstore_key)
-      self.redirect(
-          '/admin/uploadpkg?mode=error&msg=PackageInfo is not modifiable')
+
+      self._RedirectWithErrorMsg('PackageInfo is not modifiable')
       return
 
     installer_item_size = p.plist['installer_item_size']
     size_difference = int(blob_info.size / 1024) - installer_item_size
     if abs(size_difference) > 1:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       gae_util.SafeBlobDel(blobstore_key)
       msg = 'Blob size (%s) does not match PackageInfo plist size (%s)' % (
           blob_info.size, installer_item_size)
-      self.redirect('/admin/uploadpkg?mode=error&msg=%s' % msg)
+
+      self._RedirectWithErrorMsg(msg)
       return
 
     old_blobstore_key = None
@@ -174,8 +184,9 @@ class UploadPackage(
     # an orphan.
     if error is not None:
       gae_util.SafeBlobDel(blobstore_key)
-      gae_util.ReleaseLock(lock)
-      self.redirect('/admin/uploadpkg?mode=error&msg=%s' % error)
+      lock.Release()
+
+      self._RedirectWithErrorMsg(error)
       return
 
     # if an old blob was associated with this Package, delete it.
@@ -183,7 +194,7 @@ class UploadPackage(
     if old_blobstore_key:
       gae_util.SafeBlobDel(old_blobstore_key)
 
-    gae_util.ReleaseLock(lock)
+    lock.Release()
 
     user = users.get_current_user().email()
     # Log admin upload to Datastore.

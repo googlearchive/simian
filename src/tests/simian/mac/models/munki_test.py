@@ -19,39 +19,32 @@
 import datetime
 
 import tests.appenginesdk
+import mock
+import stubout
 import mox
 import stubout
 
 from google.appengine.ext import testbed
 
+from simian.mac.common import datastore_locks
 from google.apputils import app
 from google.apputils import basetest
 from tests.simian.mac.common import test
 from simian.mac.models import munki as models
 
 
-class CatalogTest(mox.MoxTestBase):
+class CatalogTest(mox.MoxTestBase, test.AppengineTest):
   """Test Catalog class."""
 
   def setUp(self):
+    test.AppengineTest.setUp(self)
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
   def tearDown(self):
+    test.AppengineTest.tearDown(self)
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  def _MockObtainLock(self, name, obtain=True):
-    if not hasattr(self, '_mock_obtain_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ObtainLock')
-      self._mock_obtain_lock = True
-    models.gae_util.ObtainLock(name).AndReturn(obtain)
-
-  def _MockReleaseLock(self, name):
-    if not hasattr(self, '_mock_release_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ReleaseLock')
-      self._mock_release_lock = True
-    models.gae_util.ReleaseLock(name).AndReturn(None)
 
   def testGenerateAsync(self):
     """Tests calling Generate(delay=2)."""
@@ -73,17 +66,17 @@ class CatalogTest(mox.MoxTestBase):
     name = 'goodname'
     plist1 = '<dict><key>foo</key><string>bar</string></dict>'
     mock_plist1 = self.mox.CreateMockAnything()
-    pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
+    pkg1 = test.GenericContainer(
+        plist=mock_plist1, name='foo', mtime=datetime.datetime.utcnow())
     plist2 = '<dict><key>foo</key><string>bar</string></dict>'
     mock_plist2 = self.mox.CreateMockAnything()
-    pkg2 = test.GenericContainer(plist=mock_plist2, name='bar')
+    pkg2 = test.GenericContainer(
+        plist=mock_plist2, name='bar', mtime=datetime.datetime.utcnow())
 
     self.mox.StubOutWithMock(models.Manifest, 'Generate')
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     self.mox.StubOutWithMock(models.Catalog, 'get_or_insert')
     self.mox.StubOutWithMock(models.Catalog, 'DeleteMemcacheWrap')
-
-    self._MockObtainLock('catalog_lock_%s' % name)
 
     mock_model = self.mox.CreateMockAnything()
     models.PackageInfo.all().AndReturn(mock_model)
@@ -94,21 +87,29 @@ class CatalogTest(mox.MoxTestBase):
 
     mock_catalog = self.mox.CreateMockAnything()
     models.Catalog.get_or_insert(name).AndReturn(mock_catalog)
-    mock_catalog.put().AndReturn(None)
+    mock_catalog.put(avoid_mtime_update=True).AndReturn(None)
 
-    models.Catalog.DeleteMemcacheWrap(
-        name, prop_name='plist_xml').AndReturn(None)
+    models.Catalog.DeleteMemcacheWrap(name).AndReturn(None)
     models.Manifest.Generate(name, delay=1).AndReturn(None)
-    self._MockReleaseLock('catalog_lock_%s' % name)
 
-    self.mox.ReplayAll()
-    models.Catalog.Generate(name)
+    m = mock.Mock()
+    with mock.patch.object(
+        datastore_locks, 'DatastoreLock', return_value=m) as lock_mock:
+      self.mox.ReplayAll()
+      models.Catalog.Generate(name)
+      self.mox.VerifyAll()
+
+      lock_mock.assert_called_once_with('catalog_lock_goodname')
+
+    m.assert_has_calls([
+        mock.call.Acquire(timeout=600, max_acquire_attempts=2),
+        mock.call.Release()])
+
     self.assertEqual(mock_catalog.name, name)
     xml = '\n'.join([plist1, plist2])
     expected_plist = models.constants.CATALOG_PLIST_XML % xml
     self.assertEqual(expected_plist, mock_catalog.plist)
     self.assertEqual(mock_catalog.package_names, ['foo', 'bar'])
-    self.mox.VerifyAll()
 
   def testGenerateWithNoPkgsinfo(self):
     """Tests Catalog.Generate() where no coorresponding PackageInfo exist."""
@@ -118,8 +119,6 @@ class CatalogTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(models.Catalog, 'get_or_insert')
     self.mox.StubOutWithMock(models.Catalog, 'DeleteMemcacheWrap')
 
-    self._MockObtainLock('catalog_lock_%s' % name)
-
     mock_model = self.mox.CreateMockAnything()
     models.PackageInfo.all().AndReturn(mock_model)
     mock_model.filter('catalogs =', name).AndReturn(mock_model)
@@ -127,12 +126,10 @@ class CatalogTest(mox.MoxTestBase):
 
     mock_catalog = self.mox.CreateMockAnything()
     models.Catalog.get_or_insert(name).AndReturn(mock_catalog)
-    mock_catalog.put().AndReturn(None)
+    mock_catalog.put(avoid_mtime_update=True).AndReturn(None)
 
-    models.Catalog.DeleteMemcacheWrap(
-        name, prop_name='plist_xml').AndReturn(None)
+    models.Catalog.DeleteMemcacheWrap(name).AndReturn(None)
     models.Manifest.Generate(name, delay=1).AndReturn(None)
-    self._MockReleaseLock('catalog_lock_%s' % name)
 
     self.mox.ReplayAll()
     models.Catalog.Generate(name)
@@ -147,14 +144,12 @@ class CatalogTest(mox.MoxTestBase):
     name = 'goodname'
     mock_plist1 = self.mox.CreateMockAnything()
     pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
-    self._MockObtainLock('catalog_lock_%s' % name)
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
     mock_model.filter('catalogs =', name).AndReturn(mock_model)
     mock_model.fetch(None).AndReturn([pkg1])
     mock_plist1.GetXmlContent(indent_num=1).AndRaise(models.plist_lib.Error)
-    self._MockReleaseLock('catalog_lock_%s' % name)
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -166,12 +161,12 @@ class CatalogTest(mox.MoxTestBase):
     name = 'goodname'
     plist1 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist1 = self.mox.CreateMockAnything()
-    pkg1 = test.GenericContainer(plist=mock_plist1, name='foo')
+    pkg1 = test.GenericContainer(
+        plist=mock_plist1, name='foo', mtime=datetime.datetime.utcnow())
     plist2 = '<plist><dict><key>foo</key><string>bar</string></dict></plist>'
     mock_plist2 = self.mox.CreateMockAnything()
-    pkg2 = test.GenericContainer(plist=mock_plist2, name='bar')
-
-    self._MockObtainLock('catalog_lock_%s' % name)
+    pkg2 = test.GenericContainer(
+        plist=mock_plist2, name='bar', mtime=datetime.datetime.utcnow())
 
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
@@ -184,8 +179,7 @@ class CatalogTest(mox.MoxTestBase):
     mock_catalog = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.Catalog, 'get_or_insert')
     models.Catalog.get_or_insert(name).AndReturn(mock_catalog)
-    mock_catalog.put().AndRaise(models.db.Error)
-    self._MockReleaseLock('catalog_lock_%s' % name)
+    mock_catalog.put(avoid_mtime_update=True).AndRaise(models.db.Error)
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -195,45 +189,31 @@ class CatalogTest(mox.MoxTestBase):
   def testGenerateLocked(self):
     """Tests Generate() where name is locked."""
     name = 'lockedname'
-    self._MockObtainLock('catalog_lock_%s' % name, obtain=False)
+    datastore_locks.DatastoreLock('catalog_lock_%s' % name).Acquire()
+
     # here is where Generate calls itself; can't stub the method we're
     # testing, so mock the calls that happen as a result.
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
     self.stubs.Set(models.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-catalog-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    models.datetime.datetime.utcnow().AndReturn(utcnow)
     models.deferred.defer(
-        models.Catalog.Generate, name, _name=deferred_name, _countdown=10)
+        models.Catalog.Generate, name, _name=mox.IgnoreArg(), _countdown=10)
 
     self.mox.ReplayAll()
     models.Catalog.Generate(name)
     self.mox.VerifyAll()
 
 
-class ManifestTest(mox.MoxTestBase):
+class ManifestTest(mox.MoxTestBase, test.AppengineTest):
   """Test Manifest class."""
 
   def setUp(self):
+    test.AppengineTest.setUp(self)
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
   def tearDown(self):
+    test.AppengineTest.tearDown(self)
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  def _MockObtainLock(self, name, obtain=True):
-    if not hasattr(self, '_mock_obtain_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ObtainLock')
-      self._mock_obtain_lock = True
-    models.gae_util.ObtainLock(name).AndReturn(obtain)
-
-  def _MockReleaseLock(self, name):
-    if not hasattr(self, '_mock_release_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ReleaseLock')
-      self._mock_release_lock = True
-    models.gae_util.ReleaseLock(name).AndReturn(None)
 
   def testGenerateAsync(self):
     """Tests calling Manifest.Generate(delay=2)."""
@@ -261,7 +241,6 @@ class ManifestTest(mox.MoxTestBase):
         pkg1.install_types[0]: [pkg1.name, pkg2.name],
         pkg2.install_types[1]: [pkg2.name],
     }
-    self._MockObtainLock('manifest_lock_%s' % name)
     self.stubs.Set(
         models.plist_lib,
         'MunkiManifestPlist',
@@ -283,24 +262,28 @@ class ManifestTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(models.Manifest, 'DeleteMemcacheWrap')
     models.Manifest.DeleteMemcacheWrap(name).AndReturn(None)
 
-    self._MockReleaseLock('manifest_lock_%s' % name)
+    m = mock.Mock()
+    with mock.patch.object(
+        datastore_locks, 'DatastoreLock', return_value=m) as lock_mock:
+      self.mox.ReplayAll()
+      models.Manifest.Generate(name)
+      self.mox.VerifyAll()
 
-    self.mox.ReplayAll()
-    models.Manifest.Generate(name)
-    self.mox.VerifyAll()
+      lock_mock.assert_called_once_with('manifest_lock_goodname')
+
+    m.assert_has_calls([
+        mock.call.Acquire(timeout=30, max_acquire_attempts=1),
+        mock.call.Release()])
 
   def testGenerateDbError(self):
     """Tests Manifest.Generate() with db Error."""
     name = 'goodname'
-    self._MockObtainLock('manifest_lock_%s' % name)
 
     mock_model = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(models.PackageInfo, 'all')
     models.PackageInfo.all().AndReturn(mock_model)
     mock_model.filter('manifests =', name).AndReturn(mock_model)
     mock_model.fetch(None).AndRaise(models.db.Error)
-
-    self._MockReleaseLock('manifest_lock_%s' % name)
 
     self.mox.ReplayAll()
     self.assertRaises(models.db.Error, models.Manifest.Generate, name)
@@ -312,7 +295,6 @@ class ManifestTest(mox.MoxTestBase):
     manifest_dict = {
         'catalogs': [name, 'apple_update_metadata'],
     }
-    self._MockObtainLock('manifest_lock_%s' % name)
     self.stubs.Set(
         models.plist_lib,
         'MunkiManifestPlist',
@@ -334,8 +316,6 @@ class ManifestTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(models.Manifest, 'DeleteMemcacheWrap')
     models.Manifest.DeleteMemcacheWrap(name).AndReturn(None)
 
-    self._MockReleaseLock('manifest_lock_%s' % name)
-
     self.mox.ReplayAll()
     models.Manifest.Generate(name)
     self.mox.VerifyAll()
@@ -343,17 +323,13 @@ class ManifestTest(mox.MoxTestBase):
   def testGenerateLocked(self):
     """Tests Manifest.Generate() where name is locked."""
     name = 'lockedname'
-    self._MockObtainLock('manifest_lock_%s' % name, obtain=False)
+    datastore_locks.DatastoreLock('manifest_lock_%s' % name).Acquire()
+
     # here is where Manifest.Generate calls itself; can't stub the method we're
     # testing, so mock the calls that happen as a result.
-    utcnow = datetime.datetime(2010, 9, 2, 19, 30, 21, 377827)
-    self.mox.StubOutWithMock(datetime, 'datetime')
     self.stubs.Set(models.deferred, 'defer', self.mox.CreateMockAnything())
-    deferred_name = 'create-manifest-%s-%s' % (
-        name, '2010-09-02-19-30-21-377827')
-    models.datetime.datetime.utcnow().AndReturn(utcnow)
     models.deferred.defer(
-        models.Manifest.Generate, name, _name=deferred_name, _countdown=5)
+        models.Manifest.Generate, name, _name=mox.IgnoreArg(), _countdown=5)
 
     self.mox.ReplayAll()
     models.Manifest.Generate(name)
@@ -371,7 +347,7 @@ class PackageInfoTest(mox.MoxTestBase):
         USER_EMAIL='foo@example.com',
         USER_ID='1337',
         USER_IS_ADMIN='0')
-    self.testbed.init_user_stub()
+    self.testbed.init_all_stubs()
 
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
@@ -381,19 +357,6 @@ class PackageInfoTest(mox.MoxTestBase):
 
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
-
-  # TODO(user): create a base test class for non-handlers.
-  def _MockObtainLock(self, name, obtain=True, timeout=0):
-    if not hasattr(self, '_mock_obtain_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ObtainLock')
-      self._mock_obtain_lock = True
-    models.gae_util.ObtainLock(name, timeout=timeout).AndReturn(obtain)
-
-  def _MockReleaseLock(self, name):
-    if not hasattr(self, '_mock_release_lock'):
-      self.mox.StubOutWithMock(models.gae_util, 'ReleaseLock')
-      self._mock_release_lock = True
-    models.gae_util.ReleaseLock(name).AndReturn(None)
 
   def _GetTestPackageInfoPlist(self, d=None):
     """String concatenates a description and returns test plist xml."""
@@ -498,7 +461,7 @@ class PackageInfoTest(mox.MoxTestBase):
     """Test Update() with a failure obtaining the lock."""
     p = models.PackageInfo()
     p.filename = 'foofile.dmg'
-    self._MockObtainLock('pkgsinfo_%s' % p.filename, obtain=False, timeout=5.0)
+    datastore_locks.DatastoreLock('pkgsinfo_%s' % p.filename).Acquire()
 
     self.mox.ReplayAll()
     self.assertRaises(models.PackageInfoLockError, p.Update)
@@ -541,7 +504,6 @@ class PackageInfoTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(models.PackageInfo, 'approval_required')
     models.PackageInfo.approval_required = False
 
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     self.mox.StubOutWithMock(models.PackageInfo, 'get_by_key_name')
 
     if create_new:
@@ -552,7 +514,6 @@ class PackageInfoTest(mox.MoxTestBase):
       pkginfo.manifest_mod_access = []
       if filename_exists:
         models.PackageInfo.get_by_key_name(filename).AndReturn(True)
-        self._MockReleaseLock('pkgsinfo_%s' % filename)
         self.mox.ReplayAll()
         models.PackageInfo.UpdateFromPlist(plist_xml, create_new=create_new)
       else:
@@ -575,7 +536,6 @@ class PackageInfoTest(mox.MoxTestBase):
       if plist_xml or unsafe_properties_changed:
         # If not safe to modify and plist_xml was passed, an exception will be
         # raised after releasing the lock.
-        self._MockReleaseLock('pkgsinfo_%s' % filename)
         self.mox.ReplayAll()
         if plist_xml:
           models.PackageInfo.UpdateFromPlist(plist_xml)
@@ -589,8 +549,6 @@ class PackageInfoTest(mox.MoxTestBase):
 
     self.mox.StubOutWithMock(pkginfo, 'put')
     pkginfo.put().AndReturn(None)
-
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.StubOutWithMock(models.Catalog, 'Generate')
 
@@ -664,10 +622,20 @@ class PackageInfoTest(mox.MoxTestBase):
 
     catalogs = ['unstable', 'testing', 'stable']
     manifests = ['unstable', 'testing', 'stable']
-    pkginfo = self._UpdateTestHelper(
-        'fooname.dmg', p, catalogs=catalogs, manifests=manifests)
-    self.assertEqual(pkginfo.catalogs, catalogs)
-    self.mox.VerifyAll()
+
+    m = mock.Mock()
+    with mock.patch.object(
+        datastore_locks, 'DatastoreLock', return_value=m) as lock_mock:
+      pkginfo = self._UpdateTestHelper(
+          'fooname.dmg', p, catalogs=catalogs, manifests=manifests)
+      self.assertEqual(pkginfo.catalogs, catalogs)
+      self.mox.VerifyAll()
+
+      lock_mock.assert_called_once_with('pkgsinfo_fooname.dmg')
+
+    m.assert_has_calls([
+        mock.call.Acquire(timeout=600, max_acquire_attempts=5),
+        mock.call.Release()])
 
   def testUpdateDemoteFromStable(self):
     """Test Update() when demoting a package from stable."""

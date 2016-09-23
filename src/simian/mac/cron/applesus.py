@@ -21,13 +21,16 @@ Classes:
 """
 
 import datetime
+import gc
 import httplib
 import logging
+import time
 import urllib2
 import webapp2
 
 from google.appengine.api import urlfetch
 from google.appengine.ext import db
+from google.appengine.ext import deferred
 
 from simian import settings
 from simian.mac import common
@@ -41,8 +44,6 @@ from simian.mac.munki import plist
 # Note: The unit test applesus_test enforces the existence and format of this
 # variable.
 CATALOGS = {
-    '10.5': ('https://swscan.apple.com/content/catalogs/others/'
-             'index-leopard.merged-1.sucatalog.gz'),
     '10.6': ('https://swscan.apple.com/content/catalogs/others/'
              'index-leopard-snowleopard.merged-1.sucatalog.gz'),
     '10.7': ('https://swscan.apple.com/content/catalogs/others/'
@@ -69,8 +70,9 @@ RESTART_REQUIRED_FOOTER = '* denotes restart required'
 class AppleSUSCatalogSync(webapp2.RequestHandler):
   """Class to sync SUS catalogs from Apple."""
 
+  @classmethod
   def _UpdateCatalog(
-      self, plist_str, key=None, entity=None, last_modified=None):
+      cls, plist_str, key=None, entity=None, last_modified=None):
     """Updates a Datastore entry.
 
     Args:
@@ -94,8 +96,9 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       logging.exception('AppleSUSCatalogSync._UpdateCatalog() db.Error.')
       raise
 
+  @classmethod
   def _NotifyAdminsOfCatalogSync(
-      self, catalog, new_products, deprecated_products):
+      cls, catalog, new_products, deprecated_products):
     """Notifies Simian admins that a new Apple Updates catalog was synced.
 
     Args:
@@ -129,7 +132,8 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
 
     mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
 
-  def _UpdateCatalogIfChanged(self, catalog, url):
+  @classmethod
+  def _UpdateCatalogIfChanged(cls, catalog, url):
     """Returns the contents of a url passed to URLFetch.fetch().
 
     Args:
@@ -151,13 +155,14 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
       #logging.info(
       #    '%s SUS catalog is old. Updating...', catalog.key().name())
       header_date_str = response.headers.get('Last-Modified', '')
-      self._UpdateCatalog(xml, entity=catalog, last_modified=header_date_str)
+      cls._UpdateCatalog(xml, entity=catalog, last_modified=header_date_str)
       return True
     else:
       raise urlfetch.DownloadError(
           'Non-200 status_code: %s' % response.status_code)
 
-  def _UpdateProductDataFromCatalog(self, catalog_plist):
+  @classmethod
+  def _UpdateProductDataFromCatalog(cls, catalog_plist):
     """Updates models.AppleSUSProduct model from a catalog plist object.
 
     Args:
@@ -223,7 +228,8 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
 
     return new_products
 
-  def _DeprecateOrphanedProducts(self):
+  @classmethod
+  def _DeprecateOrphanedProducts(cls):
     """Deprecates products in Datastore that no longer exist in any catalogs.
 
     Returns:
@@ -246,6 +252,9 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
           continue
         for product in catalog_plist.get('Products', []):
           catalog_products.add(product)
+      # catalog xml is ~4MB, parsing creates a lot of interconnected
+      # temporary objects
+      gc.collect()
 
     deprecated = []
     # Loop over Datastore products, deprecating all that aren't in any catalogs.
@@ -256,7 +265,8 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
         deprecated.append(p)
     return deprecated
 
-  def _ProcessCatalogAndNotifyAdmins(self, catalog, os_version):
+  @classmethod
+  def _ProcessCatalogAndNotifyAdmins(cls, catalog, os_version):
     """Wrapper method to process a catalog and notify admin of changes.
 
     Args:
@@ -271,10 +281,10 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
           'Error parsing Apple Updates catalog: %s', catalog.key().name())
       return
 
-    new_products = self._UpdateProductDataFromCatalog(catalog_plist)
-    deprecated_products = self._DeprecateOrphanedProducts()
+    new_products = cls._UpdateProductDataFromCatalog(catalog_plist)
+    deprecated_products = cls._DeprecateOrphanedProducts()
 
-    self._NotifyAdminsOfCatalogSync(catalog, new_products, deprecated_products)
+    cls._NotifyAdminsOfCatalogSync(catalog, new_products, deprecated_products)
 
     # Regenerate the unstable catalog, including new updates but excluding
     # any that were previously manually disabled.
@@ -285,20 +295,26 @@ class AppleSUSCatalogSync(webapp2.RequestHandler):
     models.AdminAppleSUSProductLog.Log(
         deprecated_products, 'deprecated for %s' % os_version)
 
+  @classmethod
+  def _ProcessCatalog(cls, os_version):
+    url = CATALOGS.get(os_version, 'UNKNOWN_OS_VERSION')
+    untouched_key = '%s_untouched' % os_version
+    untouched_catalog = models.AppleSUSCatalog.get_or_insert(untouched_key)
+    try:
+      if cls._UpdateCatalogIfChanged(untouched_catalog, url):
+        cls._ProcessCatalogAndNotifyAdmins(untouched_catalog, os_version)
+    except (urlfetch.DownloadError, urlfetch.InvalidURLError):
+      logging.exception(
+          'Unable to download Software Update catalog for %s', os_version)
+
   def get(self):
     """Handle GET."""
     for os_version in applesus.OS_VERSIONS:
-      url = CATALOGS.get(os_version, 'UNKNOWN_OS_VERSION')
-      untouched_key = '%s_untouched' % os_version
-      untouched_catalog = models.AppleSUSCatalog.get_or_insert(untouched_key)
-      try:
-        if self._UpdateCatalogIfChanged(untouched_catalog, url):
-          self._ProcessCatalogAndNotifyAdmins(untouched_catalog, os_version)
-        else:
-          pass
-      except (urlfetch.DownloadError, urlfetch.InvalidURLError):
-        logging.exception(
-            'Unable to download Software Update catalog for %s', os_version)
+      deferred_name = 'applesus_catalog_sync_%s_%d' % (
+          os_version.replace('.', '-'), int(time.time()))
+      deferred.defer(
+          self._ProcessCatalog, os_version, _name=deferred_name,
+          _queue='serial')
 
 
 class AppleSUSAutoPromote(webapp2.RequestHandler):

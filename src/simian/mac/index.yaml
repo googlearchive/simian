@@ -263,3 +263,8 @@ indexes:
   - name: user
   - name: mtime
     direction: desc
+
+- kind: AuthSession
+  properties:
+  - name: level
+  - name: mtime

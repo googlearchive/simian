@@ -16,36 +16,14 @@
 #
 """settings module tests."""
 
-import mox
-import stubout
 
 from google.apputils import app
 from google.apputils import basetest
 from simian.mac.models import settings
 
 
-class SettingsModuleTest(mox.MoxTestBase):
-  """Test Settings module."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
-
-class SettingsTest(mox.MoxTestBase):
+class SettingsTest(basetest.TestCase):
   """Test Settings class."""
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testGetSettingsType(self):
     """Test GetSettingsType()."""

@@ -86,62 +86,7 @@ class GaeUtilModuleTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     self.assertEqual(blob_str, gae_util.GetBlobAndDel(blobstore_key))
     self.mox.VerifyAll()
-    
-  def testObtainLock(self):
-    """Test ObtainLock()."""
-    lock = 'foo'
-    self.mox.StubOutWithMock(gae_util, 'memcache')
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(1)
-    self.mox.ReplayAll()
-    self.assertTrue(gae_util.ObtainLock(lock))
-    self.mox.VerifyAll()
 
-  def testObtainLockWhenTimeoutTrue(self):
-    """Test ObtainLock()."""
-    lock = 'foo'
-    self.mox.StubOutWithMock(gae_util, 'memcache')
-    self.mox.StubOutWithMock(gae_util.time, 'sleep')
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    gae_util.time.sleep(1).AndReturn(None)
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(1)
-    self.mox.ReplayAll()
-    self.assertTrue(gae_util.ObtainLock(lock, timeout=1))
-    self.mox.VerifyAll()
-
-  def testObtainLockWhenTimeoutFalse(self):
-    """Test ObtainLock()."""
-    lock = 'foo'
-    self.mox.StubOutWithMock(gae_util, 'memcache')
-    self.mox.StubOutWithMock(gae_util.time, 'sleep')
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    gae_util.time.sleep(1).AndReturn(None)
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    gae_util.time.sleep(1).AndReturn(None)
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    gae_util.time.sleep(1).AndReturn(None)
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    self.mox.ReplayAll()
-    self.assertFalse(gae_util.ObtainLock(lock, timeout=3))
-    self.mox.VerifyAll()
-
-  def testObtainLockWhenFail(self):
-    """Test ObtainLock()."""
-    lock = 'foo'
-    self.mox.StubOutWithMock(gae_util, 'memcache')
-    gae_util.memcache.incr('lock_%s' % lock, initial_value=0).AndReturn(2)
-    self.mox.ReplayAll()
-    self.assertFalse(gae_util.ObtainLock(lock))
-    self.mox.VerifyAll()
-
-  def testReleaseLock(self):
-    """Test ReleaseLock()."""
-    lock = 'foo'
-    self.mox.StubOutWithMock(gae_util, 'memcache')
-    gae_util.memcache.delete('lock_%s' % lock)
-    self.mox.ReplayAll()
-    gae_util.ReleaseLock(lock)
-    self.mox.VerifyAll()
-    
 
 class QueryIteratorTest(mox.MoxTestBase):
 
@@ -177,7 +122,6 @@ class QueryIteratorTest(mox.MoxTestBase):
       out.append(entity)
     self.assertEqual(out, entities)
     self.mox.VerifyAll()
-
 
 
 def main(unused_argv):

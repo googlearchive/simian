@@ -20,8 +20,6 @@ import httplib
 import webapp2
 import webtest
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from google.apputils import app
@@ -29,6 +27,7 @@ from google.apputils import basetest
 
 from simian.mac import admin
 from simian.mac.admin import xsrf
+from tests.simian.mac.common import test
 
 
 class MockHandler(admin.AdminHandler):
@@ -42,28 +41,12 @@ class MockHandler(admin.AdminHandler):
     self.response.write('Content.')
 
 
-class BaseHandlerTest(basetest.TestCase):
+class BaseHandlerTest(test.AppengineTest):
 
   def setUp(self):
     super(BaseHandlerTest, self).setUp()
     webapp = webapp2.WSGIApplication([('/', MockHandler)])
     self.testapp = webtest.TestApp(webapp)
-
-    self.testbed = testbed.Testbed()
-
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='user@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='1',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_all_stubs()
-
-  def tearDown(self):
-    super(BaseHandlerTest, self).tearDown()
-    self.testbed.deactivate()
 
   def testClickjackingPrevention(self):
     resp = self.testapp.get('/')

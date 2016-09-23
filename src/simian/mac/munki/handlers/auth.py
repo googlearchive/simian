@@ -27,6 +27,10 @@ from simian.auth import gaeserver
 from simian.mac.munki import handlers
 
 
+def CreateAuthTokenCookieStr(token):
+  return '%s=%s; secure; httponly;' % (auth.AUTH_TOKEN_COOKIE, token)
+
+
 class Auth(handlers.AuthenticationHandler):
   """Handler for /auth URL."""
 
@@ -97,8 +101,7 @@ class Auth(handlers.AuthenticationHandler):
 
     if auth_state == gaeserver.base.AuthState.OK:
       if output:
-        self.response.headers['Set-Cookie'] = '%s=%s; secure; httponly;' % (
-            auth.AUTH_TOKEN_COOKIE, output)
+        self.response.headers['Set-Cookie'] = CreateAuthTokenCookieStr(output)
         self.response.out.write(auth.AUTH_TOKEN_COOKIE)
       else:
         logging.critical('Auth is OK but there is no output.')

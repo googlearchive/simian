@@ -27,6 +27,7 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import deferred
 
+from simian.mac.common import datastore_locks
 from simian.mac import common
 from simian.mac.common import gae_util
 from simian.mac.common import mail as mail_tool
@@ -34,6 +35,9 @@ from simian.mac.models import base
 from simian.mac.models import constants
 from simian.mac.models import settings
 from simian.mac.munki import plist as plist_lib
+
+
+PACKAGE_LOCK_PREFIX = 'pkgsinfo_'
 
 
 class MunkiError(base.Error):
@@ -72,7 +76,13 @@ class BaseMunkiModel(base.BasePlistModel):
   """Base class for Munki related models."""
 
   name = db.StringProperty()
-  mtime = db.DateTimeProperty(auto_now=True)
+  mtime = db.DateTimeProperty()
+
+  def put(self, avoid_mtime_update=False, **kwargs):
+    if not avoid_mtime_update:
+      self.mtime = datetime.datetime.utcnow()
+
+    return super(BaseMunkiModel, self).put(**kwargs)
 
 
 class Catalog(BaseMunkiModel):
@@ -104,9 +114,11 @@ class Catalog(BaseMunkiModel):
       deferred.defer(cls.Generate, name, _name=deferred_name, _countdown=delay)
       return
 
-    lock = 'catalog_lock_%s' % name
-    # Obtain a lock on the catalog name.
-    if not gae_util.ObtainLock(lock):
+    lock_name = 'catalog_lock_%s' % name
+    lock = datastore_locks.DatastoreLock(lock_name)
+    try:
+      lock.Acquire(timeout=600, max_acquire_attempts=2)
+    except datastore_locks.AcquireLockError:
       # If catalog creation for this name is already in progress then delay.
       logging.debug('Catalog creation for %s is locked. Delaying....', name)
       cls.Generate(name, delay=10)
@@ -114,6 +126,12 @@ class Catalog(BaseMunkiModel):
 
     package_names = []
     try:
+      midnight = datetime.datetime.combine(
+          datetime.date.today(), datetime.time(0, 0))
+
+      # new catalog has updated average install durations,
+      # download daily.
+      mtimes = [midnight]
       pkgsinfo_dicts = []
       package_infos = PackageInfo.all().filter('catalogs =', name).fetch(None)
       if not package_infos:
@@ -121,6 +139,7 @@ class Catalog(BaseMunkiModel):
       for p in package_infos:
         package_names.append(p.name)
         pkgsinfo_dicts.append(p.plist.GetXmlContent(indent_num=1))
+        mtimes.append(p.mtime)
 
       catalog = constants.CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
 
@@ -128,15 +147,18 @@ class Catalog(BaseMunkiModel):
       c.package_names = package_names
       c.name = name
       c.plist = catalog
-      c.put()
-      cls.DeleteMemcacheWrap(name, prop_name='plist_xml')
+
+      c.mtime = max(mtimes)
+      c.put(avoid_mtime_update=True)
+
+      cls.DeleteMemcacheWrap(name)
       # Generate manifest for newly generated catalog.
       Manifest.Generate(name, delay=1)
     except (db.Error, plist_lib.Error):
       logging.exception('Catalog.Generate failure for catalog: %s', name)
       raise
     finally:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
 
 
 class Manifest(BaseMunkiModel):
@@ -166,8 +188,11 @@ class Manifest(BaseMunkiModel):
       deferred.defer(cls.Generate, name, _name=deferred_name, _countdown=delay)
       return
 
-    lock = 'manifest_lock_%s' % name
-    if not gae_util.ObtainLock(lock):
+    lock_name = 'manifest_lock_%s' % name
+    lock = datastore_locks.DatastoreLock(lock_name)
+    try:
+      lock.Acquire(timeout=30, max_acquire_attempts=1)
+    except datastore_locks.AcquireLockError:
       logging.debug(
           'Manifest.Generate for %s is locked. Delaying....', name)
       cls.Generate(name, delay=5)
@@ -200,7 +225,7 @@ class Manifest(BaseMunkiModel):
       logging.exception('Manifest.Generate failure: %s', name)
       raise
     finally:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
 
 
 class PackageInfo(BaseMunkiModel):
@@ -467,13 +492,15 @@ class PackageInfo(BaseMunkiModel):
 
     filename = plist['installer_item_location']
 
-    lock = 'pkgsinfo_%s' % filename
-    if not gae_util.ObtainLock(lock, timeout=5.0):
+    lock = GetLockForPackage(filename)
+    try:
+      lock.Acquire(timeout=600, max_acquire_attempts=5)
+    except datastore_locks.AcquireLockError:
       raise PackageInfoLockError('This PackageInfo is locked.')
 
     if create_new:
       if cls.get_by_key_name(filename):
-        gae_util.ReleaseLock(lock)
+        lock.Release()
         raise PackageInfoUpdateError(
             'An existing pkginfo exists for: %s' % filename)
       pkginfo = cls._New(filename)
@@ -484,12 +511,12 @@ class PackageInfo(BaseMunkiModel):
     else:
       pkginfo = cls.get_by_key_name(filename)
       if not pkginfo:
-        gae_util.ReleaseLock(lock)
+        lock.Release()
         raise PackageInfoNotFoundError('pkginfo not found: %s' % filename)
       original_plist = pkginfo.plist.GetXml()
 
     if not pkginfo.IsSafeToModify():
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       raise PackageInfoUpdateError(
           'PackageInfo is not safe to modify; move to unstable first.')
 
@@ -502,10 +529,10 @@ class PackageInfo(BaseMunkiModel):
       log = cls._PutAndLogPackageInfoUpdate(
           pkginfo, original_plist, original_catalogs)
     except PackageInfoUpdateError:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       raise
 
-    gae_util.ReleaseLock(lock)
+    lock.Release()
 
     return pkginfo, log
 
@@ -555,8 +582,10 @@ class PackageInfo(BaseMunkiModel):
 
     original_plist = self.plist.GetXml()
 
-    lock = 'pkgsinfo_%s' % self.filename
-    if not gae_util.ObtainLock(lock, timeout=5.0):
+    lock = GetLockForPackage(self.filename)
+    try:
+      lock.Acquire(timeout=600, max_acquire_attempts=5)
+    except datastore_locks.AcquireLockError:
       raise PackageInfoLockError
 
     if self.IsSafeToModify():
@@ -614,7 +643,7 @@ class PackageInfo(BaseMunkiModel):
           else:
             failure_message = ('PackageInfo is not safe to modify;'
                                ' please move to unstable first.')
-          gae_util.ReleaseLock(lock)
+          lock.Release()
           raise PackageInfoUpdateError(failure_message)
 
     original_catalogs = self.catalogs
@@ -632,10 +661,10 @@ class PackageInfo(BaseMunkiModel):
     try:
       self._PutAndLogPackageInfoUpdate(self, original_plist, original_catalogs)
     except PackageInfoUpdateError:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       raise
 
-    gae_util.ReleaseLock(lock)
+    lock.Release()
 
   @classmethod
   def GetManifestModPkgNames(
@@ -785,8 +814,10 @@ class PackageInfoProposal(PackageInfo):
       PackageInfoLockError: PackageInfo is locked.
       PackageInfoUpdateError: Package is not eligible for catalogs.
     """
-    lock = 'pkgsinfo_%s' % self.filename
-    if not gae_util.ObtainLock(lock, timeout=5.0):
+    lock = GetLockForPackage(self.filename)
+    try:
+      lock.Acquire(timeout=600, max_acquire_attempts=5)
+    except datastore_locks.AcquireLockError:
       raise PackageInfoLockError
 
     new_catalogs = [c for c in self.catalogs if c not in self.pkginfo.catalogs]
@@ -795,7 +826,7 @@ class PackageInfoProposal(PackageInfo):
       self.pkginfo.VerifyPackageIsEligibleForNewCatalogs(
           new_catalogs)
     except PackageInfoUpdateError:
-      gae_util.ReleaseLock(lock)
+      lock.Release()
       raise
 
     approver = users.get_current_user().email()
@@ -816,7 +847,7 @@ class PackageInfoProposal(PackageInfo):
 
     self.pkginfo.PutAndLogFromProposal(original_plist, original_catalogs)
 
-    gae_util.ReleaseLock(lock)
+    lock.Release()
 
     self.ProposalMailer('approval')
 
@@ -875,3 +906,9 @@ class PackageInfoProposal(PackageInfo):
     filename = urllib.quote(filename)
     body += '\nhttps://%s/admin/package/%s' % (hostname, filename)
     return body
+
+
+def GetLockForPackage(filename):
+  lock_name = PACKAGE_LOCK_PREFIX + filename
+  lock = datastore_locks.DatastoreLock(lock_name)
+  return lock

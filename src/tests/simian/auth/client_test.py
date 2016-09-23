@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """client module tests."""
-
-
 
 import logging
 logging.basicConfig(filename='/dev/null')
 
 
-import mox
+import mock
 import stubout
 
 from google.apputils import app
@@ -34,7 +30,7 @@ from tests.simian import test_settings
 from simian.auth import client
 
 
-class AuthSessionSimianClientTest(mox.MoxTestBase):
+class AuthSessionSimianClientTest(basetest.TestCase):
   """Test AuthSessionSimianClient class."""
 
   def testBasic(self):
@@ -42,17 +38,11 @@ class AuthSessionSimianClientTest(mox.MoxTestBase):
         client.AuthSessionSimianClient, client.base.Auth1ClientSession))
 
 
-class AuthSimianClientTest(mox.MoxTestBase):
+class AuthSimianClientTest(basetest.TestCase):
   """Test AuthSimianClient class."""
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
     self.apc = client.AuthSimianClient()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testGetSessionClass(self):
     self.assertTrue(
@@ -60,27 +50,21 @@ class AuthSimianClientTest(mox.MoxTestBase):
 
   def testLoadCaParameters(self):
     """Test _LoadCaParameters()."""
-    self.mox.ReplayAll()
     self.apc.LoadCaParameters(test_settings)
     self.assertEqual(self.apc._ca_pem, test_settings.CA_PUBLIC_CERT_PEM)
     self.assertEqual(
         self.apc._server_cert_pem, test_settings.SERVER_PUBLIC_CERT_PEM)
     self.assertEqual(
         self.apc._required_issuer, test_settings.REQUIRED_ISSUER)
-    self.mox.VerifyAll()
 
-  def testLoadCaParametersWhenError(self):
+  @mock.patch.object(client.util, 'GetCaParameters')
+  def testLoadCaParametersWhenError(self, m):
     """Test _LoadCaParameters()."""
-    self.mox.StubOutWithMock(client.util, 'GetCaParameters')
-
-    client.util.GetCaParameters(
-        test_settings, omit_server_private_key=True).AndRaise(
-            client.util.CaParametersError)
-
-    self.mox.ReplayAll()
+    m.side_effect = client.util.CaParametersError
     self.assertRaises(
         client.CaParametersError, self.apc.LoadCaParameters, test_settings)
-    self.mox.VerifyAll()
+
+    m.assert_called_once_with(test_settings, omit_server_private_key=True)
 
 
 def main(unused_argv):

@@ -23,18 +23,23 @@ import mox
 import stubout
 
 import tests.appenginesdk
+from simian.mac.common import datastore_locks
 from google.apputils import app
 from google.apputils import basetest
 from simian.mac.common import applesus
+from simian.mac.common import gae_util
+from tests.simian.mac.common import test
 
 
-class AppleModuleTest(mox.MoxTestBase):
+class AppleModuleTest(mox.MoxTestBase, test.AppengineTest):
 
   def setUp(self):
+    test.AppengineTest.setUp(self)
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
   def tearDown(self):
+    test.AppengineTest.tearDown(self)
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
@@ -56,11 +61,8 @@ class AppleModuleTest(mox.MoxTestBase):
     os_version = 'foo-version'
     track = 'foo'
 
-    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
     self.mox.StubOutWithMock(applesus.models.AppleSUSCatalog, 'get_by_key_name')
 
-    applesus.gae_util.ReleaseLock(
-        applesus.CATALOG_REGENERATION_LOCK_NAME % track)
     applesus.models.AppleSUSCatalog.get_by_key_name(
         '%s_untouched' % os_version).AndReturn(None)
 
@@ -87,13 +89,9 @@ class AppleModuleTest(mox.MoxTestBase):
     mock_query = self.mox.CreateMockAnything()
     mock_new_catalog_obj = self.mox.CreateMockAnything()
 
-    self.mox.StubOutWithMock(applesus.gae_util, 'ReleaseLock')
     self.mox.StubOutWithMock(applesus.models.AppleSUSCatalog, 'get_by_key_name')
     self.mox.StubOutWithMock(applesus.models, 'AppleSUSCatalog')
     self.mox.StubOutWithMock(applesus.models.AppleSUSProduct, 'AllActive')
-
-    applesus.gae_util.ReleaseLock(
-        applesus.CATALOG_REGENERATION_LOCK_NAME % track)
 
     applesus.models.AppleSUSCatalog.get_by_key_name(
         '%s_untouched' % os_version).AndReturn(mock_catalog_obj)
@@ -114,14 +112,20 @@ class AppleModuleTest(mox.MoxTestBase):
         key_name='%s_%s' % (os_version, track)).AndReturn(mock_new_catalog_obj)
     mock_new_catalog_obj.put().AndReturn(None)
 
+    lock_name = 'lock_name'
+    lock = datastore_locks.DatastoreLock(lock_name)
+    lock.Acquire()
+
     self.mox.ReplayAll()
     _, new_plist = applesus.GenerateAppleSUSCatalog(
-        os_version, track, mock_datetime)
+        os_version, track, mock_datetime, catalog_lock=lock)
     self.assertTrue('ID1' in new_plist['Products'])
     self.assertTrue('ID2' not in new_plist['Products'])
     self.assertTrue('ID3' in new_plist['Products'])
     self.assertTrue('ID4' not in new_plist['Products'])
     self.mox.VerifyAll()
+
+    self.assertFalse(gae_util.LockExists(lock_name))
 
   def testGetAutoPromoteDateTesting(self):
     """Test GetAutoPromoteDate() for testing track."""

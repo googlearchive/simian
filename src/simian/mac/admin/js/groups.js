@@ -7,6 +7,7 @@
 
 
 goog.require('goog.dom');
+goog.require('goog.dom.TagName');
 goog.require('goog.events');
 goog.require('goog.ui.Component.EventType');
 goog.require('goog.ui.Css3MenuButtonRenderer');
@@ -100,10 +101,8 @@ simian.initHostGroups = function(groups) {
     item.setVisible(!b);
     if (!b) {
       item.setContent(this.dom_.createDom(
-          'span',
-          null,
-          '"',
-          this.dom_.createDom('b', null, str),
+          goog.dom.TagName.SPAN, null, '"',
+          this.dom_.createDom(goog.dom.TagName.B, null, str),
           '" (create group)'));
     }
   });

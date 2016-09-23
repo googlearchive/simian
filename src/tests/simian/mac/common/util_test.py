@@ -20,7 +20,7 @@ import datetime
 import time
 
 
-import mox
+import mock
 import stubout
 
 from google.apputils import app
@@ -28,16 +28,10 @@ from google.apputils import basetest
 from simian.mac.common import util
 
 
-class DatetimeTest(mox.MoxTestBase):
+class DatetimeTest(basetest.TestCase):
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
     self.dt = util.Datetime
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testUtcFromTimestampInt(self):
     """Tests utcfromtimestamp()."""
@@ -79,45 +73,25 @@ class DatetimeTest(mox.MoxTestBase):
         self.dt.utcfromtimestamp, epoch)
 
 
-class UtilModuleTest(mox.MoxTestBase):
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
+class UtilModuleTest(basetest.TestCase):
 
   def testSerializeJson(self):
     """Test Serialize()."""
-    self.mox.StubOutWithMock(util.json, 'dumps')
-
-    util.json.dumps('object1').AndReturn('serial1')
-    util.json.dumps('object2').AndRaise(TypeError)
-
-    self.mox.ReplayAll()
-    self.assertEqual('serial1', util.Serialize('object1'))
-    self.assertRaises(util.SerializeError, util.Serialize, 'object2')
-    self.mox.VerifyAll()
+    with mock.patch.object(util.json, 'dumps', return_value='serial1'):
+      self.assertEqual('serial1', util.Serialize('object1'))
+    with mock.patch.object(util.json, 'dumps', side_effect=TypeError):
+      self.assertRaises(util.SerializeError, util.Serialize, 'object2')
 
   def testDeserializeJson(self):
     """Test Deserialize()."""
-    self.mox.StubOutWithMock(util.json, 'loads')
-
-    util.json.loads('serial1', parse_float=float).AndReturn('object1')
-    util.json.loads('serial2', parse_float=float).AndRaise(ValueError)
-
-    self.mox.ReplayAll()
-    self.assertEqual('object1', util.Deserialize('serial1'))
-    self.assertRaises(util.DeserializeError, util.Deserialize, 'serial2')
-    self.mox.VerifyAll()
+    with mock.patch.object(util.json, 'loads', return_value='object1'):
+      self.assertEqual('object1', util.Deserialize('serial1'))
+    with mock.patch.object(util.json, 'loads', side_effect=ValueError):
+      self.assertRaises(util.DeserializeError, util.Deserialize, 'serial2')
 
   def testDeserializeWhenNone(self):
     """Test Deserialize()."""
-    self.mox.ReplayAll()
     self.assertRaises(util.DeserializeError, util.Deserialize, None)
-    self.mox.VerifyAll()
 
   def testUrlUnquote(self):
     """Test UrlUnquote()."""

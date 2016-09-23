@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """gaeserver module tests."""
 
-
-
+import datetime
 import logging
+import os
 logging.basicConfig(filename='/dev/null')
 
 import tests.appenginesdk
@@ -32,7 +30,10 @@ import stubout
 from google.apputils import app
 from google.apputils import basetest
 
+from simian import auth
 from simian.auth import gaeserver
+from simian.mac import models
+from tests.simian.mac.common import test
 
 
 class GaeserverModuleTest(mox.MoxTestBase):
@@ -373,59 +374,6 @@ class Auth1ServerDatastoreSessionTest(DatastoreModelTest):
     self.assertEqual(12345, ads._Mtime(session))
     self.mox.VerifyAll()
 
-  def testAll(self):
-    """Test All()."""
-    mock_model = self.mox.CreateMockAnything()
-    mock_query = self.mox.CreateMockAnything()
-
-    self._StubGetModelClass()
-    ads = self._GetAds()
-
-    ads.model = mock_model
-    sessions = [1, 2, 3]
-    mock_model.all().AndReturn(mock_query)
-
-    self.mox.StubOutWithMock(gaeserver.gae_util, 'QueryIterator')
-    gaeserver.gae_util.QueryIterator(mock_query, step=100).AndReturn(sessions)
-
-    self.mox.ReplayAll()
-    output = []
-    for i in ads.All():
-      output.append(i)
-    self.assertEqual(output, sessions)
-    self.mox.VerifyAll()
-
-  def testAllWithMinAgeSeconds(self):
-    """Test All(min_age_seconds=<int>)."""
-    mock_model = self.mox.CreateMockAnything()
-    mock_query = self.mox.CreateMockAnything()
-
-    self._StubDatetime()
-    self._StubGetModelClass()
-    ads = self._GetAds()
-
-    ads.model = mock_model
-    sessions = [1, 2, 3]
-    cursor = 'cursor'
-    # stub out datetime.* calls with simple int returns.
-    min_seconds = 120
-    now_seconds = 220
-    date_seconds = 100
-    gaeserver.datetime.timedelta(seconds=min_seconds).AndReturn(min_seconds)
-    gaeserver.datetime.datetime.utcnow().AndReturn(now_seconds)
-    mock_model.all().AndReturn(mock_query)
-    mock_query.filter('mtime <', date_seconds).AndReturn(mock_query)
-
-    self.mox.StubOutWithMock(gaeserver.gae_util, 'QueryIterator')
-    gaeserver.gae_util.QueryIterator(mock_query, step=100).AndReturn(sessions)
-
-    self.mox.ReplayAll()
-    output = []
-    for i in ads.All(min_age_seconds=min_seconds):
-      output.append(i)
-    self.assertEqual(output, sessions)
-    self.mox.VerifyAll()
-
 
 class Auth1ServerDatastoreMemcacheSessionTest(DatastoreModelTest):
   """Test Auth1ServerDatastoreMemcacheSession class."""
@@ -589,10 +537,12 @@ class Auth1ServerDatastoreMemcacheSessionTest(DatastoreModelTest):
     self.mox.VerifyAll()
 
 
-class AuthSessionSimianServer(mox.MoxTestBase):
+class AuthSessionSimianServer(mox.MoxTestBase, test.AppengineTest):
   """Test AuthSessionSimianServer class."""
 
   def setUp(self):
+    super(test.AppengineTest, self).setUp()
+
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
     self.asps = gaeserver.AuthSessionSimianServer()
@@ -600,6 +550,8 @@ class AuthSessionSimianServer(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
+
+    super(test.AppengineTest, self).tearDown()
 
   def _StubDatetime(self):
     self.stubs.Set(
@@ -621,27 +573,16 @@ class AuthSessionSimianServer(mox.MoxTestBase):
       session_prefix: str, like 'foo_'
       session_age_seconds: int, allowable session age data seconds
     """
-    self._StubDatetime()
+    session = models.AuthSession(
+        mtime=datetime.datetime.utcnow() - datetime.timedelta(
+            seconds=session_age_seconds),
+        key_name=session_prefix + '123')
+    session.put()
 
-    session = self.mox.CreateMockAnything()
-    mock_e1 = self.mox.CreateMockAnything()
+    asd = gaeserver.AuthSessionSimianServer()
+    self.assertEqual(True, asd.ExpireOne(session))
 
-    now = 12345
-    ret = -1
-
-    session.key().AndReturn(session)
-    session.name().AndReturn('%s1' % session_prefix)
-    gaeserver.datetime.timedelta(
-        seconds = session_age_seconds).AndReturn('age')
-
-    self.stubs.Set(
-        gaeserver.Auth1ServerDatastoreSession, 'ExpireOne', mock_e1)
-    gaeserver.Auth1ServerDatastoreSession.ExpireOne(
-        session, 'age', now).AndReturn(ret)
-
-    self.mox.ReplayAll()
-    self.assertEqual(ret, self.asps.ExpireOne(session, now=now))
-    self.mox.VerifyAll()
+    self.assertEqual(0, len(models.AuthSession.all().fetch(None)))
 
   def testExpireOneToken(self):
     """Test ExpireOne() on a token session item."""
@@ -656,10 +597,12 @@ class AuthSessionSimianServer(mox.MoxTestBase):
         gaeserver.base.AGE_CN_SECONDS)
 
 
-class AuthSimianServer(mox.MoxTestBase):
+class AuthSimianServer(mox.MoxTestBase, test.AppengineTest):
   """Test AuthSimianServer class."""
 
   def setUp(self):
+    super(test.AppengineTest, self).setUp()
+
     mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
     self.aps = gaeserver.AuthSimianServer()
@@ -667,6 +610,8 @@ class AuthSimianServer(mox.MoxTestBase):
   def tearDown(self):
     self.mox.UnsetStubs()
     self.stubs.UnsetAll()
+
+    super(test.AppengineTest, self).tearDown()
 
   def testInit(self):
     """Test __init__()."""
@@ -742,6 +687,15 @@ class AuthSimianServer(mox.MoxTestBase):
     """Test GetSessionClass()."""
     self.assertTrue(
         self.aps.GetSessionClass() is gaeserver.AuthSessionSimianServer)
+
+  def testAuthLevel(self):
+    auth1 = gaeserver.AuthSimianServer()
+    token = auth1.SessionCreateUserAuthToken(
+        'long_uuid', level=gaeserver.LEVEL_APPLESUS)
+
+    os.environ['HTTP_COOKIE'] = '%s=%s' % (auth.AUTH_TOKEN_COOKIE, token)
+
+    self.assertRaises(gaeserver.NotAuthenticated, gaeserver.DoMunkiAuth)
 
 
 def main(unused_argv):

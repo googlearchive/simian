@@ -16,42 +16,73 @@
 #
 """maint module tests."""
 
+import datetime
 import httplib
 import logging
 import mock
 import stubout
 import mox
 import stubout
+import webtest
+
+from google.appengine.ext import deferred
+from google.appengine.ext import testbed
 
 from django.conf import settings
 settings.configure()
 from google.apputils import app
 from google.apputils import resources
+from google.apputils import basetest
 from simian.mac import models
 from tests.simian.mac.common import test
 from simian.mac.cron import maintenance as maint
 from simian.mac.cron.main import app as gae_app
 
 
-class AuthSessionCleanupTest(test.RequestHandlerTest):
+class AuthSessionCleanupTest(basetest.TestCase):
 
-  def GetTestClassInstance(self):
-    return maint.AuthSessionCleanup()
+  def setUp(self):
+    super(AuthSessionCleanupTest, self).setUp()
+    self.testbed = testbed.Testbed()
 
-  def GetTestClassModule(self):
-    return maint
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
+
+    self.testbed.init_all_stubs()
+    self.testapp = webtest.TestApp(gae_app)
+
+  def tearDown(self):
+    super(AuthSessionCleanupTest, self).tearDown()
+    self.testbed.deactivate()
 
   def testGet(self):
     """Test get()."""
-    self.mox.StubOutWithMock(maint.gaeserver, 'AuthSessionSimianServer')
-    mock_ps = self.mox.CreateMockAnything()
-    maint.gaeserver.AuthSessionSimianServer().AndReturn(mock_ps)
+    valid_session_name = 'cn_2'
+    models.AuthSession(
+        key_name='t_1', state='OK',
+        mtime=datetime.datetime.fromtimestamp(0)).put()
+    models.AuthSession(
+        key_name='cn_1', state=None,
+        mtime=datetime.datetime.fromtimestamp(0)).put()
+    models.AuthSession(
+        key_name=valid_session_name, mtime=datetime.datetime.utcnow()).put()
+    self.testapp.get('/cron/maintenance/authsession_cleanup')
 
-    mock_ps.ExpireAll().AndReturn(2)
+    taskqueue_stub = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+    tasks = taskqueue_stub.get_filtered_tasks()
 
-    self.mox.ReplayAll()
-    self.c.get()
-    self.mox.VerifyAll()
+    for i in range(len(tasks)):
+      deferred.run(tasks[i].payload)
+
+    sessions = models.AuthSession.all().fetch(10)
+
+    self.assertEqual(1, len(sessions))
+    self.assertEqual(valid_session_name, sessions[0].key().name())
 
 
 class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):

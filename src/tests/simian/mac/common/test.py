@@ -36,6 +36,28 @@ def GetArgFromCallHistory(mock_fn, call_index=0, arg_index=0):
   return mock_fn.call_args_list[call_index][0][arg_index]
 
 
+class AppengineTest(basetest.TestCase):
+
+  def setUp(self):
+    super(AppengineTest, self).setUp()
+
+    self.testbed = testbed.Testbed()
+
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
+
+    self.testbed.init_all_stubs()
+
+  def tearDown(self):
+    super(AppengineTest, self).tearDown()
+    self.testbed.deactivate()
+
+
 class GenericContainer(test_base.GenericContainer):
   """Generic data container for testing purposes."""
 

@@ -18,21 +18,34 @@
 
 import httplib
 
-from google.appengine.api import memcache
-
+from simian.mac.common import datastore_locks
 from simian.mac import admin
-from simian.mac import common
 from simian.mac import models
-from simian.mac.common import gae_util
 
-PACKAGE = 'package'
-CATALOG = 'catalog'
-MANIFEST = 'manifest'
-LOCK_TYPES = {
-    PACKAGE: gae_util.LOCK_NAME % 'pkgsinfo_%s',
-    CATALOG: gae_util.LOCK_NAME % 'catalog_lock_%s',
-    MANIFEST: gae_util.LOCK_NAME % 'manifest_lock_%s',
-}
+_PACKAGE = 'package'
+
+
+def _ListAllLockedPackages():
+  """List all active locks for packages."""
+  # pylint: disable=protected-access
+  # pylint: disable=g-explicit-bool-comparison
+  locks = datastore_locks._DatastoreLockEntity.query(
+      datastore_locks._DatastoreLockEntity.acquired == True).fetch()
+  # pylint: enable=protected-access
+  # pylint: enable=g-explicit-bool-comparison
+
+  locked_pkgs = []
+  for l in locks:
+    if l.lock_held and l.key.id().startswith(models.PACKAGE_LOCK_PREFIX):
+      locked_pkgs.append(l.key.id()[len(models.PACKAGE_LOCK_PREFIX):])
+  return locked_pkgs
+
+
+def _ForceReleaseLock(pkg_name):
+  lock_name = models.PACKAGE_LOCK_PREFIX + pkg_name
+  e = datastore_locks._DatastoreLockEntity.get_by_id(lock_name)  # pylint: disable=protected-access
+  e.acquired = False
+  e.put()
 
 
 class LockAdmin(admin.AdminHandler):
@@ -42,35 +55,27 @@ class LockAdmin(admin.AdminHandler):
   def post(self):
     """POST handler."""
     if not self.IsAdminUser():
+      self.error(httplib.FORBIDDEN)
       return
 
-    lock_type = self.request.get('lock_type')
-    if lock_type not in LOCK_TYPES:
-      self.error(httplib.NOT_FOUND)
+    if self.request.get('lock_type') != _PACKAGE:
+      self.error(httplib.BAD_REQUEST)
       return
 
-    lock_name = self.request.get('lock_name')
-    memcache.delete(LOCK_TYPES[lock_type] % lock_name)
+    pkg_name = self.request.get('lock_name')
+    _ForceReleaseLock(pkg_name)
+
     self.redirect('/admin/lock_admin?msg=Lock deleted successfully.')
 
   def get(self):
     """GET handler."""
     if not self.IsAdminUser():
+      self.error(httplib.FORBIDDEN)
       return
 
     locks = []
-    pkgs = [k.name() for k in models.PackageInfo.all(keys_only=True)]
-    for pkg in pkgs:
-      if memcache.get(LOCK_TYPES[PACKAGE] % pkg):
-        locks.append((PACKAGE, pkg))
-
-    for catalog in common.TRACKS:
-      if memcache.get(LOCK_TYPES[CATALOG] % catalog):
-        locks.append((CATALOG, catalog))
-
-    for manifest in common.TRACKS:
-      if memcache.get(LOCK_TYPES[MANIFEST] % manifest):
-        locks.append((MANIFEST, manifest))
+    for pkg in _ListAllLockedPackages():
+      locks.append((_PACKAGE, pkg))
 
     values = {'report_type': 'lock_admin', 'locks': locks}
     self.Render('lock_admin.html', values)

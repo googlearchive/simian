@@ -29,7 +29,7 @@ simian.xhr = function(url, params, method, successCallback, failureCallback) {
                           failureCallback(this);
                         }
                       },
-                      method, params, null, 10000);
+                      method, params, null, 10000, true);
 };
 
 
@@ -262,17 +262,17 @@ goog.exportSymbol('applesus.toggleProductManualOverride',
 /**
  * Makes AJAX call to /admin/host/uuid with action "upload_logs".
  * @param {string} uuid UUID of the target host.
- * @param {Element=} opt_button Button to replace with success msg.
+ * @param {Element}  button Button to replace with success msg.
  * @param {string} xsrfToken
  */
-simian.hostUploadLogs = function(uuid, opt_button, xsrfToken) {
+simian.hostUploadLogs = function(uuid, button, xsrfToken) {
   simian.xhr('/admin/host/' + uuid,
             'action=upload_logs&uuid=' + uuid + '&xsrf_token=' + xsrfToken,
             'POST',
             function(e) {
-              if (opt_button) {
+              if (button) {
                 var email = e.getResponseJson()['email'];
-                opt_button.outerHTML = '<span class="success">' +
+                button.outerHTML = '<span class="success">' +
                     'Logs will be uploaded on next preflight.' +
                     ' (notify: ' + email + ')</span>';
               }

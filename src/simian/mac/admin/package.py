@@ -20,6 +20,7 @@ import datetime
 import httplib
 import urllib
 
+from google.appengine.api import app_identity
 from google.appengine.api import users
 
 from simian import settings
@@ -33,6 +34,8 @@ try:
   from simian.mac.common import mail
 except ImportError:
   mail = None
+
+
 
 
 class Package(admin.AdminHandler):

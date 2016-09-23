@@ -636,6 +636,8 @@ class HttpsClient(object):
       return response
     except httplib.HTTPException, e:
       raise HTTPError(str(e))
+    except IOError as e:
+      raise HTTPError(str(e))
 
   def Do(
       self, method, url,

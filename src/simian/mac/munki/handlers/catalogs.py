@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 """Catalogs URL handlers."""
-
 import httplib
 
 from simian.mac import models
@@ -36,9 +35,19 @@ class Catalogs(handlers.AuthenticationHandler):
       A webapp.Response() response.
     """
     auth.DoAnyAuth()
-    catalog = models.Catalog.MemcacheWrappedGet(name, 'plist_xml')
-    if catalog:
-      self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
-      self.response.out.write(catalog)
-    else:
+
+    catalog = models.Catalog.MemcacheWrappedGet(name)
+    if not catalog:
       self.response.set_status(httplib.NOT_FOUND)
+      return
+
+    header_date_str = self.request.headers.get('If-Modified-Since', '')
+    if not handlers.IsClientResourceExpired(catalog.mtime, header_date_str):
+      self.response.set_status(httplib.NOT_MODIFIED)
+      return
+
+    self.response.headers['Last-Modified'] = catalog.mtime.strftime(
+        handlers.HEADER_DATE_FORMAT)
+
+    self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
+    self.response.out.write(catalog.plist_xml)

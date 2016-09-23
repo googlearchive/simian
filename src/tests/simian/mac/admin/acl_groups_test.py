@@ -22,8 +22,6 @@ import mock
 import stubout
 import webtest
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from google.apputils import app
@@ -36,27 +34,11 @@ from simian.mac.common import auth
 from tests.simian.mac.common import test
 
 
-class AclGroupsModuleTest(basetest.TestCase):
+class AclGroupsModuleTest(test.AppengineTest):
 
   def setUp(self):
     super(AclGroupsModuleTest, self).setUp()
     self.testapp = webtest.TestApp(gae_main.app)
-
-    self.testbed = testbed.Testbed()
-
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='user@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='1',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_all_stubs()
-
-  def tearDown(self):
-    super(AclGroupsModuleTest, self).tearDown()
-    self.testbed.deactivate()
 
   def testPostWithoutToken(self):
     resp = self.testapp.post('/admin/acl_groups', status=httplib.BAD_REQUEST)

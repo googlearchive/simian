@@ -21,7 +21,6 @@ import datetime
 import httplib
 import json
 
-from google.appengine.api import memcache
 from google.appengine.api import users
 from google.appengine.ext import deferred
 
@@ -169,9 +168,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     # Regenerate catalogs for any changed tracks, if a task isn't already
     # queued to do so.
     for track in changed_tracks:
-      if gae_util.ObtainLock(applesus.CATALOG_REGENERATION_LOCK_NAME % track):
-        deferred.defer(
-            applesus.GenerateAppleSUSCatalogs, track=track, delay=180)
+      deferred.defer(applesus.GenerateAppleSUSCatalogs, track=track, delay=180)
     # TODO(user): add a visual cue to UI so admins know a generation is pending.
 
     self.response.headers['Content-Type'] = 'application/json'
@@ -217,9 +214,10 @@ class AppleSUSAdmin(admin.AdminHandler):
 
     catalogs_pending = {}
     for track in common.TRACKS:
-      lock_name = applesus.CATALOG_REGENERATION_LOCK_NAME % track
-      catalogs_pending[track] = memcache.get(
-          gae_util.LOCK_NAME % lock_name) is not None
+      catalogs_pending[track] = False
+      for os_version in applesus.OS_VERSIONS:
+        lock_name = applesus.CatalogRegenerationLockName(track, os_version)
+        catalogs_pending[track] |= gae_util.LockExists(lock_name)
 
     install_counts, counts_mtime = models.ReportsCache.GetInstallCounts()
     data = {

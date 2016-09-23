@@ -19,50 +19,68 @@
 import httplib
 import logging
 
+
+import mock
+import stubout
+import webtest
+
+from google.appengine.ext import testbed
+
+from django.conf import settings
+settings.configure()
+
 from google.apputils import app
-from tests.simian.mac.common import test
+from google.apputils import basetest
+
+from simian.mac import models
 from simian.mac.munki.handlers import catalogs
+from simian.mac.urls import app as gae_app
 
 
-class CatalogsHandlersTest(test.RequestHandlerTest):
+@mock.patch.object(catalogs.auth, 'DoAnyAuth')
+class CatalogsHandlersTest(basetest.TestCase):
 
-  def GetTestClassInstance(self):
-    return catalogs.Catalogs()
+  def setUp(self):
+    super(CatalogsHandlersTest, self).setUp()
+    self.testbed = testbed.Testbed()
 
-  def GetTestClassModule(self):
-    return catalogs
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
 
-  def testGetSuccess(self):
+    self.testbed.init_all_stubs()
+    self.testapp = webtest.TestApp(gae_app)
+
+  def tearDown(self):
+    super(CatalogsHandlersTest, self).tearDown()
+    self.testbed.deactivate()
+
+  def testGetSuccess(self, _):
     """Tests Catalogs.get()."""
     name = 'goodname'
-    self.MockDoAnyAuth()
-    catalog = self.MockModelStatic(
-        'Catalog', 'MemcacheWrappedGet', name, 'plist_xml')
-    self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
-    self.response.out.write(catalog).AndReturn(None)
 
-    self.mox.ReplayAll()
-    self.c.get(name)
-    self.mox.VerifyAll()
+    catalog_xml = '<plist><dict></dict></plist>'
+    models.Catalog(key_name=name, _plist=catalog_xml).put()
 
-  def testGet404(self):
+    resp = self.testapp.get('/catalogs/' + name, status=httplib.OK)
+    self.assertTrue(resp.body.find('plist') != -1)
+
+  def testGet404(self, _):
     """Tests Catalogs.get() where name is not found."""
     name = 'badname'
-    self.MockDoAnyAuth()
-    self.MockModelStaticBase(
-        'Catalog', 'MemcacheWrappedGet', name, 'plist_xml').AndReturn(None)
-    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
-    self.mox.ReplayAll()
-    self.c.get(name)
-    self.mox.VerifyAll()
+    self.testapp.get('/catalogs/' + name, status=httplib.NOT_FOUND)
 
 
 logging.basicConfig(filename='/dev/null')
 
 
 def main(unused_argv):
-  test.main(unused_argv)
+  basetest.main()
 
 
 if __name__ == '__main__':

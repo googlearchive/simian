@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """Handles authentication and authorization with Munki clients.
 
 Classes:
@@ -30,8 +28,6 @@ Classes:
   Auth1ClientSession: session storage for Auth1 client
 
 """
-
-
 
 import warnings
 warnings.filterwarnings(
@@ -56,13 +52,13 @@ AGE_TOKEN_SECONDS = 6 * 60 * 60
 AGE_CN_SECONDS = 5 * 60
 # Valid age of any other default session data
 AGE_DEFAULT_SECONDS = 6 * 60 * 60
+AGE_APPLESUS_TOKEN_SECONDS = 14 * 24 * 60 * 60
 # Minimum value for Cn (client nonce) value
 MIN_VALUE_CN = 2**100
 
 # Level values supplied to DoMunkiAuth() and used in session data
-# Base
+LEVEL_APPLESUS = -5
 LEVEL_BASE = 0
-# Admin
 LEVEL_ADMIN = 5
 
 
@@ -242,22 +238,27 @@ class AuthSessionBase(object):
     """
     raise NotImplementedError
 
-  def ExpireOne(self, session, age=None, now=None):
+  def ExpireOne(self, session, now=None):
     """Expire old session data.
 
     Args:
       session: type unknown, one entire entity for one session record
-      age: datetime.timedelta, optional, age at which session is too old
       now: datetime.datetime, optional, current time
     Returns:
       True, if the session is too old to use and was deleted
       False, if the session is new enough to use
     """
+    if self.IsExpired(session, now=now):
+      self.Delete(session)
+      return True
+    else:
+      return False
+
+  def IsExpired(self, session, now=None):
+    """Check whether session is expired."""
     if now is None:
       now = self._Now()
-
-    if age is None:
-      age = datetime.timedelta(seconds=AGE_DEFAULT_SECONDS)
+    age = datetime.timedelta(seconds=AGE_DEFAULT_SECONDS)
 
     session_mtime = self._Mtime(session)
 
@@ -267,23 +268,9 @@ class AuthSessionBase(object):
       d = age + age  # undefined mtime, forcefully make it too old
 
     if d > age:
-      self.Delete(session)
       return True
     else:
       return False
-
-  def ExpireAll(self):
-    """Expire all session data.
-
-    Returns:
-      Integer number of sessions expired.
-    """
-    expired_sessions_count = 0
-    # expire all certs that are over min expiration age.
-    for session in self.All(min_age_seconds=AGE_CN_SECONDS):
-      if self.ExpireOne(session):
-        expired_sessions_count += 1
-    return expired_sessions_count
 
   @classmethod
   def DefineSessionType(cls, name, prefix):

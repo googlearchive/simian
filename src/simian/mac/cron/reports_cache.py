@@ -27,11 +27,12 @@ import time
 import webapp2
 
 from google.appengine.api import taskqueue
+from google.appengine.ext import db
 from google.appengine.ext import deferred
 
+from simian.mac.common import datastore_locks
 from simian.mac import models
 from simian.mac.admin import summary as summary_module
-from simian.mac.common import gae_util
 
 
 TRENDING_INSTALLS_LIMIT = 5
@@ -101,8 +102,10 @@ class ReportsCache(webapp2.RequestHandler):
       lock_name = '%s_%s' % (lock_name, since)
       cursor_name = '%s_%s' % (cursor_name, since)
 
-    lock = gae_util.ObtainLock(lock_name)
-    if not lock:
+    lock = datastore_locks.DatastoreLock(lock_name)
+    try:
+      lock.Acquire(timeout=RUNTIME_MAX_SECS + 10, max_acquire_attempts=2)
+    except datastore_locks.AcquireLockError:
       logging.warning('GenerateMsuUserSummary lock found; exiting.')
       return
 
@@ -203,7 +206,7 @@ class ReportsCache(webapp2.RequestHandler):
           cursor_name, prop_name='text_value')
       models.ReportsCache.DeleteMsuUserSummary(since=since, tmp=True)
 
-    gae_util.ReleaseLock(lock_name)
+    lock.Release()
 
   def _GeneratePendingCounts(self):
     """Generates a dictionary of all install names and their pending count."""
@@ -215,77 +218,78 @@ class ReportsCache(webapp2.RequestHandler):
 
 
 def _GenerateInstallCounts():
-    """Generates a dictionary of all installs names and the count of each."""
+  """Generates a dictionary of all installs names and the count of each."""
 
-    # Obtain a lock.
-    lock_name = 'pkgs_list_cron_lock'
-    lock = gae_util.ObtainLock(lock_name)
-    if not lock:
-      logging.warning('GenerateInstallCounts: lock found; exiting.')
-      return
+  # Obtain a lock.
+  lock_name = 'pkgs_list_cron_lock'
+  lock = datastore_locks.DatastoreLock(lock_name)
+  try:
+    lock.Acquire(timeout=600, max_acquire_attempts=1)
+  except datastore_locks.AcquireLockError:
+    logging.warning('GenerateInstallCounts: lock found; exiting.')
+    return
 
-    # Get a list of all packages that have previously been pushed.
-    pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
+  # Get a list of all packages that have previously been pushed.
+  pkgs, unused_dt = models.ReportsCache.GetInstallCounts()
 
-    # Generate a query of all InstallLog entites that haven't been read yet.
-    query = models.InstallLog.all().order('server_datetime')
-    cursor_obj = models.KeyValueCache.get_by_key_name('pkgs_list_cursor')
-    if cursor_obj:
-      query.with_cursor(cursor_obj.text_value)
+  # Generate a query of all InstallLog entites that haven't been read yet.
+  query = models.InstallLog.all().order('server_datetime')
+  cursor_obj = models.KeyValueCache.get_by_key_name('pkgs_list_cursor')
+  if cursor_obj:
+    query.with_cursor(cursor_obj.text_value)
 
-    # Loop over new InstallLog entries.
-    try:
-      installs = query.fetch(1000)
-    except:
-      installs = None
-    if not installs:
-      models.ReportsCache.SetInstallCounts(pkgs)
-      gae_util.ReleaseLock(lock_name)
-      return
-
-    for install in installs:
-      pkg_name = install.package
-      if pkg_name not in pkgs:
-        pkgs[pkg_name] = {
-            'install_count': 0,
-            'install_fail_count': 0,
-            'applesus': install.applesus,
-        }
-      if install.IsSuccess():
-        pkgs[pkg_name]['install_count'] = (
-            pkgs[pkg_name].setdefault('install_count', 0) + 1)
-        # (re)calculate avg_duration_seconds for this package.
-        if 'duration_seconds_avg' not in pkgs[pkg_name]:
-          pkgs[pkg_name]['duration_count'] = 0
-          pkgs[pkg_name]['duration_total_seconds'] = 0
-          pkgs[pkg_name]['duration_seconds_avg'] = None
-        # only proceed if entity has "duration_seconds" property != None.
-        if getattr(install, 'duration_seconds', None) is not None:
-          pkgs[pkg_name]['duration_count'] += 1
-          pkgs[pkg_name]['duration_total_seconds'] += (
-              install.duration_seconds)
-          pkgs[pkg_name]['duration_seconds_avg'] = int(
-              pkgs[pkg_name]['duration_total_seconds'] /
-              pkgs[pkg_name]['duration_count'])
-      else:
-        pkgs[pkg_name]['install_fail_count'] = (
-            pkgs[pkg_name].setdefault('install_fail_count', 0) + 1)
-
-
-    # Update any changed packages.
+  # Loop over new InstallLog entries.
+  try:
+    installs = query.fetch(1000)
+  except db.Error:
+    installs = None
+  if not installs:
     models.ReportsCache.SetInstallCounts(pkgs)
+    lock.Release()
+    return
 
-    if not cursor_obj:
-      cursor_obj = models.KeyValueCache(key_name='pkgs_list_cursor')
+  for install in installs:
+    pkg_name = install.package
+    if pkg_name not in pkgs:
+      pkgs[pkg_name] = {
+          'install_count': 0,
+          'install_fail_count': 0,
+          'applesus': install.applesus,
+      }
+    if install.IsSuccess():
+      pkgs[pkg_name]['install_count'] = (
+          pkgs[pkg_name].setdefault('install_count', 0) + 1)
+      # (re)calculate avg_duration_seconds for this package.
+      if 'duration_seconds_avg' not in pkgs[pkg_name]:
+        pkgs[pkg_name]['duration_count'] = 0
+        pkgs[pkg_name]['duration_total_seconds'] = 0
+        pkgs[pkg_name]['duration_seconds_avg'] = None
+      # only proceed if entity has "duration_seconds" property != None.
+      if getattr(install, 'duration_seconds', None) is not None:
+        pkgs[pkg_name]['duration_count'] += 1
+        pkgs[pkg_name]['duration_total_seconds'] += (
+            install.duration_seconds)
+        pkgs[pkg_name]['duration_seconds_avg'] = int(
+            pkgs[pkg_name]['duration_total_seconds'] /
+            pkgs[pkg_name]['duration_count'])
+    else:
+      pkgs[pkg_name]['install_fail_count'] = (
+          pkgs[pkg_name].setdefault('install_fail_count', 0) + 1)
 
-    cursor_txt = str(query.cursor())
-    cursor_obj.text_value = cursor_txt
-    cursor_obj.put()
+  # Update any changed packages.
+  models.ReportsCache.SetInstallCounts(pkgs)
 
-    # Delete the lock.
-    gae_util.ReleaseLock(lock_name)
+  if not cursor_obj:
+    cursor_obj = models.KeyValueCache(key_name='pkgs_list_cursor')
 
-    deferred.defer(_GenerateInstallCounts)
+  cursor_txt = str(query.cursor())
+  cursor_obj.text_value = cursor_txt
+  cursor_obj.put()
+
+  # Delete the lock.
+  lock.Release()
+
+  deferred.defer(_GenerateInstallCounts)
 
 
 def _GenerateTrendingInstallsCacheDeferCallback(

@@ -11,6 +11,7 @@ goog.provide('simian');
 
 goog.require('goog.array');
 goog.require('goog.dom');
+goog.require('goog.dom.TagName');
 goog.require('goog.dom.classes');
 goog.require('goog.positioning.AnchoredPosition');
 goog.require('goog.ui.AnimatedZippy');
@@ -69,10 +70,11 @@ simian.renderCharts = function(opt_el) {
         goog.dom.appendChild(dataCell, dataDiv);
       });
       if (table.getAttribute('title')) {
-        var th = goog.dom.createDom('tr', null,
-          goog.dom.createDom('th', {'colspan': '2'},
-            goog.dom.createTextNode(table.getAttribute('title'))
-        ));
+        var th = goog.dom.createDom(
+            goog.dom.TagName.TR, null,
+            goog.dom.createDom(
+                goog.dom.TagName.TH, {'colspan': '2'},
+                goog.dom.createTextNode(table.getAttribute('title'))));
         goog.dom.insertSiblingBefore(th, goog.dom.getFirstElementChild(table));
       }
     });
@@ -110,22 +112,23 @@ goog.exportSymbol('simian.zippyfy', simian.zippyfy);
  * Makes UUID links (with class uuidhover) display a HoverCard with host info.
  */
 simian.makeUUIDHover = function() {
-  var div =
-      goog.dom.createDom('div',
-          {'id': 'host_popup_container',
-           'style': 'display: none; position: absolute; z-index: 840;'},
-          goog.dom.createDom('div', {'id': 'host_popup'},
-              goog.dom.createDom('span', {'class': 'popup_pointer'}),
-              goog.dom.createDom('div',
-                  {'id': 'host_popup_loading', 'style': 'display: none;'},
-                  goog.dom.createDom('img',
-                      {'src': '/admin/static/loading_222.gif',
-                       'style': 'width: 16px; height: 16px; margin: 5px 3px;',
-                       'alt': 'loading'})
-              ),
-              goog.dom.createDom('div', {'id': 'host_popup_info'})
-          )
-      );
+  var div = goog.dom.createDom(
+      goog.dom.TagName.DIV, {
+        'id': 'host_popup_container',
+        'style': 'display: none; position: absolute; z-index: 840;'
+      },
+      goog.dom.createDom(
+          goog.dom.TagName.DIV, {'id': 'host_popup'},
+          goog.dom.createDom(goog.dom.TagName.SPAN, {'class': 'popup_pointer'}),
+          goog.dom.createDom(
+              goog.dom.TagName.DIV,
+              {'id': 'host_popup_loading', 'style': 'display: none;'},
+              goog.dom.createDom(goog.dom.TagName.IMG, {
+                'src': '/admin/static/loading_222.gif',
+                'style': 'width: 16px; height: 16px; margin: 5px 3px;',
+                'alt': 'loading'
+              })),
+          goog.dom.createDom(goog.dom.TagName.DIV, {'id': 'host_popup_info'})));
   goog.dom.appendChild(document.body, div);
   var hc = new goog.ui.HoverCard(
       function(e) { return goog.dom.classes.has(e, 'uuidhover'); }, false);

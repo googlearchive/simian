@@ -95,7 +95,7 @@ class DatastoreSettingsTest(basetest.TestCase):
     v, stamp = models.Settings.GetItem('long_name')
     self.assertEquals(value, v)
     self.assertGreater(
-        datetime.timedelta(seconds=1), datetime.datetime.now() - stamp)
+        datetime.timedelta(seconds=1), datetime.datetime.utcnow() - stamp)
 
   def testDir(self):
     models.Settings.SetItem('some_extra_long_kEy', 343423)

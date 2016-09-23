@@ -24,8 +24,6 @@ import mock
 import stubout
 import webtest
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from google.apputils import app
@@ -41,27 +39,12 @@ from simian.mac.munki import common
 
 
 @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
-class AdminPanicTest(basetest.TestCase):
+class AdminPanicTest(test.AppengineTest):
 
   def setUp(self):
     super(AdminPanicTest, self).setUp()
 
     self.testapp = webtest.TestApp(gae_main.app)
-
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='user@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='0',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_all_stubs()
-
-  def tearDown(self):
-    super(AdminPanicTest, self).tearDown()
-    self.testbed.deactivate()
 
   @mock.patch.object(auth, 'IsAdminUser', return_value=True)
   @mock.patch.object(admin.template, 'render', return_value='html:)')

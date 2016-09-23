@@ -25,19 +25,24 @@ from xml.dom import minidom
 from google.appengine.api import taskqueue
 from google.appengine.ext import deferred
 
+from simian.mac.common import datastore_locks
 from simian import settings
 from simian.mac import common
 from simian.mac import models
-from simian.mac.common import gae_util
 from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
 OS_VERSIONS = frozenset(['10.7', '10.8', '10.9', '10.10', '10.11', '10.12'])
 
-CATALOG_REGENERATION_LOCK_NAME = 'applesus_catalog_regeneration_%s'
+_CATALOG_REGENERATION_LOCK_NAME = 'applesus_catalog_regeneration_%s_%s'
 
 MON, TUE, WED, THU, FRI, SAT, SUN = range(0, 7)
+
+
+def CatalogRegenerationLockName(track, os_version):
+  return _CATALOG_REGENERATION_LOCK_NAME % (
+      track, os_version.replace('.', '-'))
 
 
 class Error(Exception):
@@ -173,6 +178,12 @@ def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
 
   for track in tracks:
     for os_version in OS_VERSIONS:
+      lock_name = CatalogRegenerationLockName(track, os_version)
+      lock = datastore_locks.DatastoreLock(lock_name)
+      try:
+        lock.Acquire(timeout=600 + delay, max_acquire_attempts=1)
+      except datastore_locks.AcquireLockError:
+        continue
       if delay:
         now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
         deferred_name = 'gen-applesus-catalog-%s-%s-%s' % (
@@ -180,12 +191,12 @@ def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
         deferred_name = re.sub(r'[^\w-]', '', deferred_name)
         try:
           deferred.defer(
-              GenerateAppleSUSCatalog, os_version, track,
+              GenerateAppleSUSCatalog, os_version, track, catalog_lock=lock,
               _countdown=delay, _name=deferred_name)
         except taskqueue.TaskAlreadyExistsError:
           logging.info('Skipping duplicate Apple SUS Catalog generation task.')
       else:
-        GenerateAppleSUSCatalog(os_version, track)
+        GenerateAppleSUSCatalog(os_version, track, catalog_lock=lock)
 
   if delay:
     now_str = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
@@ -200,7 +211,8 @@ def GenerateAppleSUSCatalogs(track=None, tracks=None, delay=0):
     GenerateAppleSUSMetadataCatalog()
 
 
-def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
+def GenerateAppleSUSCatalog(
+    os_version, track, datetime_=datetime.datetime, catalog_lock=None):
   """Generates an Apple SUS catalog for a given os_version and track.
 
   This function loads the untouched/raw Apple SUS catalog, removes any
@@ -210,7 +222,9 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   Args:
     os_version: str OS version to generate the catalog for.
     track: str track name to generate the catalog for.
-    _datetime: datetime module; only used for stub during testing.
+    datetime_: datetime module; only used for stub during testing.
+    catalog_lock: datastore_lock.DatastoreLock; If provided, the lock to release
+                  upon completion of the operation.
   Returns:
     tuple, new models.AppleSUSCatalog object and plist.ApplePlist object. Or,
     if there is no "untouched" catalog for the os_version, then (None, None) is
@@ -218,13 +232,12 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   """
   logging.info('Generating catalog: %s_%s', os_version, track)
 
-  # clear any locks on this track, potentially set by admin product changes.
-  gae_util.ReleaseLock(CATALOG_REGENERATION_LOCK_NAME % track)
-
   catalog_key = '%s_untouched' % os_version
   untouched_catalog_obj = models.AppleSUSCatalog.get_by_key_name(catalog_key)
   if not untouched_catalog_obj:
     logging.warning('Apple Update catalog does not exist: %s', catalog_key)
+    if catalog_lock:
+      catalog_lock.Release()
     return None, None
   untouched_catalog_plist = plist.ApplePlist(untouched_catalog_obj.plist)
   untouched_catalog_plist.Parse()
@@ -243,7 +256,7 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   catalog_plist_xml = new_plist.GetXml()
 
   # Save the catalog using a time-specific key for rollback purposes.
-  now = _datetime.utcnow()
+  now = datetime_.utcnow()
   now_str = now.strftime('%Y-%m-%d-%H-%M-%S')
   backup = models.AppleSUSCatalog(
       key_name='backup_%s_%s_%s' % (os_version, track, now_str))
@@ -253,6 +266,10 @@ def GenerateAppleSUSCatalog(os_version, track, _datetime=datetime.datetime):
   c = models.AppleSUSCatalog(key_name='%s_%s' % (os_version, track))
   c.plist = catalog_plist_xml
   c.put()
+
+  if catalog_lock:
+    catalog_lock.Release()
+
   return c, new_plist
 
 

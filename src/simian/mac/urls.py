@@ -40,8 +40,8 @@ class RedirectToAdmin(webapp2.RequestHandler):
 app = webapp2.WSGIApplication([
     # GET Apple Software Update Service catalog with header client-id.
     (r'/applesus/?$', applesus.AppleSUS),
-    # GET/PUT Apple Software Update Service catalogs.
-    (r'/applesus/([\w\-\_\.\=\|\%]+)/?$', applesus.AppleSUS),
+    (r'/applesus/([^/]+)$', applesus.AppleSUS),
+    (r'/applesus/([^/]+)/([^/]+)?$', applesus.AppleSUS),
     # GET munki catalogs.
     (r'/catalogs/([\w\-\.]+)$', catalogs.Catalogs),
     # GET munki manifests.

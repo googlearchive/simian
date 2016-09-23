@@ -45,7 +45,6 @@ STATUS_FAIL_CONFIG_SETUP = (13, 'Config setup errors')
 STATUS_SERVER_EXIT_FEEDBACK = (14, 'Server send EXIT command')
 # End exit codes
 LAST_RUN_FILE = '/Library/Managed Installs/lastrun'
-MUNKI_CLIENT_ID_HEADER_KEY = 'X-munki-client-id'
 MAX_ATTEMPTS = 4
 MSULOGFILE = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.log'
 MSULOGDIR = '/Users/Shared/.com.googlecode.munki.ManagedSoftwareUpdate.logs'
@@ -108,7 +107,8 @@ def LoginToServer(secure_config, client_id, user_settings, client_exit=None):
   if munkicommon.ADDITIONAL_HTTP_HEADERS_KEY in secure_config:
     for header in secure_config[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY]:
       if (not header.startswith('Cookie:') and
-          not header.startswith(MUNKI_CLIENT_ID_HEADER_KEY)):
+          not header.startswith(flight_common.MUNKI_CLIENT_ID_HEADER_KEY) and
+          not header.startswith('User-Agent:')):
         headers.append(header)
 
   client_id_str = flight_common.DictToStr(client_id)
@@ -152,7 +152,8 @@ def LoginToServer(secure_config, client_id, user_settings, client_exit=None):
   # Add the Cookie and client id to the headers.
   headers.append('User-Agent: gzip')  # enforce GFE compression
   headers.append('Cookie: %s' % token)
-  headers.append('%s: %s' % (MUNKI_CLIENT_ID_HEADER_KEY, client_id_str))
+  headers.append('%s: %s' % (
+      flight_common.MUNKI_CLIENT_ID_HEADER_KEY, client_id_str))
   # Replace AdditionalHttpHeaders with the new headers list.
   secure_config[munkicommon.ADDITIONAL_HTTP_HEADERS_KEY] = headers
 
@@ -425,7 +426,7 @@ def RunPreflight(runtype, server_url=None):
   if client_id.get('applesus'):
     regular_config['InstallAppleSoftwareUpdates'] = True
     # Get Apple Software Update Service catalog from server and set locally.
-    flight_common.GetAppleSUSCatalog()
+    flight_common.UpdateAppleSUSCatalog(client)
 
   # Report installs/etc to server.
   flight_common.UploadAllManagedInstallReports(

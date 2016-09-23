@@ -19,8 +19,6 @@ import uuid
 import mock
 import stubout
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from google.apputils import app
@@ -33,22 +31,10 @@ from simian.mac.common import auth
 from tests.simian.mac.common import test
 
 
-class HostModuleTest(basetest.TestCase):
+class HostModuleTest(test.AppengineTest):
 
   def setUp(self):
     super(HostModuleTest, self).setUp()
-
-    self.testbed = testbed.Testbed()
-
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='zerocool@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='0',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_all_stubs()
 
     self.common_serial = str(uuid.uuid4())
     models.Computer(
@@ -60,7 +46,7 @@ class HostModuleTest(basetest.TestCase):
 
     models.Computer(
         active=True, hostname='new-host1', serial=self.common_serial,
-        uuid='NEWUUID1==', key_name='NEWUUID1==', owner='zerocool',
+        uuid='NEWUUID1==', key_name='NEWUUID1==', owner='user',
         os_version='10.11', site='NYC', track='stable',
         config_track='stable', connections_on_corp=1, connections_off_corp=0,
         uptime=90000.0, root_disk_free=0, user_disk_free=10,
@@ -68,15 +54,11 @@ class HostModuleTest(basetest.TestCase):
 
     models.Computer(
         active=True, hostname='host10', serial=str(uuid.uuid4()),
-        uuid='UUID2', key_name='UUID2', owner='zerocool',
+        uuid='UUID2', key_name='UUID2', owner='user',
         client_version='2.3.2', os_version='10.11', site='MTV',
         track='stable', config_track='stable',
         connections_on_corp=1, connections_off_corp=1,
         uptime=90000.0, root_disk_free=0, user_disk_free=10).put()
-
-  def tearDown(self):
-    super(HostModuleTest, self).tearDown()
-    self.testbed.deactivate()
 
   @mock.patch.object(auth, 'IsGroupMember', return_value=False)
   @mock.patch.dict(host.settings.__dict__, {

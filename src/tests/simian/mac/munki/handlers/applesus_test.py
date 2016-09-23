@@ -20,9 +20,17 @@ import datetime
 import httplib
 import logging
 
+
+import mock
+import stubout
+import webtest
+
 from google.apputils import app
+from simian.auth import gaeserver
+from simian.mac import models
 from tests.simian.mac.common import test
 from simian.mac.munki.handlers import applesus
+from simian.mac.urls import app as gae_app
 
 
 class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
@@ -45,9 +53,10 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     catalog_name = '%s_%s' % (major_minor_os_version, track)
 
     self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
-    self.MockDoAnyAuth(and_return=session)
+    self.MockDoMunkiAuth(
+        and_return=session, require_level=gaeserver.LEVEL_APPLESUS)
     applesus.handlers.GetClientIdForRequest(
-        self.request, session=session, client_id_str='').AndReturn(client_id)
+        self.request, session=session).AndReturn(client_id)
 
     catalog = self.MockModelStatic(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name)
@@ -79,9 +88,10 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     catalog_name = '%s_%s' % (major_minor_os_version, track)
 
     self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
-    self.MockDoAnyAuth(and_return=session)
+    self.MockDoMunkiAuth(
+        and_return=session, require_level=gaeserver.LEVEL_APPLESUS)
     applesus.handlers.GetClientIdForRequest(
-        self.request, session=session, client_id_str='').AndReturn(client_id)
+        self.request, session=session).AndReturn(client_id)
 
     catalog = self.MockModelStatic(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name)
@@ -105,9 +115,10 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     catalog_name = '_%s' % track
 
     self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
-    self.MockDoAnyAuth(and_return=session)
+    self.MockDoMunkiAuth(
+        and_return=session, require_level=gaeserver.LEVEL_APPLESUS)
     applesus.handlers.GetClientIdForRequest(
-        self.request, session=session, client_id_str='').AndReturn(client_id)
+        self.request, session=session).AndReturn(client_id)
 
     self.MockModelStaticBase(
         'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
@@ -117,29 +128,44 @@ class AppleSUSCatalogsHandlersTest(test.RequestHandlerTest):
     self.c.get()
     self.mox.VerifyAll()
 
-  def testGet404WhenArgSupplied(self):
-    """Tests AppleSUS.get() where track is not found."""
-    track = 'notfound'
-    full_os_version = '10.6.6'
-    major_minor_os_version = '10.6'
-    client_id_str = 'track=%s|os_version=%s' % (track, full_os_version)
-    client_id = {'track': track, 'os_version': full_os_version}
-    session = None  # easier than mock obj, no .uuid property
-    catalog_name = '%s_%s' % (major_minor_os_version, track)
+  def testSupplyClientIdAndTokenInUrl(self):
+    testapp = webtest.TestApp(gae_app)
 
-    self.mox.StubOutWithMock(applesus.handlers, 'GetClientIdForRequest')
-    self.MockDoAnyAuth(and_return=session)
-    applesus.handlers.GetClientIdForRequest(
-        self.request, session=session, client_id_str=client_id_str).AndReturn(
-            client_id)
+    plist = 'PLIST'
+    models.AppleSUSCatalog(key_name='10.11_stable', plist=plist).put()
 
-    self.MockModelStaticBase(
-        'AppleSUSCatalog', 'MemcacheWrappedGet', catalog_name).AndReturn(None)
-    self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
+    headers = {
+        applesus.MUNKI_CLIENT_ID_HEADER_KEY: 'track=stable|os_version=10.11'}
 
-    self.mox.ReplayAll()
-    self.c.get(client_id_str)
-    self.mox.VerifyAll()
+    ss = models.AuthSession(uuid='34')
+    with mock.patch.object(gaeserver, 'DoMunkiAuth', return_value=ss):
+      resp = testapp.post(
+          '/applesus/', status=httplib.OK,
+          headers=headers)
+    resp = testapp.get('/applesus/%s' % resp.body, status=httplib.OK)
+    self.assertEqual(plist, resp.body)
+
+  def testMultipleRequestsReturnSameToken(self):
+    # We don't want change CatalogURL too often.
+    testapp = webtest.TestApp(gae_app)
+
+    headers = {
+        applesus.MUNKI_CLIENT_ID_HEADER_KEY: 'track=stable|os_version=10.11'}
+
+    ss = models.AuthSession(uuid='34')
+    with mock.patch.object(gaeserver, 'DoMunkiAuth', return_value=ss):
+      token1 = testapp.post(
+          '/applesus/', status=httplib.OK,
+          headers=headers).body
+      token2 = testapp.post(
+          '/applesus/', status=httplib.OK,
+          headers=headers).body
+    self.assertEqual(token1, token2)
+
+  def testEncodeMsg(self):
+    msg = {'a': 1, 'b': 2}
+    self.assertEqual(
+        msg, applesus._DecodeMsg(applesus._EncodeMsg(msg)))
 
 
 logging.basicConfig(filename='/dev/null')

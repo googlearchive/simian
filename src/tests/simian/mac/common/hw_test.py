@@ -24,27 +24,14 @@ from google.apputils import basetest
 from simian.mac.common import hw
 
 
-class HwModuleTest(mox.MoxTestBase):
-
-  def setUp(self):
-    mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
-
-
 class SystemProfileTest(mox.MoxTestBase):
 
   def setUp(self):
     mox.MoxTestBase.setUp(self)
-    self.stubs = stubout.StubOutForTesting()
     self.sp = hw.SystemProfile()
 
   def tearDown(self):
     self.mox.UnsetStubs()
-    self.stubs.UnsetAll()
 
   def testInit(self):
     """Test __init__()."""

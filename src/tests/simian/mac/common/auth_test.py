@@ -18,321 +18,193 @@
 
 import logging
 
-import os
-
 import tests.appenginesdk
 
 import mock
 import stubout
-import mox
-import stubout
 
 from google.appengine.api import users
+from google.appengine.ext import testbed
 
 from google.apputils import app
 from google.apputils import basetest
 from simian import settings
+from simian.mac import models
 from simian.mac.common import auth
 
 
-class AuthModuleTest(mox.MoxTestBase):
+class AuthModuleTest(basetest.TestCase):
 
   def setUp(self):
-    mox.MoxTestBase.setUp(self)
     self.stubs = stubout.StubOutForTesting()
 
-    os.environ['AUTH_DOMAIN'] = 'example.com'
+    self.email = 'foouser@example.com'
+
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL=self.email,
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        TESTONLY_OAUTH_SKIP_CACHE='1',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
+
+    self.testbed.init_all_stubs()
+    settings.ADMINS = ['admin@example.com']
 
   def tearDown(self):
-    del os.environ['AUTH_DOMAIN']
-
-    self.mox.UnsetStubs()
     self.stubs.UnsetAll()
 
-  def testDoUserAuthWithNoUser(self):
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    auth.users.get_current_user().AndReturn(None)
-
-    self.mox.ReplayAll()
+  @mock.patch.object(auth.users, 'get_current_user', return_value=None)
+  def testDoUserAuthWithNoUser(self, _):
     self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
-    self.mox.VerifyAll()
 
   def testDoUserAuthAnyDomainUserSuccess(self):
     self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', True)
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
 
-    self.mox.ReplayAll()
-    self.assertEqual(mock_user, auth.DoUserAuth())
-    self.mox.VerifyAll()
+    self.assertEqual(self.email, auth.DoUserAuth().email())
 
 
-  def testDoUserAuthWithIsAdminTrueSuccess(self):
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    auth.IsAdminUser(email).AndReturn(True)
-    auth.IsAdminUser(email).AndReturn(True)
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testDoUserAuthWithIsAdminTrueSuccess(self, _):
+    self.assertEqual(self.email, auth.DoUserAuth(is_admin=True).email())
 
-    self.mox.ReplayAll()
-    self.assertEqual(mock_user, auth.DoUserAuth(is_admin=True))
-    self.mox.VerifyAll()
-
-  def testDoUserAuthWithIsAdminTrueFailure(self):
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    auth.IsAdminUser(email).AndReturn(False)
-
-    self.mox.ReplayAll()
+  @mock.patch.object(auth, 'IsAdminUser', return_value=False)
+  def testDoUserAuthWithIsAdminTrueFailure(self, _):
     self.assertRaises(auth.IsAdminMismatch, auth.DoUserAuth, is_admin=True)
-    self.mox.VerifyAll()
 
-  def testDoUserAuthWithAllDomainUsersOff(self):
+  @mock.patch.object(auth, 'IsAdminUser', return_value=False)
+  @mock.patch.object(auth, 'IsSupportUser', return_value=False)
+  @mock.patch.object(auth, 'IsSecurityUser', return_value=False)
+  @mock.patch.object(auth, 'IsPhysicalSecurityUser', return_value=True)
+  def testDoUserAuthWithAllDomainUsersOff(self, *_):
     self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(auth, 'IsSupportUser')
-    self.mox.StubOutWithMock(auth, 'IsSecurityUser')
-    self.mox.StubOutWithMock(auth, 'IsPhysicalSecurityUser')
 
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
+    self.assertEqual(self.email, auth.DoUserAuth().email())
 
-    auth.IsAdminUser(email).AndReturn(False)
-    auth.IsSupportUser(email).AndReturn(False)
-    auth.IsSecurityUser(email).AndReturn(False)
-    auth.IsPhysicalSecurityUser(email).AndReturn(True)
-
-    self.mox.ReplayAll()
-    self.assertEqual(mock_user, auth.DoUserAuth())
-    self.mox.VerifyAll()
-
-  def testDoUserAuthWithAllDomainUsersOffFailure(self):
+  @mock.patch.object(auth, 'IsAdminUser', return_value=False)
+  @mock.patch.object(auth, 'IsSupportUser', return_value=False)
+  @mock.patch.object(auth, 'IsSecurityUser', return_value=False)
+  @mock.patch.object(auth, 'IsPhysicalSecurityUser', return_value=False)
+  def testDoUserAuthWithAllDomainUsersOffFailure(self, *_):
     self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
-    self.stubs.Set(auth, 'users', self.mox.CreateMock(auth.users))
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(auth, 'IsSupportUser')
-    self.mox.StubOutWithMock(auth, 'IsSecurityUser')
-    self.mox.StubOutWithMock(auth, 'IsPhysicalSecurityUser')
 
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-
-    auth.IsAdminUser(email).AndReturn(False)
-    auth.IsSupportUser(email).AndReturn(False)
-    auth.IsSecurityUser(email).AndReturn(False)
-    auth.IsPhysicalSecurityUser(email).AndReturn(False)
-
-    self.mox.ReplayAll()
     self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
-    self.mox.VerifyAll()
 
   def testDoOAuthAuthSuccessSettings(self):
     """Test DoOAuthAuth() with success, where user is in settings file."""
-    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
+    email = 'zerocool@example.com'
+    user_service_stub = self.testbed.get_stub(testbed.USER_SERVICE_NAME)
+    user_service_stub.SetOAuthUser(email, scopes=[auth.OAUTH_SCOPE])
 
-    mock_user = self.mox.CreateMockAnything()
-    mock_oauth_users = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
     auth.settings.OAUTH_USERS = [email]
+    self.assertEqual(email, auth.DoOAuthAuth().email())
 
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        'oauth_users', 'text_value').AndReturn(None)
-
-    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-
-    self.mox.ReplayAll()
-    auth.DoOAuthAuth()
-    self.mox.VerifyAll()
-
-  def testDoOAuthAuthSuccess(self):
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testDoOAuthAuthSuccess(self, _):
     """Test DoOAuthAuth() with success, where user is in KeyValueCache."""
-    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    self.mox.StubOutWithMock(auth.util, 'Deserialize')
 
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
+    email = 'hal@example.com'
+    user_service_stub = self.testbed.get_stub(testbed.USER_SERVICE_NAME)
+    user_service_stub.SetOAuthUser(email, scopes=[auth.OAUTH_SCOPE])
     auth.settings.OAUTH_USERS = []
-    oauth_users = [email]
 
-    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    auth.IsAdminUser(email).AndReturn(True)
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        'oauth_users', 'text_value').AndReturn(oauth_users)
-    auth.util.Deserialize(oauth_users).AndReturn(oauth_users)
+    auth.models.KeyValueCache.MemcacheWrappedSet(
+        'oauth_users', 'text_value', auth.util.Serialize([email]))
 
-    self.mox.ReplayAll()
-    auth.DoOAuthAuth(is_admin=True)
-    self.mox.VerifyAll()
+    self.assertEqual(email, auth.DoOAuthAuth(is_admin=True).email())
 
-  def testDoOAuthAuthOAuthNotUsed(self):
+  @mock.patch.object(
+      auth.oauth, 'get_current_user', side_effect=auth.oauth.OAuthRequestError)
+  def testDoOAuthAuthOAuthNotUsed(self, _):
     """Test DoOAuthAuth() where OAuth was not used at all."""
-    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
-
-    auth.oauth.get_current_user(
-        auth.OAUTH_SCOPE).AndRaise(auth.oauth.OAuthRequestError)
-
-    self.mox.ReplayAll()
     self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
-    self.mox.VerifyAll()
 
-  def testDoOAuthAuthAdminMismatch(self):
+  @mock.patch.object(auth, 'IsAdminUser', return_value=False)
+  def testDoOAuthAuthAdminMismatch(self, _):
     """Test DoOAuthAuth(is_admin=True) where user is not admin."""
-    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
+    email = 'zerocool@example.com'
 
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
+    user_service_stub = self.testbed.get_stub(testbed.USER_SERVICE_NAME)
+    user_service_stub.SetOAuthUser(email, scopes=[auth.OAUTH_SCOPE])
 
-    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    auth.IsAdminUser(email).AndReturn(False)
-
-    self.mox.ReplayAll()
     self.assertRaises(auth.IsAdminMismatch, auth.DoOAuthAuth, is_admin=True)
-    self.mox.VerifyAll()
 
   def testDoOAuthAuthWhereNotValidOAuthUser(self):
     """Test DoOAuthAuth() where oauth user is not authorized."""
-    self.mox.StubOutWithMock(auth.oauth, 'get_current_user')
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-
-    mock_user = self.mox.CreateMockAnything()
-    email = 'foouser@example.com'
+    email = 'zerocool@example.com'
     auth.settings.OAUTH_USERS = []
 
-    auth.oauth.get_current_user(auth.OAUTH_SCOPE).AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        'oauth_users', 'text_value').AndReturn(None)
+    user_service_stub = self.testbed.get_stub(testbed.USER_SERVICE_NAME)
+    user_service_stub.SetOAuthUser(email, scopes=[auth.OAUTH_SCOPE])
 
-    self.mox.ReplayAll()
     self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
-    self.mox.VerifyAll()
 
   def testDoAnyAuth(self):
     """Test DoAnyAuth()."""
 
-    is_admin = True
+    email = 'zerocool@example.com'
     require_level = 123
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth.gaeserver, 'DoMunkiAuth')
+    with mock.patch.object(auth, 'DoUserAuth', return_value=email) as m:
+      self.assertEqual(auth.DoAnyAuth(is_admin=True), email)
+      m.assert_called_once_with(is_admin=True)
 
-    auth.DoUserAuth(is_admin=is_admin).AndReturn('user')
+    with mock.patch.object(
+        auth, 'DoUserAuth', side_effect=auth.IsAdminMismatch):
+      self.assertRaises(auth.IsAdminMismatch, auth.DoAnyAuth, is_admin=True)
 
-    auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.IsAdminMismatch)
+    with mock.patch.object(
+        auth, 'DoUserAuth', side_effect=auth.NotAuthenticated):
+      with mock.patch.object(
+          auth.gaeserver, 'DoMunkiAuth', return_value='user') as m:
+        self.assertEqual(auth.DoAnyAuth(
+            is_admin=True, require_level=require_level), 'user')
+        m.assert_called_once_with(require_level=require_level)
 
-    auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
-    auth.gaeserver.DoMunkiAuth(require_level=require_level).AndReturn('token')
+    with mock.patch.object(
+        auth, 'DoUserAuth', side_effect=auth.NotAuthenticated):
+      with mock.patch.object(
+          auth.gaeserver, 'DoMunkiAuth',
+          side_effect=auth.gaeserver.NotAuthenticated):
+        self.assertRaises(
+            auth.base.NotAuthenticated,
+            auth.DoAnyAuth, is_admin=True, require_level=require_level)
 
-    auth.DoUserAuth(is_admin=is_admin).AndRaise(auth.NotAuthenticated)
-    auth.gaeserver.DoMunkiAuth(require_level=require_level).AndRaise(
-        auth.gaeserver.NotAuthenticated)
-
-    self.mox.ReplayAll()
-
-    self.assertEqual(auth.DoAnyAuth(is_admin=is_admin), 'user')
-
-    self.assertRaises(
-        auth.IsAdminMismatch,
-        auth.DoAnyAuth, is_admin=is_admin)
-
-    self.assertEqual(auth.DoAnyAuth(
-        is_admin=is_admin, require_level=require_level), 'token')
-
-    self.assertRaises(
-        auth.base.NotAuthenticated,
-        auth.DoAnyAuth, is_admin=is_admin, require_level=require_level)
-
-    self.mox.VerifyAll()
-
-  def testIsAdminUserTrue(self):
+  @mock.patch.object(
+      auth, '_GetGroupMembers', return_value=['admin4@example.com'])
+  def testIsAdminUserTrue(self, _):
     """Test IsAdminUser() with a passed email address that is an admin."""
-    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
-
     admin_email = 'admin4@example.com'
-    auth._GetGroupMembers('admins').AndReturn([admin_email])
-
-    self.mox.ReplayAll()
     self.assertTrue(auth.IsAdminUser(admin_email))
-    self.mox.VerifyAll()
 
-  def testIsAdminUserFalse(self):
+  @mock.patch.object(auth, '_GetGroupMembers', return_value=['foo@example.com'])
+  def testIsAdminUserFalse(self, _):
     """Test IsAdminUser() with a passed email address that is not an admin."""
-    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
+    self.assertFalse(auth.IsAdminUser('admin4@example.com'))
 
-    admin_email = 'admin4@example.com'
-    auth._GetGroupMembers('admins').AndReturn(['foo@example.com'])
-
-    self.mox.ReplayAll()
-    self.assertFalse(auth.IsAdminUser(admin_email))
-    self.mox.VerifyAll()
-
-  def testIsAdminUserWithNoPassedEmail(self):
+  @mock.patch.object(
+      auth, '_GetGroupMembers', return_value=['admin5@example.com'])
+  def testIsAdminUserWithNoPassedEmail(self, _):
     """Test IsAdminUser() with no passed email address."""
-    self.mox.StubOutWithMock(auth.users, 'get_current_user')
-    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
-
-    admin_email = 'admin5@example.com'
-
-    mock_user = self.mox.CreateMockAnything()
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(admin_email)
-    auth._GetGroupMembers('admins').AndReturn(['foo@example.com'])
-
-    self.mox.ReplayAll()
     self.assertFalse(auth.IsAdminUser())
-    self.mox.VerifyAll()
 
-  def testIsAdminUserBootstrap(self):
+  @mock.patch.object(auth, '_GetGroupMembers', return_value=[])
+  def testIsAdminUserBootstrap(self, _):
     """Test IsAdminUser() where no admins are defined."""
-    self.mox.StubOutWithMock(auth.users, 'is_current_user_admin')
-    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
-
     admin_email = 'admin4@example.com'
-    auth._GetGroupMembers('admins').AndReturn([])
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL=admin_email,
+        USER_IS_ADMIN='1')
 
-    self.mox.StubOutWithMock(auth, 'users')
-    auth.users.is_current_user_admin().AndReturn(True)
-
-    self.mox.ReplayAll()
     self.assertTrue(auth.IsAdminUser(admin_email))
-    self.mox.VerifyAll()
 
-  def testIsAdminUserBootstrapFalse(self):
+  @mock.patch.object(auth, '_GetGroupMembers', return_value=[])
+  def testIsAdminUserBootstrapFalse(self, _):
     """Test IsAdminUser() where no admins are defined, but user not admin."""
-    self.mox.StubOutWithMock(auth.users, 'is_current_user_admin')
-    self.mox.StubOutWithMock(auth, '_GetGroupMembers')
-
-    admin_email = 'admin4@example.com'
-    auth._GetGroupMembers('admins').AndReturn([])
-
-    self.mox.StubOutWithMock(auth, 'users')
-    auth.users.is_current_user_admin().AndReturn(False)
-
-    self.mox.ReplayAll()
-    self.assertFalse(auth.IsAdminUser(admin_email))
-    self.mox.VerifyAll()
+    self.assertFalse(auth.IsAdminUser(self.email))
 
   def testIsGroupMemberWhenSettings(self):
     """Test IsGroupMember()."""
@@ -340,32 +212,20 @@ class AuthModuleTest(mox.MoxTestBase):
     group_name = 'foo_group'
     setattr(auth.settings, group_name.upper(), group_members)
 
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        group_name, 'text_value').AndReturn('[]')
+    models.KeyValueCache.MemcacheWrappedSet(group_name, 'text_value', '[]')
 
-    self.mox.ReplayAll()
     self.assertTrue(auth.IsGroupMember(group_members[0], group_name=group_name))
-    self.mox.VerifyAll()
 
   def testIsGroupMemberWhenSettingsWithNoPassedEmail(self):
     """Test IsGroupMember()."""
-    email = 'foouser@example.com'
-    group_members = [email, 'support2@example.com']
-    mock_user = self.mox.CreateMockAnything()
-    self.mox.StubOutWithMock(auth.users, 'get_current_user')
-    auth.users.get_current_user().AndReturn(mock_user)
-    mock_user.email().AndReturn(email)
+    group_members = [self.email, 'support2@example.com']
+
     group_name = 'foo_group_two'
     setattr(auth.settings, group_name.upper(), group_members)
 
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        group_name, 'text_value').AndReturn('[]')
+    models.KeyValueCache.MemcacheWrappedSet(group_name, 'text_value', '[]')
 
-    self.mox.ReplayAll()
     self.assertTrue(auth.IsGroupMember(group_name=group_name))
-    self.mox.VerifyAll()
 
   def testIsGroupMemberWhenLiveConfigAdminUser(self):
     """Test IsGroupMember()."""
@@ -373,15 +233,10 @@ class AuthModuleTest(mox.MoxTestBase):
     group_members = ['support1@example.com', 'support2@example.com']
     group_name = 'foo_group'
 
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    self.mox.StubOutWithMock(auth.util, 'Deserialize')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        group_name, 'text_value').AndReturn('serialized group')
-    auth.util.Deserialize('serialized group').AndReturn([email])
+    auth.models.KeyValueCache.MemcacheWrappedSet(
+        group_name, 'text_value', auth.util.Serialize([email]))
 
-    self.mox.ReplayAll()
     self.assertTrue(auth.IsGroupMember(email, group_name=group_name))
-    self.mox.VerifyAll()
 
   def testIsGroupMemberWhenNotAdmin(self):
     """Test IsGroupMember()."""
@@ -389,40 +244,43 @@ class AuthModuleTest(mox.MoxTestBase):
     group_members = ['support1@example.com', 'support2@example.com']
     group_name = 'support_users'
 
-    self.mox.StubOutWithMock(auth.models.KeyValueCache, 'MemcacheWrappedGet')
-    self.mox.StubOutWithMock(auth.util, 'Deserialize')
-    auth.models.KeyValueCache.MemcacheWrappedGet(
-        group_name, 'text_value').AndReturn('serialized group')
-    auth.util.Deserialize('serialized group').AndReturn(group_members)
+    auth.models.KeyValueCache.MemcacheWrappedSet(
+        group_name, 'text_value', auth.util.Serialize(group_members))
 
-    self.mox.ReplayAll()
     self.assertFalse(auth.IsGroupMember(email, group_name=group_name))
-    self.mox.VerifyAll()
 
 
-  def testIsAllowedTo(self):
+  @mock.patch.object(auth, 'DoUserAuth', return_value=True)
+  @mock.patch.object(auth.PermissionResolver, '_IsAllowedToPropose')
+  def testIsAllowedTo(self, mock_is_allowed_to_propose, _):
     """Test PermissionResolver.IsAllowedTo."""
     test_resolver = auth.PermissionResolver('task')
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
-
-    auth.DoUserAuth().AndReturn(True)
     auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
-    auth.DoUserAuth().AndReturn(True)
     auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
-    auth.DoUserAuth().AndRaise(auth.NotAuthenticated(''))
-    auth.DoUserAuth().AndReturn(True)
 
-    self.mox.ReplayAll()
     test_resolver.email = 'user1@example.com'
     test_resolver.task = 'Propose'
+    mock_is_allowed_to_propose.return_value = True
     self.assertTrue(test_resolver.IsAllowedTo())
+
+    mock_is_allowed_to_propose.return_value = False
     self.assertFalse(test_resolver.IsAllowedTo())
+
+  @mock.patch.object(auth, 'DoUserAuth', side_effect=auth.NotAuthenticated)
+  def testIsAllowedToWithoutUser(self, _):
+    test_resolver = auth.PermissionResolver('task')
+    test_resolver.email = 'user1@example.com'
+    test_resolver.task = 'Propose'
     self.assertFalse(test_resolver.IsAllowedTo())
+
+  @mock.patch.object(auth, 'DoUserAuth', return_value=True)
+  def testIsAllowedToUnknownTask(self, _):
+    test_resolver = auth.PermissionResolver('task')
+    test_resolver.email = 'user1@example.com'
     test_resolver.task = 'FakeTask'
+
     self.assertFalse(test_resolver.IsAllowedTo())
-    self.mox.VerifyAll()
 
   def testIsAllowedToPropose(self):
     """Test PermissionResolver._IsAllowedToPropose()."""
@@ -431,26 +289,25 @@ class AuthModuleTest(mox.MoxTestBase):
     email_two = 'user2@example.com'
     email_three = 'user3@example.com'
 
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(auth, 'IsGroupMember')
-    auth.IsAdminUser(email_one).AndReturn(True)
-    auth.IsAdminUser(email_two).AndReturn(False)
-    auth.IsGroupMember(
-        email_two, 'proposals_group',
-        remote_group_lookup=True).AndReturn(True)
-    auth.IsAdminUser(email_three).AndReturn(False)
-    auth.IsGroupMember(
-        email_three, 'proposals_group',
-        remote_group_lookup=True).AndReturn(False)
+    with mock.patch.object(auth, 'IsAdminUser', return_value=True):
+      test_resolver.email = email_one
+      self.assertTrue(test_resolver._IsAllowedToPropose())
 
-    self.mox.ReplayAll()
-    test_resolver.email = email_one
-    self.assertTrue(test_resolver._IsAllowedToPropose())
-    test_resolver.email = email_two
-    self.assertTrue(test_resolver._IsAllowedToPropose())
-    test_resolver.email = email_three
-    self.assertFalse(test_resolver._IsAllowedToPropose())
-    self.mox.VerifyAll()
+    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
+      with mock.patch.object(
+          auth, 'IsGroupMember', return_value=True) as mock_is_group_member:
+        test_resolver.email = email_two
+        self.assertTrue(test_resolver._IsAllowedToPropose())
+        mock_is_group_member.assert_called_once_with(
+            email_two, 'proposals_group', remote_group_lookup=True)
+
+    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
+      with mock.patch.object(
+          auth, 'IsGroupMember', return_value=False) as mock_is_group_member:
+        test_resolver.email = email_three
+        self.assertFalse(test_resolver._IsAllowedToPropose())
+        mock_is_group_member.assert_called_once_with(
+            email_three, 'proposals_group', remote_group_lookup=True)
 
   def testIsAllowedToUploadProposalsOff(self):
     """Test PermissionResolver._IsAllowedToUpload() with proposals."""
@@ -461,19 +318,16 @@ class AuthModuleTest(mox.MoxTestBase):
     setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', False)
     setattr(auth.settings, 'PROPOSALS_GROUP', '')
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    auth.IsAdminUser(email_one).AndReturn(True)
-    auth.IsAdminUser(email_two).AndReturn(False)
+    with mock.patch.object(auth, 'IsAdminUser', return_value=True):
+      test_resolver.email = email_one
+      self.assertTrue(test_resolver._IsAllowedToUpload())
 
-    self.mox.ReplayAll()
-    test_resolver.email = email_one
-    self.assertTrue(test_resolver._IsAllowedToUpload())
-    test_resolver.email = email_two
-    self.assertFalse(test_resolver._IsAllowedToUpload())
-    self.mox.VerifyAll()
+    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
+      test_resolver.email = email_two
+      self.assertFalse(test_resolver._IsAllowedToUpload())
 
-  def testIsAllowedToUploadProposalsOn(self):
+  @mock.patch.object(auth.PermissionResolver, '_IsAllowedToPropose')
+  def testIsAllowedToUploadProposalsOn(self, mock_is_allowed_to_propose):
     """Test PermissionResolver._IsAllowedToUpload() without proposals."""
     test_resolver = auth.PermissionResolver('task')
     email_one = 'user1@example.com'
@@ -482,19 +336,18 @@ class AuthModuleTest(mox.MoxTestBase):
     setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
     setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
-
-    self.mox.ReplayAll()
     test_resolver.email = email_one
+    mock_is_allowed_to_propose.return_value = True
     self.assertTrue(test_resolver._IsAllowedToUpload())
-    test_resolver.email = email_two
-    self.assertFalse(test_resolver._IsAllowedToUpload())
-    self.mox.VerifyAll()
 
-  def testIsAllowedToViewPacakgesProposalsOn(self):
+    test_resolver.email = email_two
+    mock_is_allowed_to_propose.return_value = False
+    self.assertFalse(test_resolver._IsAllowedToUpload())
+
+  @mock.patch.object(auth, 'IsSupportUser')
+  @mock.patch.object(auth.PermissionResolver, '_IsAllowedToPropose')
+  def testIsAllowedToViewPacakgesProposalsOn(
+      self, mock_is_allowed_to_propose, mock_is_support_user):
     """Test PermissionResolver._IsAllowedToViewPackages() with proposals."""
     test_resolver = auth.PermissionResolver('task')
     email_one = 'user1@example.com'
@@ -504,25 +357,23 @@ class AuthModuleTest(mox.MoxTestBase):
     setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
     setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth.PermissionResolver, '_IsAllowedToPropose')
-    self.mox.StubOutWithMock(auth, 'IsSupportUser')
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
-    auth.IsSupportUser(email_two).AndReturn(True)
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
-    auth.IsSupportUser(email_three).AndReturn(False)
-
-    self.mox.ReplayAll()
     test_resolver.email = email_one
+    mock_is_allowed_to_propose.return_value = True
     self.assertTrue(test_resolver._IsAllowedToViewPackages())
-    test_resolver.email = email_two
-    self.assertTrue(test_resolver._IsAllowedToViewPackages())
-    test_resolver.email = email_three
-    self.assertFalse(test_resolver._IsAllowedToViewPackages())
-    self.mox.VerifyAll()
 
-  def testIsAllowedToViewPacakgesProposalsOff(self):
+    test_resolver.email = email_two
+    mock_is_support_user.return_value = True
+    mock_is_allowed_to_propose.return_value = False
+    self.assertTrue(test_resolver._IsAllowedToViewPackages())
+
+    test_resolver.email = email_three
+    mock_is_support_user.return_value = False
+    self.assertFalse(test_resolver._IsAllowedToViewPackages())
+
+  @mock.patch.object(auth, 'IsSupportUser')
+  @mock.patch.object(auth, 'IsAdminUser')
+  def testIsAllowedToViewPacakgesProposalsOff(
+      self, mock_is_admin_user, mock_is_support_user):
     """Test PermissionResolver._IsAllowedToViewPackages() without proposals."""
     test_resolver = auth.PermissionResolver('task')
     email_one = 'user1@example.com'
@@ -532,23 +383,18 @@ class AuthModuleTest(mox.MoxTestBase):
     setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', False)
     setattr(auth.settings, 'PROPOSALS_GROUP', '')
 
-    self.mox.StubOutWithMock(auth, 'DoUserAuth')
-    self.mox.StubOutWithMock(auth, 'IsAdminUser')
-    self.mox.StubOutWithMock(auth, 'IsSupportUser')
-    auth.IsAdminUser(email_one).AndReturn(True)
-    auth.IsAdminUser(email_two).AndReturn(False)
-    auth.IsSupportUser(email_two).AndReturn(True)
-    auth.IsAdminUser(email_three).AndReturn(False)
-    auth.IsSupportUser(email_three).AndReturn(False)
-
-    self.mox.ReplayAll()
     test_resolver.email = email_one
+    mock_is_admin_user.return_value = True
     self.assertTrue(test_resolver._IsAllowedToViewPackages())
+
     test_resolver.email = email_two
+    mock_is_admin_user.return_value = False
+    mock_is_support_user.return_value = True
     self.assertTrue(test_resolver._IsAllowedToViewPackages())
+
     test_resolver.email = email_three
+    mock_is_support_user.return_value = False
     self.assertFalse(test_resolver._IsAllowedToViewPackages())
-    self.mox.VerifyAll()
 
   @mock.patch.object(auth, 'IsGroupMember', return_value=False)
   @mock.patch.object(auth, '_GetGroupMembers', return_value=[])

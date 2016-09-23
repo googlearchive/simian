@@ -19,11 +19,15 @@
 import httplib
 import logging
 
+import mock
+import stubout
 import mox
 import stubout
 
+from simian.mac.common import datastore_locks
 from google.apputils import app
 from google.apputils import basetest
+from simian.mac import models
 from tests.simian.mac.common import test
 from simian.mac.munki.handlers import pkgsinfo
 
@@ -70,33 +74,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
   def GetTestClassModule(self):
     return pkgsinfo
 
-  def _MockObtainLock(self, lock, obtain=True, timeout=None):
-    """Mock ObtainLock().
-
-    Args:
-      lock: str, lock name
-      obtain: bool, default True, whether to obtain it or not
-      timeout: int, timeout value to ObtainLock with
-    """
-    if not hasattr(self, '_mock_obtainlock'):
-      self.mox.StubOutWithMock(pkgsinfo.gae_util, 'ObtainLock')
-      self._mock_obtainlock = True
-    if timeout is not None:
-      pkgsinfo.gae_util.ObtainLock(lock, timeout=timeout).AndReturn(obtain)
-    else:
-      pkgsinfo.gae_util.ObtainLock(lock).AndReturn(obtain)
-
-  def _MockReleaseLock(self, lock):
-    """Mock ReleaseLock().
-
-    Args:
-      lock: str, lock name
-    """
-    if not hasattr(self, '_mock_releaselock'):
-      self.mox.StubOutWithMock(pkgsinfo.gae_util, 'ReleaseLock')
-      self._mock_releaselock = True
-    pkgsinfo.gae_util.ReleaseLock(lock).AndReturn(None)
-
   def testHash(self):
     """Test _Hash()."""
     self.stubs.Set(
@@ -131,7 +108,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     self.MockDoAnyAuth()
     self.request.get('hash').AndReturn('1')
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.plist = 'plist'
     self.mox.StubOutWithMock(self.c, '_Hash')
@@ -139,11 +115,19 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.response.headers['Content-Type'] = 'text/xml; charset=utf-8'
     self.response.headers['X-Pkgsinfo-Hash'] = 'hash'
     self.response.out.write(pkginfo.plist).AndReturn(None)
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
-    self.mox.ReplayAll()
-    self.c.get(filename_quoted)
-    self.mox.VerifyAll()
+    m = mock.Mock()
+    with mock.patch.object(
+        datastore_locks, 'DatastoreLock', return_value=m) as lock_mock:
+      self.mox.ReplayAll()
+      self.c.get(filename_quoted)
+      self.mox.VerifyAll()
+
+      lock_mock.assert_called_once_with(models.PACKAGE_LOCK_PREFIX + filename)
+
+    m.assert_has_calls([
+        mock.call.Acquire(timeout=30, max_acquire_attempts=5),
+        mock.call.Release()])
 
   def testGetSuccessWhenHashLockFail(self):
     """Test get() with success when hash header is requested and lock fails."""
@@ -151,7 +135,8 @@ class PackagesInfoTest(test.RequestHandlerTest):
     filename_quoted = 'pkg%20name.dmg'
     self.MockDoAnyAuth()
     self.request.get('hash').AndReturn('1')
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0, obtain=False)
+
+    datastore_locks.DatastoreLock('pkgsinfo_%s' % filename).Acquire()
     self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Could not lock pkgsinfo').AndReturn(None)
 
@@ -187,11 +172,9 @@ class PackagesInfoTest(test.RequestHandlerTest):
     """Test get() with failure."""
     filename = 'pkgnamenotfound.dmg'
     self.MockDoAnyAuth()
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0, obtain=True)
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
     self.request.get('hash').AndReturn('1')
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
     self.response.set_status(httplib.NOT_FOUND).AndReturn(None)
 
     self.mox.ReplayAll()
@@ -342,13 +325,11 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     self.MockModelStaticBase(
         'PackageInfo', 'get_by_key_name', filename).AndReturn(None)
 
     self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Only updates supported')
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()
     self.c.put(filename)
@@ -378,13 +359,11 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
@@ -430,13 +409,11 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
@@ -482,13 +459,11 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
 
     pkginfo.IsSafeToModify().AndReturn(True)
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
@@ -536,14 +511,12 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.IsSafeToModify().AndReturn(True)
     self.mox.StubOutWithMock(self.c, '_Hash')
     self.c._Hash(pkginfo.plist).AndReturn('goodhash')
     pkginfo.name = mock_mpl.GetPackageName().AndReturn(name)
     pkginfo.put()
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.StubOutWithMock(pkgsinfo.models.Catalog, 'Generate')
     for catalog in catalogs:
@@ -584,7 +557,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.IsSafeToModify().AndReturn(True)
     self.mox.StubOutWithMock(self.c, '_Hash')
@@ -592,7 +564,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.c._Hash(pkginfo.plist).AndReturn('otherhash')
     self.response.set_status(httplib.CONFLICT).AndReturn(None)
     self.response.out.write('Update hash does not match').AndReturn(None)
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
@@ -620,7 +591,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.plist = 'foo'
 
@@ -630,7 +600,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.response.set_status(httplib.FORBIDDEN).AndReturn(None)
     self.response.out.write('Changes to pkginfo not allowed').AndReturn(
         None)
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)
@@ -658,7 +627,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.mox.StubOutWithMock(pkgsinfo, 'MunkiPackageInfoPlistStrict')
     pkgsinfo.MunkiPackageInfoPlistStrict(body).AndReturn(mock_mpl)
     mock_mpl.Parse().AndReturn(None)
-    self._MockObtainLock('pkgsinfo_%s' % filename, timeout=5.0)
     pkginfo = self.MockModelStatic('PackageInfo', 'get_by_key_name', filename)
     pkginfo.plist = 'foo'
 
@@ -671,7 +639,6 @@ class PackagesInfoTest(test.RequestHandlerTest):
     self.c._Hash(pkginfo.plist).AndReturn('otherhash')
     self.response.set_status(httplib.CONFLICT).AndReturn(None)
     self.response.out.write('Update hash does not match').AndReturn(None)
-    self._MockReleaseLock('pkgsinfo_%s' % filename)
 
     self.mox.ReplayAll()
     self.c.put(filename_quoted)

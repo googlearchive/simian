@@ -23,8 +23,6 @@ import mock
 import stubout
 import webtest
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from google.apputils import app
@@ -39,30 +37,14 @@ from tests.simian.mac.common import test
 
 @mock.patch.object(auth, 'IsAdminUser', return_value=True)
 @mock.patch.object(admin.template, 'render', return_value='html:)')
-class AdminGroupsTest(basetest.TestCase):
+class AdminGroupsTest(test.AppengineTest):
 
   def setUp(self):
     super(AdminGroupsTest, self).setUp()
     self.testapp = webtest.TestApp(gae_main.app)
 
-    self.testbed = testbed.Testbed()
-
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='user@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='0',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_all_stubs()
-
     models.Group(key_name='test group', users=['user1', 'user4']).put()
     models.Group(key_name='test group2', users=['user1', 'user2']).put()
-
-  def tearDown(self):
-    super(AdminGroupsTest, self).tearDown()
-    self.testbed.deactivate()
 
   def testGet(self, render_mock, *unused_args):
     """Test get()."""

@@ -19,8 +19,12 @@
 import datetime
 import logging
 
+import mox
+import stubout
+
 import tests.appenginesdk
 from google.apputils import app
+from simian.mac import models
 from tests.simian.mac.common import test
 from simian.mac.munki import common
 
@@ -46,33 +50,30 @@ class CommonModuleTest(test.RequestHandlerTest):
 
   def testSaveFirstConnectionWithSkipSerial(self):
     """Tests _SaveFirstConnection() with a serial in skip_serials = []."""
-    self.mox.StubOutWithMock(common.models, 'FirstClientConnection')
+    computer = models.Computer(
+        serial=common.DUPE_SERIAL_NUMBER_EXCEPTIONS[0],
+        active=True, uuid='OLD',
+    )
+    computer.put()
 
     client_id = {
         'uuid': 'uuid', 'owner': 'foouser', 'hostname': 'foohost',
         'site': 'foosite'
     }
-    class MockComputer(object):
-      serial = common.DUPE_SERIAL_NUMBER_EXCEPTIONS[0]
-    mock_computer = MockComputer()
-    mock_entity = self.mox.CreateMockAnything()
-    common.models.FirstClientConnection(key_name=client_id['uuid']).AndReturn(
-        mock_entity)
-    mock_entity.put().AndReturn(None)
 
-    self.mox.ReplayAll()
-    common._SaveFirstConnection(client_id, mock_computer)
-    self.assertEqual(mock_entity.computer, mock_computer)
-    self.assertEqual(mock_entity.owner, client_id['owner'])
-    self.assertEqual(mock_entity.hostname, client_id['hostname'])
-    self.assertEqual(mock_entity.site, client_id['site'])
-    self.mox.VerifyAll()
+    common._SaveFirstConnection(client_id, computer.key())
+
+    connections = common.models.FirstClientConnection.all().fetch(10)
+    self.assertEqual(1, len(connections))
+
+    conn = connections[0]
+    self.assertEqual(conn.computer.key(), computer.key())
+    self.assertEqual(conn.owner, client_id['owner'])
+    self.assertEqual(conn.hostname, client_id['hostname'])
+    self.assertEqual(conn.site, client_id['site'])
 
   def testSaveFirstConnectionMarkingDupesInactive(self):
     """Tests _SaveFirstConnection(), marking dupe serial numbers as inactive."""
-    self.mox.StubOutWithMock(common.models, 'FirstClientConnection')
-    self.mox.StubOutWithMock(common.models.Computer, 'AllActive')
-
     now = datetime.datetime.utcnow()
     dupe_serial = 'fooserial'
 
@@ -81,41 +82,27 @@ class CommonModuleTest(test.RequestHandlerTest):
         'site': 'foosite'
     }
 
-    mock_computer = self.mox.CreateMockAnything()
-    mock_computer.uuid = 'this is a unique id'
-    mock_computer.preflight_datetime = now
-    mock_computer.serial = 'foobar serial'
+    computer = models.Computer(
+        uuid='this is a unique id', preflight_datetime=now,
+        serial=dupe_serial)
+    computer.put()
 
-    mock_entity = self.mox.CreateMockAnything()
-    common.models.FirstClientConnection(key_name=client_id['uuid']).AndReturn(
-        mock_entity)
-    mock_entity.put().AndReturn(None)
+    dupe1 = models.Computer(
+        uuid='diff', serial=dupe_serial,
+        preflight_datetime=now - datetime.timedelta(days=0, minutes=1))
+    dupe2 = models.Computer(
+        uuid='diff again', serial=dupe_serial,
+        preflight_datetime=now - datetime.timedelta(days=21))
+    dupe1.put()
+    dupe2.put()
 
-    dupe1 = self.mox.CreateMockAnything()
-    dupe1.uuid = 'diff'
-    dupe1.preflight_datetime = now - datetime.timedelta(days=0, minutes=1)
-    dupe1.serial = dupe_serial
+    common._SaveFirstConnection(client_id, computer.key())
+    self.assertTrue(computer.active)
+    self.assertFalse(models.Computer.get(dupe1.key()).active)
+    self.assertFalse(models.Computer.get(dupe2.key()).active)
 
-    dupe2 = self.mox.CreateMockAnything()
-    dupe2.uuid = 'diff again'
-    dupe2.preflight_datetime = now - datetime.timedelta(days=21)
-    dupe2.serial = dupe_serial
-
-    # same_serials contains mock_computer, but put() shouldn't be called again.
-    same_serials = [mock_computer, dupe1, dupe2]
-    mock_query = self.mox.CreateMockAnything()
-    common.models.Computer.AllActive().AndReturn(mock_query)
-    mock_query.filter('serial =', mock_computer.serial).AndReturn(same_serials)
-
-    dupe1.put(update_active=False).AndReturn(None)
-    dupe2.put(update_active=False).AndReturn(None)
-
-    self.mox.ReplayAll()
-    common._SaveFirstConnection(client_id, mock_computer)
-    self.assertTrue(mock_computer.active)
-    self.assertFalse(dupe1.active)
-    self.assertFalse(dupe2.active)
-    self.mox.VerifyAll()
+    connections = common.models.FirstClientConnection.all().fetch(10)
+    self.assertEqual(1, len(connections))
 
   def testLogClientConnectionWithInvalidUuid(self):
     """Tests LogClientConnection() function with an invalid uuid."""
@@ -296,8 +283,8 @@ class CommonModuleTest(test.RequestHandlerTest):
     hostname = 'foohostname'
     serial = 'fooserial'
     owner = 'foouser'
-    track = 'footrack'
-    config_track = 'footrack'
+    track = 'stable'
+    config_track = 'stable'
     site = 'NYC'
     os_version = '10.6.3'
     client_version = '0.6.0.759.0'
@@ -305,7 +292,7 @@ class CommonModuleTest(test.RequestHandlerTest):
     last_notified_datetime_str = '2010-11-03 15:15:10'
     last_notified_datetime = datetime.datetime(
         2010, 11, 03, 15, 15, 10)
-    uptime = 123
+    uptime = 123.0
     root_disk_free = 456
     user_disk_free = 789
     runtype = 'auto'
@@ -324,43 +311,36 @@ class CommonModuleTest(test.RequestHandlerTest):
         common.models.db, 'run_in_transaction',
         lambda fn, *args, **kwargs: fn(*args, **kwargs))
 
-    self.MockModelStaticNone('Computer', 'get_by_key_name', uuid)
-    mock_computer = self.MockModel('Computer', key_name=uuid)
     self.mox.StubOutWithMock(common.deferred, 'defer')
 
-    mock_computer.connection_datetimes = []
-    mock_computer.connection_dates = []
-    mock_computer.connections_on_corp = None
-    mock_computer.connections_off_corp = None
-    mock_computer.preflight_count_since_postflight = None
-    mock_computer.put().AndReturn(None)
     common.deferred.defer(
-        common._SaveFirstConnection,
-        client_id=client_id, computer=mock_computer, _countdown=300,
-        _queue='first')
+        common._SaveFirstConnection, client_id=client_id,
+        computer_key=mox.IgnoreArg(), _countdown=300, _queue='first')
 
     self.mox.ReplayAll()
     common.LogClientConnection(event, client_id, ip_address=ip_address)
-    self.assertEquals(uuid, mock_computer.uuid)
-    self.assertEquals(ip_address, mock_computer.ip_address)
-    self.assertEquals(runtype, mock_computer.runtype)
-    self.assertEquals(hostname, mock_computer.hostname)
-    self.assertEquals(serial, mock_computer.serial)
-    self.assertEquals(owner, mock_computer.owner)
-    self.assertEquals(track, mock_computer.track)
-    self.assertEquals(config_track, mock_computer.config_track)
-    self.assertEquals(site, mock_computer.site)
-    self.assertEquals(os_version, mock_computer.os_version)
-    self.assertEquals(client_version, mock_computer.client_version)
+
+    computer = models.Computer.get_by_key_name(uuid)
+    self.assertEquals(uuid, computer.uuid)
+    self.assertEquals(ip_address, computer.ip_address)
+    self.assertEquals(runtype, computer.runtype)
+    self.assertEquals(hostname, computer.hostname)
+    self.assertEquals(serial, computer.serial)
+    self.assertEquals(owner, computer.owner)
+    self.assertEquals(track, computer.track)
+    self.assertEquals(config_track, computer.config_track)
+    self.assertEquals(site, computer.site)
+    self.assertEquals(os_version, computer.os_version)
+    self.assertEquals(client_version, computer.client_version)
     self.assertEquals(
-        last_notified_datetime, mock_computer.last_notified_datetime)
+        last_notified_datetime, computer.last_notified_datetime)
     # New client, so zero connection date/datetimes until after postflight.
-    self.assertEquals([], mock_computer.connection_datetimes)
-    self.assertEquals([], mock_computer.connection_dates)
+    self.assertEquals([], computer.connection_datetimes)
+    self.assertEquals([], computer.connection_dates)
     # Verify on_corp/off_corp counts.
-    self.assertEquals(None, mock_computer.connections_on_corp)
-    self.assertEquals(None, mock_computer.connections_off_corp)
-    self.assertEquals(1, mock_computer.preflight_count_since_postflight)
+    self.assertEquals(0, computer.connections_on_corp)
+    self.assertEquals(0, computer.connections_off_corp)
+    self.assertEquals(1, computer.preflight_count_since_postflight)
     self.mox.VerifyAll()
 
   def testLogClientConnectionAsync(self):

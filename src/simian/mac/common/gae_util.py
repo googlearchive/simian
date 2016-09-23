@@ -17,14 +17,11 @@
 """Shared resources for App Engine."""
 
 import logging
-import time
 
-from google.appengine.api import memcache
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 
-
-LOCK_NAME = 'lock_%s'
+from simian.mac.common import datastore_locks
 
 
 def BatchDatastoreOp(op, entities_or_keys, batch_size=25):
@@ -107,39 +104,7 @@ class QueryIterator(object):
 
 def LockExists(name):
   """Returns True if a lock with the given str name exists, False otherwise."""
-  memcache_key = LOCK_NAME % name
-  return memcache.get(memcache_key) is not None
-
-
-def ObtainLock(name, timeout=0):
-  """Obtain a lock, given a name.
-
-  Args:
-    name: str, name of lock
-    timeout: int, if >0, wait timeout seconds for a lock if it cannot
-      be obtained at first attempt.  NOTE:  Using a timeout near or greater
-      than the AppEngine deadline will be hazardous to your health.
-      The deadline is 30s for live http, 10m for offline tasks as of
-      this note.
-  Returns:
-    True if lock was obtained
-    False if lock was not obtained, some other process has the lock
-  """
-  memcache_key = LOCK_NAME % name
-  while 1:
-    locked = memcache.incr(memcache_key, initial_value=0) == 1
-    timeout -= 1
-    if locked or timeout < 0:
-      return locked
-    time.sleep(1)
+  e = datastore_locks._DatastoreLockEntity.get_by_id(name)  # pylint: disable=protected-access
+  if e:
+    return e.lock_held
   return False
-
-
-def ReleaseLock(name):
-  """Release a lock, given its name.
-
-  Args:
-    name: str, name of lock
-  """
-  memcache_key = LOCK_NAME % name
-  memcache.delete(memcache_key)

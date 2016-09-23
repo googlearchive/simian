@@ -21,37 +21,23 @@ import stubout
 import webapp2
 import webtest
 
-from google.appengine.ext import testbed
-
 from django.conf import settings
 settings.configure()
 from simian.mac import models
 from simian.mac.admin import package
+from tests.simian.mac.common import test
 from simian.mac.models import munki
 from simian.mac.models import settings
 
 
-class PackageInfoProposalTest(unittest.TestCase):
+class PackageInfoProposalTest(test.AppengineTest):
   """Test PackageInfoProposal class."""
 
   def setUp(self):
+    super(PackageInfoProposalTest, self).setUp()
+
     app = webapp2.WSGIApplication([('/(.*)', package.Package)])
     self.testapp = webtest.TestApp(app)
-    self.testbed = testbed.Testbed()
-
-    self.testbed.activate()
-    self.testbed.setup_env(
-        overwrite=True,
-        USER_EMAIL='user@example.com',
-        USER_ID='123',
-        USER_IS_ADMIN='1',
-        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
-
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_memcache_stub()
-    self.testbed.init_taskqueue_stub()
-    self.testbed.init_user_stub()
-    self.testbed.init_mail_stub()
 
     self.test_plist = '''<?xml version="1.0" encoding="UTF-8"?>
       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -183,9 +169,6 @@ class PackageInfoProposalTest(unittest.TestCase):
 
     munki.Catalog.Generate = mock.Mock(return_value=True)
     munki.Manifest.Generate = mock.Mock(return_value=True)
-
-  def tearDown(self):
-    self.testbed.deactivate()
 
   def testProposeToCatalogsAndManifests(self):
     self.test_package.put()

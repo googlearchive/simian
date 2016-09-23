@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-
 """App Engine server module, including classes to handle auth.
 
 Classes:
@@ -28,8 +26,6 @@ Functions:
 
   DoMunkiAuth:                  Check Munki client auth credentials.
 """
-
-
 
 import Cookie
 import datetime
@@ -51,16 +47,19 @@ from simian import auth
 from simian.auth import base
 from simian.auth import util
 from simian.mac import models
-from simian.mac.common import gae_util
 
 
 # Level values supplied to DoMunkiAuth() and used in session data
 # Base
+LEVEL_APPLESUS = base.LEVEL_APPLESUS
 LEVEL_BASE = base.LEVEL_BASE
 # Admin
 LEVEL_ADMIN = base.LEVEL_ADMIN
 # Can upload new/updated packages
 LEVEL_UPLOADPKG = LEVEL_ADMIN
+
+ALL_LEVELS = [LEVEL_APPLESUS, LEVEL_BASE, LEVEL_ADMIN, LEVEL_UPLOADPKG]
+
 # Deadline in seconds for datastore RPC operations
 DATASTORE_RPC_DEADLINE = 5
 
@@ -149,24 +148,32 @@ class Auth1ServerDatastoreSession(base.Auth1ServerSession):
     """
     session.delete(rpc=self._GetConfig())
 
-  def All(self, min_age_seconds=None):
+  def All(
+      self, min_age_seconds=None, cursor=None, level=None):
     """Iterate through all session entities, yielding each.
 
     Args:
       min_age_seconds: int seconds of minimum age sessions to return.
-
-    Yields:
-      session entity object
+      cursor: str starting position.
+      level: filter by access level
+    Returns:
+      Return query.
     """
+    q = self.model.all()
+
+    if level is not None:
+      q = q.filter('level =', level)
+
     if min_age_seconds:
       delta = datetime.timedelta(seconds=min_age_seconds)
       min_datetime = datetime.datetime.utcnow() - delta
-      q = self.model.all().filter('mtime <', min_datetime)
-    else:
-      q = self.model.all()
+      q = q.filter('mtime <', min_datetime)
 
-    for session in gae_util.QueryIterator(q, step=100):
-      yield session
+    q.with_cursor(cursor)
+    return q
+
+  def GetByUuid(self, uuid):
+    return self.model.all().filter('uuid =', uuid).fetch(None)
 
 
 class Auth1ServerDatastoreMemcacheSession(Auth1ServerDatastoreSession):
@@ -254,24 +261,24 @@ class AuthSessionSimianServer(Auth1ServerDatastoreMemcacheSession):
   def GetModelClass():
     return models.AuthSession
 
-  def ExpireOne(self, session, age=None, now=None):
-    """Check session item age, expire if too old, report.
-
-    Args:
-      session: simian.mac.models.AuthSession instance
-      age: datetime.timedelta, age at which session is too old
-      now: datetime.datetime, optional, current time
-    Returns:
-      True, if the session is too old to use and was deleted
-      False, if the session is new enough to use
-    """
+  def IsExpired(self, session, now=None):
+    """check whether session is expired."""
+    if now is None:
+      now = self._Now()
     ek = session.key().name()
     age = None
     if ek.startswith(self.SESSION_TYPE_PREFIX_TOKEN):
       age = datetime.timedelta(seconds=base.AGE_TOKEN_SECONDS)
     elif ek.startswith(self.SESSION_TYPE_PREFIX_CN):
       age = datetime.timedelta(seconds=base.AGE_CN_SECONDS)
-    return super(AuthSessionSimianServer, self).ExpireOne(session, age, now)
+
+    if session.level == LEVEL_APPLESUS:
+      age = datetime.timedelta(seconds=base.AGE_APPLESUS_TOKEN_SECONDS)
+
+    if not session.mtime or not age:
+      return True
+
+    return now - session.mtime > age
 
 
 class AuthSimianServer(base.Auth1):

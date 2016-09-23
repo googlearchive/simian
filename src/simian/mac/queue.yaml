@@ -5,3 +5,6 @@ queue:
 - name: first
   rate: 5/s
   bucket_size: 5
+- name: serial
+  rate: 5/s
+  max_concurrent_requests: 1

@@ -293,21 +293,6 @@ class AuthSessionBaseTest(mox.MoxTestBase):
     self.assertFalse(asb.ExpireOne(session))
     self.mox.VerifyAll()
 
-  def testExpireAll(self):
-    """Test ExpireAll()."""
-    asb = base.AuthSessionBase()
-    self.mox.StubOutWithMock(asb, 'All')
-    self.mox.StubOutWithMock(asb, 'ExpireOne')
-    l = [1, 2, 3]
-    asb.All(min_age_seconds=base.AGE_CN_SECONDS).AndReturn(l)
-    asb.ExpireOne(1).AndReturn(True)
-    asb.ExpireOne(2).AndReturn(True)
-    asb.ExpireOne(3).AndReturn(False)
-
-    self.mox.ReplayAll()
-    self.assertEqual(2, asb.ExpireAll())
-    self.mox.VerifyAll()
-
 
 class AuthSessionDataTest(mox.MoxTestBase):
   """Test AuthSessionData class."""

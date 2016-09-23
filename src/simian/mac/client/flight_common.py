@@ -32,8 +32,6 @@ import struct
 import subprocess
 import tempfile
 import time
-import urllib
-import urlparse
 
 from simian.mac.client import version
 
@@ -67,6 +65,7 @@ DEFAULT_ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
 # Global for holding the auth token to be used to communicate with the server.
 AUTH1_TOKEN = None
 HUNG_MSU_TIMEOUT = datetime.timedelta(hours=2)
+MUNKI_CLIENT_ID_HEADER_KEY = 'X-munki-client-id'
 
 
 DEBUG = False
@@ -530,32 +529,34 @@ def DictToStr(d, delimiter=DELIMITER):
   return delimiter.join(out).encode('utf-8')
 
 
-def GetAppleSUSCatalog():
+def _SetCustomCatalogURL(catalog_url):
+  """Sets Software Update's CatalogURL to custom value."""
+  key = 'SimianCatalogURL'
+  if munkicommon.pref(key) == catalog_url:
+    return
+  munkicommon.set_pref(key, catalog_url)
+
+  os_version_tuple = munkicommon.getOsVersion(as_tuple=True)
+  # set custom catalog url on each preflight for apple updates
+  if os_version_tuple >= (10, 11):
+    Exec(['/usr/sbin/softwareupdate', '--set-catalog', catalog_url])
+
+  Exec([
+      '/usr/bin/defaults', 'write', APPLE_SUS_PLIST, 'CatalogURL', catalog_url])
+
+
+def UpdateAppleSUSCatalog(client):
   """Fetches an Apple Software Update Service catalog from the server."""
+
   url = GetServerURL()
-  try:
-    new = updatecheck.getResourceIfChangedAtomically(
-        '%s/applesus/' % url, APPLE_SUS_CATALOG)
-  except fetch.MunkiDownloadError as e:
-    logging.exception(u'MunkiDownloadError getting Apple SUS catalog: %s', e)
-    return
 
-  if new:
-    # SUS catalog changed, clear last check date to run softwareupdate soon.
-    munkicommon.set_pref('LastAppleSoftwareUpdateCheck', None)
+  resp = client.Do(
+      'POST', '%s/applesus/' % url,
+      headers={MUNKI_CLIENT_ID_HEADER_KEY: DictToStr(GetClientIdentifier())})
 
-  try:
-    sus_catalog = fpl.readPlist(APPLE_SUS_PLIST)
-  except fpl.NSPropertyListSerializationException:
-    # plist may not exist, but will be created when softwareupdate is run, then
-    # the next execution of of this code will set the CatalogURL.
-    logging.exception('Failed to read Apple SoftwareUpdate plist.')
-    return
+  applesus_url = '%s/applesus/%s' % (url, resp.body)
 
-  # Update the CatalogURL setting in com.apple.SoftwareUpdate.plist.
-  sus_catalog['CatalogURL'] = urlparse.urljoin(
-      'file://localhost/', urllib.quote(APPLE_SUS_CATALOG))
-  fpl.writePlist(sus_catalog, APPLE_SUS_PLIST)
+  _SetCustomCatalogURL(applesus_url)
 
 
 def GetAuth1Token():

@@ -73,13 +73,15 @@ class ManifestDisabledError(Error):
   """Disable manifest was requested."""
 
 
-def _SaveFirstConnection(client_id, computer):
+def _SaveFirstConnection(client_id, computer_key):
   """Function to save first connection of a given client.
 
   Args:
     client_id: dict client id.
-    computer: models.Computer entity.
+    computer_key: entity's key.
   """
+  computer = models.Computer.get(computer_key)
+
   e = models.FirstClientConnection(key_name=client_id['uuid'])
   e.computer = computer
   e.owner = client_id['owner']
@@ -240,7 +242,7 @@ def LogClientConnection(
     c.put()
     if is_new_client:  # Queue welcome email to be sent.
       deferred.defer(
-          _SaveFirstConnection, client_id=_client_id, computer=c,
+          _SaveFirstConnection, client_id=_client_id, computer_key=c.key(),
           _countdown=300, _queue='first')
 
   try:

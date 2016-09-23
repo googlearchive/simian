@@ -25,6 +25,8 @@ libraries:
   version: 1.5
 - name: webapp2
   version: latest
+- name: pycrypto
+  version: latest
 
 env_variables:
   DJANGO_SETTINGS_MODULE: 'simian.settings'
