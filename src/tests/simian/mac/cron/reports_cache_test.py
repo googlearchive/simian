@@ -26,8 +26,6 @@ import stubout
 from google.appengine.ext import deferred
 from google.appengine.ext import testbed
 
-from django.conf import settings
-settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 from simian.mac import models

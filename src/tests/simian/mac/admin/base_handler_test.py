@@ -20,8 +20,6 @@ import httplib
 import webapp2
 import webtest
 
-from django.conf import settings
-settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 

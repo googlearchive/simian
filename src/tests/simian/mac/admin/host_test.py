@@ -19,8 +19,6 @@ import uuid
 import mock
 import stubout
 
-from django.conf import settings
-settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 

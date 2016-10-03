@@ -15,8 +15,6 @@
 # limitations under the License.
 #
 
-from django.conf import settings
-settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 

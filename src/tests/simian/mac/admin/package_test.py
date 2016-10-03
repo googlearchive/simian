@@ -21,8 +21,6 @@ import stubout
 import webapp2
 import webtest
 
-from django.conf import settings
-settings.configure()
 from simian.mac import models
 from simian.mac.admin import package
 from tests.simian.mac.common import test

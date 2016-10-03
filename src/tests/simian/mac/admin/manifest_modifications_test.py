@@ -20,8 +20,6 @@ import stubout
 
 from google.appengine.api import users
 
-from django.conf import settings
-settings.configure()
 from google.apputils import app
 from google.apputils import basetest
 
