@@ -11,7 +11,7 @@ MUNKI_VERSION=2.5.1.2630
 MUNKI=munkitools-${MUNKI_VERSION}
 MUNKIFILE=${MUNKI}.pkg
 PYTHON_VERSION=2.7
-PYTHON=$(shell type -p python${PYTHON_VERSION})
+PYTHON="/usr/bin/python${PYTHON_VERSION}"
 TS=$(shell date '+%s')
 BUILD_VERSION=$(shell (git rev-parse HEAD 2>/dev/null || echo ${SIMIAN_VERSION} | tr '.' '-') | cut -c1-12)
 
@@ -23,8 +23,8 @@ python_check:
 
 virtualenv: python_check
 	${PYTHON} -c 'import virtualenv; exit(virtualenv.__version__ != "13.1.2")' || \
-	(sudo easy_install-${PYTHON_VERSION} -U virtualenv==13.1.2 && \
-	sudo easy_install-${PYTHON_VERSION} -U setuptools==18.6.1)
+	(sudo /usr/bin/easy_install-${PYTHON_VERSION} -U virtualenv==13.1.2 && \
+	sudo /usr/bin/easy_install-${PYTHON_VERSION} -U setuptools==18.6.1)
 
 VE: virtualenv python_check
 	[ -d VE ] || \

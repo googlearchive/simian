@@ -38,7 +38,7 @@ BASETMPDIR="${TARGET_PATH}/tmp/"
 OSX=$(sw_vers -productVersion | cut -d. -f1-2)
 VERSION="2.4"
 PYTHON_VERSION=$(egrep '[0-9].[0-9]' "${RESOURCES}/python_version")
-PYTHON="python${PYTHON_VERSION}"
+PYTHON="/usr/bin/python${PYTHON_VERSION}"
 INSTALL_DIR=/usr/local/munki/
 VE_DIR=simian
 BOMPATH=$(pkgutil --bom "${1}")
@@ -64,20 +64,7 @@ trap "rm -rf ${TMPDIR}" EXIT
 
 ### find & test easy_install
 
-# this can be somewhat difficult because the version of easy_install
-# appropriate for our PYTHON_VERSION and setuptools version might be in
-# /usr/local/bin or /usr/bin.
-
 EZ="/usr/bin/easy_install"
-
-# the version in /usr/local/bin might be for a newer python with a newer
-# dependency on setuptools. try running it to see if it is willing to run.
-if [[ -f /usr/local/bin/easy_install ]]; then
-  if [[ -x /usr/local/bin/easy_install ]]; then
-    ${PYTHON} /usr/local/bin/easy_install --help 2>/dev/null && \
-      EZ="/usr/local/bin/easy_install"
-  fi
-fi
 
 # easy_install might point the user to easy_install-VERSION instead and fail.
 # look around for a specific version.
