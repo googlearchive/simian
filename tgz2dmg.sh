@@ -20,19 +20,6 @@
 set -i
 set -e
 
-function find_packagemaker() {
-  for path in \
-    /Developer/usr/bin/packagemaker \
-    /Applications/PackageMaker.app/Contents/MacOS/PackageMaker \
-    /Applications/Xcode.app/Contents/Applications/PackageMaker.app/Contents/MacOS/PackageMaker \
-    ; do
-    if [[ -x "$path" ]]; then
-      echo "$path"
-      return
-    fi
-  done
-}
-
 if [[ $(uname) != "Darwin" ]]; then
   echo $0 must run on OS X
   exit 1
@@ -69,12 +56,8 @@ fi
 shift ; shift
 
 if [[ -z "$PKGBUILD" ]]; then
-  echo "cannot find executable Apple pkgbuild tool, looking for packagemaker."
-  PKGMAKER=$(find_packagemaker)
-  if [[ -z "$PKGMAKER" ]]; then
-      echo "cannot find executable Apple pkgmaker tool, exit."
-      exit 1
-  fi
+  echo "cannot find executable Apple pkgbuild tool."
+  exit 1
 fi
 
 TMPDIR=$(mktemp -d tgz2dmgXXXXXX)
@@ -177,24 +160,13 @@ else
   pkgout="$OUT"
 fi
 
-if [[ ${PKGBUILD} != "" ]]; then
-    echo "Using pkgbuild"
-    cp -R "${TMPDIR}/resources" "${TMPDIR}/scripts/Resources"
-    ${PKGBUILD} --root "${TMPDIR}/contents" \
-        --identifier "$ID" \
-        --scripts "${TMPDIR}/scripts" \
-        --version "${VERSION}" \
-        "${pkgout}"
-else
-    echo "Using packagemaker"
-    ${PKGMAKER} \
-    --root "${TMPDIR}/contents" \
-    --id "$ID" \
-    --out "$pkgout" \
-    --resources "${TMPDIR}/resources" \
+echo "Using pkgbuild"
+cp -R "${TMPDIR}/resources" "${TMPDIR}/scripts/Resources"
+${PKGBUILD} --root "${TMPDIR}/contents" \
+    --identifier "$ID" \
     --scripts "${TMPDIR}/scripts" \
-    --version "$VERSION"
-fi
+    --version "${VERSION}" \
+    "${pkgout}"
 
 if [[ -z "$PKGONLY" ]]; then
   hdiutil create -srcfolder "${TMPDIR}/pkg" -layout NONE -volname Simian "$OUT"
