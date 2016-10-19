@@ -54,7 +54,7 @@ echo postflight BEGIN
 ### find & test python
 
 [[ ! -z "$PYTHON_VERSION" ]] || die "No python version specified in pkg"
-[[ ! -x "$PYTHON" ]] || die "Python is not executable"
+[[ -x "$PYTHON" ]] || die "Python is not executable"
 
 ### create temp work directory
 
