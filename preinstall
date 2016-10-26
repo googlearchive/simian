@@ -2,9 +2,7 @@
 simian_files=("/Applications/Managed Software Center.app")
 
 for file in "${simian_files[@]}"; do
-
-if [ -e "$file" ]; then
-rm -rf "$file"
-fi
-
+  if [ -e "$file" ]; then
+    rm -rf "$file"
+  fi
 done

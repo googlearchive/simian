@@ -21,8 +21,11 @@ Contents:
   RequestHandlerTest
 """
 
+import base64
+
 import tests.appenginesdk
 
+from google.appengine.ext import deferred
 from google.appengine.ext import testbed
 
 from google.apputils import basetest
@@ -56,6 +59,15 @@ class AppengineTest(basetest.TestCase):
   def tearDown(self):
     super(AppengineTest, self).tearDown()
     self.testbed.deactivate()
+
+  def RunAllDeferredTasks(self, queue_name='default'):
+    """Runs all deferred tasks in specified queue."""
+    taskqueue = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
+
+    tasks = taskqueue.GetTasks(queue_name)
+    for task in tasks:
+      deferred.run(base64.b64decode(task['body']))
+      taskqueue.DeleteTask(queue_name, task['name'])
 
 
 class GenericContainer(test_base.GenericContainer):

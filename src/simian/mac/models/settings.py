@@ -56,6 +56,9 @@ SETTINGS = {
                     'testing to stable.'),
         'default': 7,
     },
+    'approval_required': {
+        'type': 'bool',
+    },
     'client_site_enabled': {
         'type': 'bool',
         'title': 'Display Client Site/Office',

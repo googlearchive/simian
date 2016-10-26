@@ -52,7 +52,7 @@ AGE_TOKEN_SECONDS = 6 * 60 * 60
 AGE_CN_SECONDS = 5 * 60
 # Valid age of any other default session data
 AGE_DEFAULT_SECONDS = 6 * 60 * 60
-AGE_APPLESUS_TOKEN_SECONDS = 14 * 24 * 60 * 60
+AGE_APPLESUS_TOKEN_SECONDS = 21 * 24 * 60 * 60
 # Minimum value for Cn (client nonce) value
 MIN_VALUE_CN = 2**100
 

@@ -31,13 +31,7 @@ from simian.mac import models
 from simian.mac.common import applesus
 from simian.mac.common import auth
 from simian.mac.common import gae_util
-
-# pylint: disable=g-import-not-at-top
-try:
-  from simian.mac.common import mail
-except ImportError:
-  mail = None
-# pylint: enable=g-import-not-at-top
+from simian.mac.common import mail
 
 
 DEFAULT_APPLESUS_LOG_FETCH = 25
@@ -154,7 +148,7 @@ class AppleSUSAdmin(admin.AdminHandler):
     log.put()
 
     # Send email notification to admins
-    if mail and settings.EMAIL_ON_EVERY_CHANGE:
+    if settings.EMAIL_ON_EVERY_CHANGE:
       display_name = '%s - %s' % (product.name, product.version)
 
       subject = 'Apple SUS Update by %s - %s (%s)' % (
@@ -181,9 +175,10 @@ class AppleSUSAdmin(admin.AdminHandler):
   def get(self, report=None, product_id=None):
     """GET handler."""
     auth.DoUserAuth()
+
     if not report:
       self._DisplayMain()
-    if report == 'product':
+    elif report == 'product':
       self._DisplayProductDescription(product_id)
     elif report == 'logs':
       product_id = self.request.get('product_id')

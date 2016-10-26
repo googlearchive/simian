@@ -29,11 +29,7 @@ from simian.mac import common
 from simian.mac import models
 from simian.mac.admin import xsrf
 from simian.mac.common import auth
-
-try:
-  from simian.mac.common import mail
-except ImportError:
-  mail = None
+from simian.mac.common import mail
 
 
 
@@ -262,9 +258,7 @@ class Package(admin.AdminHandler):
         if pkginfo.plist.get(key, '') != value:
           main_body.append(
               '%s: %s --> %s' % (key, pkginfo.plist.get(key, ''), value))
-    if mail:
-      mail.SendMail(
-          settings.EMAIL_ADMIN_LIST, subject_line, '\n'.join(main_body))
+    mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, '\n'.join(main_body))
 
   def NotifyAdminsOfPackageChangeFromPlist(self, log, defer=True):
     """Notifies admins of changes to packages."""
@@ -273,25 +267,25 @@ class Package(admin.AdminHandler):
 
     plist_diff = log.plist_diff
     main_body = 'Diff:\n' + '\n'.join([x['line'] for x in plist_diff])
-    if mail:
-      mail.SendMail(
-          settings.EMAIL_ADMIN_LIST, subject_line, main_body, defer=defer)
+
+    mail.SendMail(
+        settings.EMAIL_ADMIN_LIST, subject_line, main_body, defer=defer)
 
   def NotifyAdminsOfPackageDeletion(self, pkginfo):
     """Notifies admins of packages deletions."""
     subject_line = 'MSU Package Deleted by %s - %s' % (users.get_current_user(),
                                                        pkginfo.filename)
     main_body = 'That package has been deleted, hope you didn\'t need it.'
-    if mail:
-      mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, main_body)
+
+    mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, main_body)
 
   def NotifyAdminsOfPackageUnlock(self, pkginfo):
     """Notifies admins of package being unlocked."""
     subject_line = 'MSU Package Unlocked by %s - %s' % (
         users.get_current_user(), pkginfo.filename)
     main_body = 'That package has been removed from all catalogs and manifests.'
-    if mail:
-      mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, main_body)
+
+    mail.SendMail(settings.EMAIL_ADMIN_LIST, subject_line, main_body)
 
   def UpdatePackageInfo(self, pkginfo):
     """Updates an existing PackageInfo entity."""
@@ -374,7 +368,7 @@ class Package(admin.AdminHandler):
           'error.html', {'message': 'PackageInfoUpdateError: %s' % str(e)})
       return
     else:
-      if settings.email_on_every_change:
+      if settings.EMAIL_ON_EVERY_CHANGE:
         self.NotifyAdminsOfPackageChangeFromPlist(log)
 
     self.redirect('/admin/package/%s?msg=PackageInfo saved#package-%s' % (

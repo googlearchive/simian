@@ -17,6 +17,7 @@
 """Apple Software Update Service Catalog URL handlers."""
 
 import base64
+import datetime
 import httplib
 import json
 import logging
@@ -110,7 +111,10 @@ class AppleSUS(handlers.AuthenticationHandler):
     for s in asd.GetByUuid(session.uuid):
       if s.level != gaeserver.LEVEL_APPLESUS:
         continue
-      if asd.IsExpired(s):
+
+      # make sure token will be valid for at least one more week.
+      if asd.IsExpired(
+          s, now=datetime.datetime.now() + datetime.timedelta(days=7)):
         continue
 
       assert s.key().name().startswith('t_')

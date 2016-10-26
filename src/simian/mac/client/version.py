@@ -16,4 +16,4 @@
 #
 #
 
-VERSION = 'simian-2.4'
+VERSION = 'simian-2.5'

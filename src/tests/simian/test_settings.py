@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012 Google Inc. All Rights Reserved.
+# Copyright 2016 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
-#
-
 APPLE_AUTO_PROMOTE_ENABLED = True
 
 APPLE_AUTO_UNATTENDED_ENABLED = True
@@ -122,3 +119,5 @@ SERVER_PORT = 443
 AUTH_DOMAIN = 'example.com'
 
 CLIENT_SSL_PATH = '/path/to/ssl'
+
+EMAIL_ON_EVERY_CHANGE = False

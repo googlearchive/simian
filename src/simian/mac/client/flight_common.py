@@ -21,6 +21,7 @@ import ctypes.util
 import datetime
 import errno
 import fcntl
+import httplib
 import logging
 import os
 import platform
@@ -33,6 +34,7 @@ import subprocess
 import tempfile
 import time
 
+from simian.client import client as base_client  # pylint: disable=import-error
 from simian.mac.client import version
 
 # Place all ObjC-dependent imports in this try/except block.
@@ -553,6 +555,9 @@ def UpdateAppleSUSCatalog(client):
   resp = client.Do(
       'POST', '%s/applesus/' % url,
       headers={MUNKI_CLIENT_ID_HEADER_KEY: DictToStr(GetClientIdentifier())})
+
+  if resp.status != httplib.OK:
+    raise base_client.HTTPError
 
   applesus_url = '%s/applesus/%s' % (url, resp.body)
 

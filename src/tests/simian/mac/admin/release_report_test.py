@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 
-from google.apputils import app
 from google.apputils import basetest
 
 from simian.mac.admin import release_report
@@ -34,9 +33,5 @@ class ReleaseReportModelTest(basetest.TestCase):
     self.assertEqual(None, release_report.GetOSXMajorVersion(None))
 
 
-def main(_):
-  basetest.main()
-
-
 if __name__ == '__main__':
-  app.run()
+  basetest.main()

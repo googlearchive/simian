@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+#
+# Copyright 2016 Google Inc. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS-IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+import httplib
+
+
+import mock
+import stubout
+import webtest
+
+from google.apputils import basetest
+
+from simian.mac import admin
+from simian.mac import models
+from simian.mac.admin import main as gae_main
+from simian.mac.admin import xsrf
+from simian.mac.common import auth
+from tests.simian.mac.common import test
+
+
+class TagsModuleTest(test.AppengineTest):
+
+  def setUp(self):
+    super(TagsModuleTest, self).setUp()
+    self.testapp = webtest.TestApp(gae_main.app)
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(admin.AdminHandler, 'Render')
+  def testGet(self, render_mock, _):
+    tagname = 'ak47'
+    models.Tag(key_name=tagname).put()
+
+    self.testapp.get('/admin/tags', status=httplib.OK)
+
+    args = test.GetArgFromCallHistory(render_mock, arg_index=1)
+    self.assertEqual(tagname, args['tags'][0].key().name())
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
+  def testCreateTag(self, *_):
+    tagname = 't1'
+    self.testapp.post(
+        '/admin/tags', {'action': 'create', 'tag': tagname, 'uuid': 'id1'},
+        status=httplib.FOUND)
+
+    tags = models.Tag.all().fetch(None)
+    self.assertEqual(1, len(tags))
+    self.assertEqual(tags[0].key().name(), tagname)
+    self.assertEqual(1, len(tags[0].keys))
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
+  def testDeleteTag(self, *_):
+    tagname = 'ak47'
+    models.Tag(key_name=tagname).put()
+    self.testapp.post(
+        '/admin/tags', {'action': 'delete', 'tag': tagname},
+        status=httplib.FOUND)
+
+    tags = models.Tag.all().fetch(None)
+    self.assertEqual(0, len(tags))
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=True)
+  def testModifyTag(self, *_):
+    uuid = 'id1'
+    tagname = 'ak47'
+    models.Tag(key_name=tagname).put()
+    self.testapp.post(
+        '/admin/tags',
+        {'action': 'change', 'tag': tagname, 'add': 1, 'uuid': uuid},
+        status=httplib.FOUND)
+
+    tags = models.Tag.all().fetch(None)
+    self.assertEqual(1, len(tags))
+    self.assertEqual(1, len(tags[0].keys))
+    self.assertEqual(uuid, tags[0].keys[0].name())
+
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  @mock.patch.object(xsrf, 'XsrfTokenValidate', return_value=False)
+  def testInvalidXsrfToken(self, *_):
+    tagname = 't1'
+    self.testapp.post(
+        '/admin/tags', {'action': 'create', 'tag': tagname, 'uuid': 'id1'},
+        status=httplib.BAD_REQUEST)
+
+
+if __name__ == '__main__':
+  basetest.main()
