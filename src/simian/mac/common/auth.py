@@ -82,22 +82,15 @@ class PermissionResolver(object):
 
   def _IsAllowedToPropose(self):
     """Returns true if email is allowed to propose packages."""
-    return IsAdminUser(self.email) or IsGroupMember(
-        self.email, 'proposals_group', remote_group_lookup=True)
+    return _IsAllowedToPropose(self.email)
 
   def _IsAllowedToUpload(self):
     """Returns true if email is allowed to upload packages."""
-    if settings.ENABLE_PROPOSALS_GROUP and settings.PROPOSALS_GROUP:
-      return self._IsAllowedToPropose()
-    else:
-      return IsAdminUser(self.email)
+    return _IsAllowedToPropose(self.email)
 
   def _IsAllowedToViewPackages(self):
     """Returns true if email is allowed to view package details."""
-    if settings.ENABLE_PROPOSALS_GROUP and settings.PROPOSALS_GROUP:
-      return self._IsAllowedToPropose() or IsSupportUser(self.email)
-    else:
-      return IsAdminUser(self.email) or IsSupportUser(self.email)
+    return _IsAllowedToPropose(self.email) or IsSupportUser(self.email)
 
 
 def HasPermission(task, email=None):
@@ -154,6 +147,8 @@ def DoUserAuth(is_admin=None):
     return user
   elif IsPhysicalSecurityUser(email):
     return user
+  elif _IsAllowedToPropose(email):
+    return user
   else:
     raise NotAuthenticated('DoUserAuthUnknownUser')
 
@@ -204,6 +199,12 @@ def DoOAuthAuth(is_admin=None, require_level=None):
     user = oauth.get_current_user(OAUTH_SCOPE)
   except oauth.OAuthRequestError:
     raise NotAuthenticated('OAuthRequestError')
+
+  try:
+    if oauth.get_client_id(OAUTH_SCOPE) != settings.OAUTH_CLIENT_ID:
+      raise NotAuthenticated('mismatched OAUTH_CLIENT_ID')
+  except AttributeError:
+    raise NotAuthenticated('OAUTH_CLIENT_ID not set')
 
   email = user.email()
 
@@ -269,6 +270,17 @@ def IsGroupMember(email=None, group_name=None, remote_group_lookup=False):
 
   if email in _GetGroupMembers(group_name):
     return True
+
+  return False
+
+
+def _IsAllowedToPropose(email):
+  if IsAdminUser(email):
+    return True
+
+  if settings.ENABLE_PROPOSALS_GROUP and settings.PROPOSALS_GROUP:
+    if IsGroupMember(email, 'proposals_group', remote_group_lookup=True):
+      return True
 
   return False
 

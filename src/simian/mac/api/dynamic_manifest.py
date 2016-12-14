@@ -102,14 +102,27 @@ class DynamicManifest(handlers.AuthenticationHandler):
     models.BaseManifestModification.ResetModMemcache(
         self.mod_type, self.target)
 
+  def _CheckApiKey(self):
+    key = self.request.headers.get('X-Simian-API-Info-Key')
+
+    if not settings.API_INFO_KEY:
+      logging.warning('API_INFO_KEY is unset; blocking all API info requests.')
+      self.response.abort(httplib.UNAUTHORIZED)
+    elif key != settings.API_INFO_KEY:
+      self.response.abort(httplib.UNAUTHORIZED)
+
+  def _UserAuthWithApiKeyCheck(self):
+    # TODO(user): setup DoUserAuth require_level=gaeserver.LEVEL_API_READONLY.
+    self.user = auth.DoUserAuth(is_admin=True)
+    self._CheckApiKey()
+
   def get(self, mod_type=None, target=None, pkg_name=None):
     """DynamicManifest get handler.
 
     Returns:
       A webapp.Response() response.
     """
-    # TODO(user): setup DoUserAuth require_level=gaeserver.LEVEL_API_READONLY.
-    self.user = auth.DoUserAuth(is_admin=True)
+    self._UserAuthWithApiKeyCheck()
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
@@ -139,8 +152,8 @@ class DynamicManifest(handlers.AuthenticationHandler):
     Returns:
       A webapp.Response() response.
     """
-    # TODO(user): setup DoUserAuth require_level=gaeserver.LEVEL_API_DYN_MAN.
-    self.user = auth.DoUserAuth(is_admin=True)
+    self._UserAuthWithApiKeyCheck()
+
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
@@ -160,8 +173,8 @@ class DynamicManifest(handlers.AuthenticationHandler):
     Returns:
       A webapp.Response() response.
     """
-    # TODO(user): setup DoUserAuth require_level=gaeserver.LEVEL_API_DYN_MAN.
-    self.user = auth.DoUserAuth(is_admin=True)
+    self._UserAuthWithApiKeyCheck()
+
     try:
       self._ParseParameters(mod_type, target, pkg_name)
     except InvalidModificationType:
@@ -185,9 +198,9 @@ class DynamicManifest(handlers.AuthenticationHandler):
     try:
       self.user = auth.DoOAuthAuth()
     except auth.NotAuthenticated:
-      enable_admin_check = True
       # OAuth was either not used or failed, so perform regular user auth.
-      self.user = auth.DoUserAuth(is_admin=enable_admin_check)
+      if not self.user:
+        self._UserAuthWithApiKeyCheck()
 
     mod_type = self.request.get('mod_type')
     target = self.request.get('target')

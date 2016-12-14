@@ -50,11 +50,9 @@ class GroupHandler(webapp2.RequestHandler):
 
     if not API_INFO_KEY:
       logging.warning('API_INFO_KEY is unset; blocking all API info requests.')
-      self.response.set_status(httplib.UNAUTHORIZED)
-      return
+      self.response.abort(httplib.UNAUTHORIZED)
     elif key != API_INFO_KEY:
-      self.response.set_status(httplib.UNAUTHORIZED)
-      return
+      self.response.abort(httplib.UNAUTHORIZED)
 
   def get(self):
     """List groups, or list a group's memberhsip.

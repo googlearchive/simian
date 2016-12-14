@@ -19,11 +19,11 @@ import unittest
 import mock
 import stubout
 
-import webapp2
 import webtest
 
 from simian.mac import admin
 from simian.mac import models
+from simian.mac.admin import main as gae_main
 from simian.mac.admin import package
 from simian.mac.admin import xsrf
 from simian.mac.common import auth
@@ -40,8 +40,7 @@ class PackageInfoProposalTest(test.AppengineTest):
   def setUp(self):
     super(PackageInfoProposalTest, self).setUp()
 
-    app = webapp2.WSGIApplication([('/(.*)', package.Package)])
-    self.testapp = webtest.TestApp(app)
+    self.testapp = webtest.TestApp(gae_main.app)
 
     self.test_plist = '''<?xml version="1.0" encoding="UTF-8"?>
       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -183,7 +182,7 @@ class PackageInfoProposalTest(test.AppengineTest):
 
     params = {'approve': '1'}
 
-    self.testapp.post('/testpackage.dmg', params)
+    self.testapp.post('/admin/package/testpackage.dmg', params)
 
     result_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -204,7 +203,7 @@ class PackageInfoProposalTest(test.AppengineTest):
 
     params = {'reject': '1'}
 
-    self.testapp.post('/testpackage.dmg', params)
+    self.testapp.post('/admin/package/testpackage.dmg', params)
 
     result_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -224,7 +223,7 @@ class PackageInfoProposalTest(test.AppengineTest):
 
     params = {'submit': 'save', 'catalogs': [], 'manifests': []}
 
-    self.testapp.post('/testpackage.dmg', params)
+    self.testapp.post('/admin/package/testpackage.dmg', params)
 
     result_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -244,7 +243,7 @@ class PackageInfoProposalTest(test.AppengineTest):
 
     params = {'unlock': '1'}
 
-    self.testapp.post('/testpackage.dmg', params)
+    self.testapp.post('/admin/package/testpackage.dmg', params)
 
     result_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -259,7 +258,7 @@ class PackageInfoProposalTest(test.AppengineTest):
   def testUploadNewPlist(self, *_):
     params = {'new_pkginfo_plist': self.test_plist}
 
-    self.testapp.post('/', params)
+    self.testapp.post('/admin/package/', params)
 
     result_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -276,8 +275,8 @@ class PackageInfoProposalTest(test.AppengineTest):
 
     params = {'approve': '1'}
 
-    self.testapp.post('/testpackage.dmg', params)
-    self.testapp.post('/testpackage-v2.dmg', params)
+    self.testapp.post('/admin/package/testpackage.dmg', params)
+    self.testapp.post('/admin/package/testpackage-v2.dmg', params)
 
     result_replaced_package = package.models.munki.PackageInfo.get_by_key_name(
         'testpackage.dmg')
@@ -298,12 +297,20 @@ class PackageInfoProposalTest(test.AppengineTest):
     filename = 'testpackage.dmg'
     self.test_package.put()
 
-    resp = self.testapp.get('/' + filename)
+    resp = self.testapp.get('/admin/package/' + filename)
 
     self.assertEqual(httplib.OK, resp.status_int)
     args = test.GetArgFromCallHistory(render_mock, arg_index=1)
 
     self.assertEqual(filename, args['pkg'].filename)
+
+  @mock.patch.object(auth, 'IsGroupMember', return_value=True)
+  @mock.patch.object(package.Package, 'get', return_value=None)
+  def testFilenameWithPlus(self, mock_get, *_):
+    self.testapp.get(
+        '/admin/package/Mercurial-4.0+169-19.dmg', status=httplib.OK)
+
+    mock_get.assert_called_once()
 
 
 if __name__ == '__main__':

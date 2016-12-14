@@ -18,6 +18,12 @@
       document.getElementById(also).checked = false;
     }
   }
+  function showUploadIconDialog() {
+    simian.addClass(document.getElementById('upload-icon'), 'visible');
+    simian.registerEscListener(function() {
+      simian.removeClass(document.getElementById('upload-icon'), 'visible');
+    });
+  }
 
   function fieldValidate_forceinstall_datepick(recurse) {
     var thiselement = document.getElementById('forceinstall_datepick')
@@ -42,6 +48,23 @@
         recurse ? fieldValidate_forceinstall_datepick : null);
   }
 </script>
+
+<div id="upload-icon" class="modaldialog">
+  <form action="/admin/upload_icon/{{ pkg.filename }}" method="post" enctype="multipart/form-data">
+    <h2>
+      Icon:
+    </h2>
+    <br/>
+    <input type="file" accept=".png" name="icon" />
+    <br/><br/>
+    <div style="text-align:right">
+      <input type="button" class="button" value="Close"
+             onclick="simian.removeClass(document.getElementById('upload-icon'), 'visible'); void(0);"/>
+      <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
+      <button id="upload-icon-submit" type="submit">Upload</button>
+    </div>
+  </form>
+</div>
 
 {% if pkg_safe_to_modify %}
   <form method="post" action="/admin/package/{{ pkg.filename }}?delete=1" id="deleteform"
@@ -74,15 +97,14 @@
     <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
     <button type="submit" name="submit" value="save" class="rightbutton">Save</button>
 
-    <h3 style="display: inline; font-size: 1.3em; margin: 0 10px;">
-      Package <b>{{ pkg.munki_name }}</b>
-    </h3>
-
     {% if not pkg.blob_info %}
       <a href="/admin/uploadpkg?filename={{ pkg.filename }}"
          class="blue upload button leftbutton">
          Upload File</a>
     {% endif %}
+    <button type="button" onclick="showUploadIconDialog(); void(0);"
+            class="blue upload">
+      Upload Icon</button>
 
     <a class="blue button {% if not pkg.blob_info %}rightbutton{% endif %}"
        {% if editxml %}
@@ -107,6 +129,10 @@
     {% if editxml and not pkg_safe_to_modify %}
       <div class="infopanel" style="padding:4px 6px; margin: 4px 0 0 0">PackageInfo NOT safe to modify!</div>
     {% endif %}
+    <br/>
+    <h3 style="display: inline; font-size: 1.3em; margin: 0 10px;">
+      Package <b>{{ pkg.munki_name }}</b>
+    </h3>
   </div>
 
 {% if editxml %}
@@ -330,6 +356,7 @@
 {% endif %}
 
 </form>
+
 <script type="text/javascript">
   var formEdited = false;
   (function() {

@@ -41,14 +41,11 @@ handlers:
   login: admin
   secure: always
 
-### Dev Admin Console
-
-#- url: /ahadmin/.*
-#  script: $PYTHON_LIB/google/appengine/ext/admin
-# login: admin
-#  secure: always
-
 ### URLs commonly requested by Munki clients
+
+- url: /icons/.*
+  script: simian.mac.urls.app
+  secure: always
 
 - url: /pkgs/.*
   script: simian.mac.urls.app
@@ -79,14 +76,6 @@ handlers:
 # - url: /client_resources
 #   static_dir: client_resources
 #   secure: always
-
-### The icons directory is publicly accessible, and thus has potential for
-### abuse. Anyone with known filename will be able to view the associated icon.
-### Static icons stored in gae_resources/icons will be served from here.
-### For more, see https://github.com/munki/munki/wiki/Product-Icons
-- url: /icons
-  static_dir: icons
-  secure: always
 
 ### Apple SUS integration, client repair, Munki log uploads, etc.
 
@@ -140,6 +129,7 @@ handlers:
   script: simian.mac.admin.main.app
   secure: always
   login: required
+
 
 ### Catchall handler
 

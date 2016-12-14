@@ -23,6 +23,7 @@ import tests.appenginesdk
 import mock
 import stubout
 
+from google.appengine.api import oauth
 from google.appengine.api import users
 from google.appengine.ext import testbed
 
@@ -87,12 +88,16 @@ class AuthModuleTest(basetest.TestCase):
   @mock.patch.object(auth, 'IsSupportUser', return_value=False)
   @mock.patch.object(auth, 'IsSecurityUser', return_value=False)
   @mock.patch.object(auth, 'IsPhysicalSecurityUser', return_value=False)
+  @mock.patch.object(auth, '_IsAllowedToPropose', return_value=False)
   def testDoUserAuthWithAllDomainUsersOffFailure(self, *_):
     self.stubs.Set(auth.settings, 'ALLOW_ALL_DOMAIN_USERS_READ_ACCESS', False)
 
     self.assertRaises(auth.NotAuthenticated, auth.DoUserAuth)
 
-  def testDoOAuthAuthSuccessSettings(self):
+  @mock.patch.dict(settings.__dict__, {
+      'OAUTH_CLIENT_ID': 'id_123'})
+  @mock.patch.object(oauth, 'get_client_id', return_value='id_123')
+  def testDoOAuthAuthSuccessSettings(self, _):
     """Test DoOAuthAuth() with success, where user is in settings file."""
     email = 'zerocool@example.com'
     user_service_stub = self.testbed.get_stub(testbed.USER_SERVICE_NAME)
@@ -101,8 +106,11 @@ class AuthModuleTest(basetest.TestCase):
     auth.settings.OAUTH_USERS = [email]
     self.assertEqual(email, auth.DoOAuthAuth().email())
 
+  @mock.patch.dict(settings.__dict__, {
+      'OAUTH_CLIENT_ID': 'id_123'})
+  @mock.patch.object(oauth, 'get_client_id', return_value='id_123')
   @mock.patch.object(auth, 'IsAdminUser', return_value=True)
-  def testDoOAuthAuthSuccess(self, _):
+  def testDoOAuthAuthSuccess(self, *_):
     """Test DoOAuthAuth() with success, where user is in KeyValueCache."""
 
     email = 'hal@example.com'
@@ -121,8 +129,11 @@ class AuthModuleTest(basetest.TestCase):
     """Test DoOAuthAuth() where OAuth was not used at all."""
     self.assertRaises(auth.NotAuthenticated, auth.DoOAuthAuth)
 
+  @mock.patch.dict(settings.__dict__, {
+      'OAUTH_CLIENT_ID': 'id_123'})
+  @mock.patch.object(oauth, 'get_client_id', return_value='id_123')
   @mock.patch.object(auth, 'IsAdminUser', return_value=False)
-  def testDoOAuthAuthAdminMismatch(self, _):
+  def testDoOAuthAuthAdminMismatch(self, *_):
     """Test DoOAuthAuth(is_admin=True) where user is not admin."""
     email = 'zerocool@example.com'
 
@@ -256,9 +267,6 @@ class AuthModuleTest(basetest.TestCase):
     """Test PermissionResolver.IsAllowedTo."""
     test_resolver = auth.PermissionResolver('task')
 
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(True)
-    auth.PermissionResolver._IsAllowedToPropose().AndReturn(False)
-
     test_resolver.email = 'user1@example.com'
     test_resolver.task = 'Propose'
     mock_is_allowed_to_propose.return_value = True
@@ -282,33 +290,6 @@ class AuthModuleTest(basetest.TestCase):
 
     self.assertFalse(test_resolver.IsAllowedTo())
 
-  def testIsAllowedToPropose(self):
-    """Test PermissionResolver._IsAllowedToPropose()."""
-    test_resolver = auth.PermissionResolver('task')
-    email_one = 'user1@example.com'
-    email_two = 'user2@example.com'
-    email_three = 'user3@example.com'
-
-    with mock.patch.object(auth, 'IsAdminUser', return_value=True):
-      test_resolver.email = email_one
-      self.assertTrue(test_resolver._IsAllowedToPropose())
-
-    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
-      with mock.patch.object(
-          auth, 'IsGroupMember', return_value=True) as mock_is_group_member:
-        test_resolver.email = email_two
-        self.assertTrue(test_resolver._IsAllowedToPropose())
-        mock_is_group_member.assert_called_once_with(
-            email_two, 'proposals_group', remote_group_lookup=True)
-
-    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
-      with mock.patch.object(
-          auth, 'IsGroupMember', return_value=False) as mock_is_group_member:
-        test_resolver.email = email_three
-        self.assertFalse(test_resolver._IsAllowedToPropose())
-        mock_is_group_member.assert_called_once_with(
-            email_three, 'proposals_group', remote_group_lookup=True)
-
   def testIsAllowedToUploadProposalsOff(self):
     """Test PermissionResolver._IsAllowedToUpload() with proposals."""
     test_resolver = auth.PermissionResolver('task')
@@ -326,7 +307,7 @@ class AuthModuleTest(basetest.TestCase):
       test_resolver.email = email_two
       self.assertFalse(test_resolver._IsAllowedToUpload())
 
-  @mock.patch.object(auth.PermissionResolver, '_IsAllowedToPropose')
+  @mock.patch.object(auth, '_IsAllowedToPropose')
   def testIsAllowedToUploadProposalsOn(self, mock_is_allowed_to_propose):
     """Test PermissionResolver._IsAllowedToUpload() without proposals."""
     test_resolver = auth.PermissionResolver('task')
@@ -345,7 +326,7 @@ class AuthModuleTest(basetest.TestCase):
     self.assertFalse(test_resolver._IsAllowedToUpload())
 
   @mock.patch.object(auth, 'IsSupportUser')
-  @mock.patch.object(auth.PermissionResolver, '_IsAllowedToPropose')
+  @mock.patch.object(auth, '_IsAllowedToPropose')
   def testIsAllowedToViewPacakgesProposalsOn(
       self, mock_is_allowed_to_propose, mock_is_support_user):
     """Test PermissionResolver._IsAllowedToViewPackages() with proposals."""

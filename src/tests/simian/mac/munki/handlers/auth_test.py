@@ -90,7 +90,7 @@ class AuthModuleTest(test.RequestHandlerTest):
 
   def PostSetup(self):
     """Sets up post() tests."""
-    self.mox.StubOutWithMock(auth.logging, 'critical')
+    self.mox.StubOutWithMock(auth.logging, 'error')
     self.mox.StubOutWithMock(auth.logging, 'exception')
     mock_auth1 = self.mox.CreateMockAnything()
     self.mox.StubOutWithMock(self.c, 'GetAuth1Instance')
@@ -123,7 +123,7 @@ class AuthModuleTest(test.RequestHandlerTest):
     mock_auth1.Input(n='n', m='m', s='s').AndReturn(None)
     mock_auth1.Output().AndReturn(None)
     mock_auth1.AuthState().AndReturn('NO_MATCH_STATE')
-    auth.logging.critical('auth_state is %s but no output.', 'NO_MATCH_STATE')
+    auth.logging.error('auth_state is %s but no output.', 'NO_MATCH_STATE')
     self.mox.ReplayAll()
     self.assertRaises(auth.base.NotAuthenticated, self.c.post)
     self.mox.VerifyAll()
@@ -155,7 +155,7 @@ class AuthModuleTest(test.RequestHandlerTest):
     mock_auth1.Input(n='n', m='m', s='s').AndReturn(None)
     mock_auth1.Output().AndReturn(None)
     mock_auth1.AuthState().AndReturn(auth.gaeserver.base.AuthState.OK)
-    auth.logging.critical('Auth is OK but there is no output.')
+    auth.logging.error('Auth is OK but there is no output.')
     self.mox.ReplayAll()
     self.assertRaises(auth.base.NotAuthenticated, self.c.post)
     self.mox.VerifyAll()

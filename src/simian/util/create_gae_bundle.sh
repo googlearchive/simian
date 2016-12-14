@@ -22,7 +22,6 @@ ln -s ../$SIMIAN_REL_PATH/mac $BUNDLE_ROOT/simian/mac
 ln -s ../$SIMIAN_REL_PATH/settings.py $BUNDLE_ROOT/simian/settings.py
 
 # Symlink gae_resources.
-ln -s ../$SIMIAN_ROOT/gae_resources/icons $BUNDLE_ROOT/icons
 ln -s ../$SIMIAN_ROOT/gae_resources/client_resources $BUNDLE_ROOT/client_resources
 
 # Symlink necessary files at the root of the bundle.

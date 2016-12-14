@@ -38,6 +38,7 @@ from simian.mac.admin import panic
 from simian.mac.admin import release_report
 from simian.mac.admin import summary
 from simian.mac.admin import tags
+from simian.mac.admin import upload_icon
 from simian.mac.admin import uploadpkg
 
 
@@ -71,7 +72,7 @@ app = webapp2.WSGIApplication([
      manifest_modifications.ManifestModifications),
 
     (r'/admin/package/?$', package.Package),
-    (r'/admin/package/([\w\-\_\.\s\%]+)/?$', package.Package),
+    (r'/admin/package/([\w\-\_\.\s\%\+]+)/?$', package.Package),
 
     (r'/admin/package_alias/?$', package_alias.PackageAlias),
 
@@ -87,6 +88,7 @@ app = webapp2.WSGIApplication([
     (r'/admin/groups/?$', groups.Groups),
 
     (r'/admin/uploadpkg/?$', uploadpkg.UploadPackage),
+    (r'/admin/upload_icon/([\w\-\_\.\s\%]+)/?$', upload_icon.UploadIcon),
 
     (r'/admin/([\w\-\_\.\=\|\%]+)$', misc.Misc),
     (r'/admin/([\w\-\_\.\=\|\%]+)/([\w\-\_\.\=\|\%]+)$', misc.Misc),

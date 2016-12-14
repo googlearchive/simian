@@ -44,6 +44,7 @@ REQUIRE_BASE = [
     'tlslite==0.4.9',
     'pyyaml>=3.10',
     'requests',
+    'GoogleAppEngineCloudStorageClient',
 ]
 
 REQUIRE_SETUP = REQUIRE_BASE + [

@@ -138,7 +138,7 @@ def GetCaParameters(settings, ca_id=0, omit_server_private_key=False):
           raise
       setattr(ca_params, param_k, v)
   except (AttributeError, ValueError), e:
-    logging.critical(str(e))
+    logging.error(str(e))
     logging.exception(str(e))
     raise CaParametersError(str(e))
 

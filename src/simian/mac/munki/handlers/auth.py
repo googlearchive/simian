@@ -46,7 +46,7 @@ class Auth(handlers.AuthenticationHandler):
       auth1 = gaeserver.AuthSimianServer()
       auth1.LoadCaParameters(settings, ca_id)
     except gaeserver.CaParametersError, e:
-      logging.critical('(ca_id = %s) %s' % (ca_id, str(e)))
+      logging.error('(ca_id = %s) %s' % (ca_id, str(e)))
       raise base.NotAuthenticated('CaParametersError')
     return auth1
 
@@ -104,13 +104,13 @@ class Auth(handlers.AuthenticationHandler):
         self.response.headers['Set-Cookie'] = CreateAuthTokenCookieStr(output)
         self.response.out.write(auth.AUTH_TOKEN_COOKIE)
       else:
-        logging.critical('Auth is OK but there is no output.')
+        logging.error('Auth is OK but there is no output.')
         raise base.NotAuthenticated('AuthOkOutputEmpty')
     elif auth_state == gaeserver.base.AuthState.FAIL:
       raise base.NotAuthenticated('AuthStateFail')
     elif output:
       self.response.out.write(output)
     else:
-      logging.critical('auth_state is %s but no output.', auth_state)
+      logging.error('auth_state is %s but no output.', auth_state)
       # technically 500, 403 for security
       raise base.NotAuthenticated('AuthStateUnknownOutputEmpty')

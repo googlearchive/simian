@@ -117,7 +117,7 @@ class UploadPackage(
     # Only blobstore/upload service/scotty requests should be
     # invoking this handler.
     if not handlers.IsBlobstore():
-      logging.critical(
+      logging.error(
           'POST to uploadpkg not from Blobstore: %s', self.request.headers)
       self.redirect('/admin/packages')
       return

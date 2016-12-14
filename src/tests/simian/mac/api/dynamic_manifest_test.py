@@ -20,12 +20,28 @@ import httplib
 import logging
 import urllib
 
+import mock
+import stubout
+import webtest
+
 from google.apputils import app
+from simian.mac import models
 from simian.mac.api import dynamic_manifest as dyn_man
+from simian.mac.api import urls as gae_main
+from simian.mac.common import auth
 from tests.simian.mac.common import test
 
 
+@mock.patch.object(dyn_man.DynamicManifest, '_CheckApiKey')
 class DynamicManifestHandlersTest(test.RequestHandlerTest):
+
+  def setUp(self):
+    super(DynamicManifestHandlersTest, self).setUp()
+    self._original_mod_models = dyn_man.models.MANIFEST_MOD_MODELS.copy()
+
+  def tearDown(self):
+    super(DynamicManifestHandlersTest, self).tearDown()
+    dyn_man.models.MANIFEST_MOD_MODELS = self._original_mod_models
 
   def GetTestClassInstance(self):
     return dyn_man.DynamicManifest()
@@ -39,7 +55,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     dyn_man.models.MANIFEST_MOD_MODELS[mod_type] = mock_model
     return mock_model
 
-  def testModTypes(self):
+  def testModTypes(self, _):
     """Tests that all valid mod_type options work."""
     mod_types = ['owner', 'os_version', 'site']
     for mod_type in mod_types:
@@ -47,7 +63,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
           dyn_man.models.MANIFEST_MOD_MODELS.get(mod_type) is not None)
     self.assertTrue(dyn_man.models.MANIFEST_MOD_MODELS.get('crazytype') is None)
 
-  def testParseParameters(self):
+  def testParseParameters(self, _):
     """Tests _ParseParameters()."""
     mod_type = 'site'
     target = 'foouser'
@@ -74,7 +90,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     self.mox.VerifyAll()
 
-  def testParseParametersOwner(self):
+  def testParseParametersOwner(self, _):
     """Tests _ParseParameters()."""
     mod_type = 'owner'
     target = 'foouser'
@@ -99,7 +115,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
 
     self.mox.VerifyAll()
 
-  def testPutMod(self):
+  def testPutMod(self, _):
     """Test _PutMod."""
     mod_type = 'owner'
     target = 'foouser'
@@ -134,7 +150,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c._PutMod()
     self.mox.VerifyAll()
 
-  def testPutModWhenError(self):
+  def testPutModWhenError(self, _):
     """Test _PutMod."""
     mod_type = 'owner'
     target = 'foouser'
@@ -167,7 +183,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.assertRaises(dyn_man.db.Error, self.c._PutMod)
     self.mox.VerifyAll()
 
-  def testGetSuccess(self):
+  def testGetSuccess(self, _):
     """Tests get()."""
     mod_type = 'owner'
     target = 'foouser'
@@ -199,7 +215,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.get(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testGetBadType(self):
+  def testGetBadType(self, _):
     """Tests get() where a bad mod_type is given."""
     mod_type = 'doesntexist'
     target = 'foouser'
@@ -215,7 +231,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.get(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testGetNoTarget(self):
+  def testGetNoTarget(self, _):
     """Tests get() where the target is not given."""
     mod_type = 'owner'
     target = None
@@ -228,7 +244,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.get(mod_type=mod_type, target=target)
     self.mox.VerifyAll()
 
-  def testGetNoResults(self):
+  def testGetNoResults(self, _):
     """Tests get() where no results are returned."""
     mod_type = 'owner'
     target = 'foouser'
@@ -246,36 +262,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.get(mod_type=mod_type, target=target)
     self.mox.VerifyAll()
 
-  def testPutSuccess(self):
-    """Tests put() with success."""
-    mod_type = 'owner'
-    target = 'foouser'
-    pkg_name = 'FooPkg-1.2'
-    install_types = ['optional_installs', 'managed_updates']
-    key_name = '%s##%s' % (target, pkg_name)
-    mock_model = self._MockModTypeModel(mod_type)
-    user = 'foouser'
-
-    self.MockDoUserAuth(is_admin=True, user=user)
-    self.request.get_all('install_types').AndReturn(install_types)
-    mock_model(key_name=key_name).AndReturn(mock_model)
-    mock_model.put().AndReturn(None)
-    self.mox.StubOutWithMock(
-        dyn_man.models.BaseManifestModification, 'ResetModMemcache')
-    dyn_man.models.BaseManifestModification.ResetModMemcache(
-        mod_type, target).AndReturn(None)
-
-    self.mox.ReplayAll()
-    self.c.put(mod_type=mod_type, target=target, pkg_name=pkg_name)
-    self.assertTrue(mock_model.enabled)
-    self.assertEqual(mock_model.target, target)
-    self.assertEqual(mock_model.value, pkg_name)
-    self.assertEqual(mock_model.manifests, [])
-    self.assertEqual(mock_model.user, user)
-    self.assertEqual(mock_model.install_types, install_types)
-    self.mox.VerifyAll()
-
-  def testPutWithEmptyRequiredVar(self):
+  def testPutWithEmptyRequiredVar(self, _):
     """Tests put() with a required var that is empty."""
     mod_type = 'owner'
     target = 'foouser'
@@ -291,7 +278,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.put(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testDeleteSuccess(self):
+  def testDeleteSuccess(self, _):
     """Tests delete() with success."""
     mod_type = 'owner'
     target = 'foouser'
@@ -309,7 +296,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.delete(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testDeleteWithBadKey(self):
+  def testDeleteWithBadKey(self, _):
     """Tests delete() with success."""
     mod_type = 'owner'
     target = 'foouser'
@@ -327,7 +314,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.delete(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testDeleteDbError(self):
+  def testDeleteDbError(self, _):
     """Tests delete() with success."""
     mod_type = 'owner'
     target = 'foouser'
@@ -346,7 +333,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.c.delete(mod_type=mod_type, target=target, pkg_name=pkg_name)
     self.mox.VerifyAll()
 
-  def testPostWithPkgAlias(self):
+  def testPostWithPkgAlias(self, _):
     """Tests post() with a pkg_alias, not a pkg_name."""
     mutate = 'true'
     mod_type = 'owner'
@@ -391,7 +378,7 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.assertEqual(mock_model.install_types, install_types)
     self.mox.VerifyAll()
 
-  def testPostWithPkgAliasAndWithoutMutate(self):
+  def testPostWithPkgAliasAndWithoutMutate(self, _):
     """Tests post() with a pkg_alias without mutate.
 
     If this test is retrofitted to use a stub datastore then it should verify
@@ -426,6 +413,32 @@ class DynamicManifestHandlersTest(test.RequestHandlerTest):
     self.mox.VerifyAll()
 
 
+
+
+class NewDynamicManifestHandlersTest(test.AppengineTest):
+
+  @mock.patch.object(models.BaseManifestModification, 'ResetModMemcache')
+  @mock.patch.object(auth, 'IsAdminUser', return_value=True)
+  def testPut(self, *_):
+    testapp = webtest.TestApp(gae_main.app)
+    mod_type = 'owner'
+    target = 'foouser'
+    pkg_name = 'FooPkg-1.2'
+    install_types = ['optional_installs', 'managed_updates']
+
+    dyn_man.settings.API_INFO_KEY = 'key'
+    testapp.put(
+        '/api/dynamic_manifest/%s/%s/%s' % (mod_type, target, pkg_name),
+        {'install_types': install_types},
+        headers={'X-Simian-API-Info-Key': 'key'})
+
+    mods = models.OwnerManifestModification.all().fetch(None)
+    self.assertEqual(1, len(mods))
+    mod = mods[0]
+    self.assertEqual(target, mod.target)
+    self.assertEqual(pkg_name, mod.value)
+    self.assertEqual([], mod.manifests)
+    self.assertEqual(install_types, mod.install_types)
 
 
 logging.basicConfig(filename='/dev/null')

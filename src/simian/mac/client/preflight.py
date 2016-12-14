@@ -200,7 +200,7 @@ def CreateEmptyDirectory(attempt=0):
     except OSError as e:
       if e.args[0] == errno.ENOENT:
         # it went missing after we just found it.  try to regain control.
-        logging.critical('%s went missing after it existed', path)
+        logging.error('%s went missing after it existed', path)
         return CreateEmptyDirectory(attempt + 1)
       else:
         # some other error.
@@ -215,7 +215,7 @@ def CreateEmptyDirectory(attempt=0):
         return CreateEmptyDirectory(attempt + 1)
       else:
         # some other error.  try again.
-        logging.critical('mkdir(%s) error: %s', path, str(e))
+        logging.error('mkdir(%s) error: %s', path, str(e))
         return CreateEmptyDirectory(attempt + 1)
 
   return path

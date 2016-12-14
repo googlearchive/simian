@@ -78,6 +78,7 @@ server_config:
 	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
+	src/simian/util/link_module.sh GoogleAppEngineCloudStorageClient
 	VE/bin/python src/simian/util/compile_js.py gae_bundle/simian/mac/admin/js/simian.js
 
 client_config: settings_check

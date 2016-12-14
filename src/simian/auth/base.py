@@ -900,12 +900,12 @@ class Auth1(AuthBase):
       try:
         cn = int(n)
       except ValueError:
-        logging.critical('Non-integer Cn was supplied: %s', str(n))
+        logging.error('Non-integer Cn was supplied: %s', str(n))
         self.AuthFail()
         return
 
       if cn < MIN_VALUE_CN:
-        logging.critical('Cn value is too small: %d', cn)
+        logging.error('Cn value is too small: %d', cn)
         self.AuthFail()
         return
 
