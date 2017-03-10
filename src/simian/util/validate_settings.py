@@ -120,6 +120,7 @@ def Validate():
       'required_issuer',
       'domain',
       'subdomain',
+      'auth_domain',
   ]
 
   for k in required_settings:
