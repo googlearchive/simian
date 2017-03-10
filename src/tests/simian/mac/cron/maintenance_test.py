@@ -21,10 +21,9 @@ import httplib
 import logging
 import mock
 import stubout
-import mox
-import stubout
 import webtest
 
+from google.appengine.ext import blobstore
 from google.appengine.ext import deferred
 from google.appengine.ext import testbed
 
@@ -150,75 +149,38 @@ class UpdateAverageInstallDurationsTest(test.RequestHandlerTest):
         pkg_info.plist['description'])
 
 
-class VerifyPackagesCleanupTest(test.RequestHandlerTest):
-
-  def GetTestClassInstance(self):
-    return maint.VerifyPackages()
-
-  def GetTestClassModule(self):
-    return maint
-
-  def MockPackageInfoQuery(self, blobstore_key, return_value=None, sleep=0):
-    """Mocks a PackageInfo query filtering with a given mock blob and key."""
-    mock_query = self.mox.CreateMockAnything()
-    maint.models.PackageInfo.all().AndReturn(mock_query)
-    mock_query.filter('blobstore_key =', blobstore_key).AndReturn(mock_query)
-    mock_query.get().AndReturn(return_value)
-    if sleep:
-      maint.time.sleep(sleep).AndReturn(None)
+class VerifyPackagesCleanupTest(test.AppengineTest):
 
   def testGet(self):
     """Test get()."""
-    self.mox.StubOutWithMock(maint.models, 'PackageInfo')
-    self.mox.StubOutWithMock(maint.blobstore, 'BlobInfo')
-    self.mox.StubOutWithMock(maint.time, 'sleep')
-    self.mox.StubOutWithMock(maint.mail, 'SendMail')
-    blobstore_key_good = 'goodkey'
-    blobstore_key_bad = 'badkey'
-    filename_bad = 'badfilename'
+    self.testapp = webtest.TestApp(gae_app)
+    blobstore_stub = self.testbed.get_stub(testbed.BLOBSTORE_SERVICE_NAME)
+    mail_stub = self.testbed.get_stub('mail')
 
-    # verify PackageInfo entities have Blobstore blobs.
-    mock_pkginfo_good = self.mox.CreateMockAnything()
-    mock_pkginfo_bad = self.mox.CreateMockAnything()
-    mock_pkginfo_good.blobstore_key = blobstore_key_good
-    mock_pkginfo_bad.blobstore_key = blobstore_key_bad
-    mock_pkginfo_bad.filename = filename_bad
-    mock_pkginfo_bad.mtime = maint.datetime.datetime(1970, 1, 1)
-    pkginfos = [mock_pkginfo_good, mock_pkginfo_bad]
-    maint.models.PackageInfo.all().AndReturn(pkginfos)
-    maint.blobstore.BlobInfo.get(
-        mock_pkginfo_good.blobstore_key).AndReturn(True)
-    maint.blobstore.BlobInfo.get(
-        mock_pkginfo_bad.blobstore_key).AndReturn(None)
+    goodblob_key = 'good'
+    blobstore_stub.CreateBlob(goodblob_key, 'content')
+    blobstore_stub.CreateBlob('to_be_deleted', '123B')
 
-    maint.mail.SendMail(
-        mox.IgnoreArg(), 'Package is lacking a file: %s' % filename_bad,
-        mox.IgnoreArg()).AndReturn(None)
+    filename_bad = 'missing_blob'
 
-    # verify Blobstore blobs are not orphaned.
-    blob_good = self.mox.CreateMockAnything()
-    blob_bad = self.mox.CreateMockAnything()
-    blob_bad.filename = filename_bad
-    blobs = [blob_good, blob_bad]
-    maint.blobstore.BlobInfo.all().AndReturn(blobs)
-    # good blob
-    blob_good.key().AndReturn(blobstore_key_good)
-    self.MockPackageInfoQuery(blobstore_key_good, return_value='non None')
-    # bad blob
-    blob_bad.key().AndReturn(blobstore_key_bad)
-    self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 1
-    self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 2
-    self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 3
-    self.MockPackageInfoQuery(blobstore_key_bad, sleep=1)  # attempt 4
-    self.MockPackageInfoQuery(blobstore_key_bad)  # attempt 5
+    models.PackageInfo(
+        filename=filename_bad, mtime=datetime.datetime(1970, 1, 1)).put(
+            avoid_mtime_update=True)
+    models.PackageInfo(
+        filename='good', mtime=datetime.datetime(1970, 1, 1),
+        blobstore_key=goodblob_key).put(avoid_mtime_update=True)
 
-    maint.mail.SendMail(
-        mox.IgnoreArg(), 'Orphaned Blob in Blobstore: %s' % filename_bad,
-        mox.IgnoreArg()).AndReturn(None)
+    self.testapp.get('/cron/maintenance/verify_packages')
+    self.RunAllDeferredTasks()
 
-    self.mox.ReplayAll()
-    self.c.get()
-    self.mox.VerifyAll()
+    self.assertEqual(1, len(mail_stub.get_sent_messages()))
+    mail = mail_stub.get_sent_messages()[0]
+    self.assertEqual('Package is lacking a file: missing_blob', mail.subject)
+
+    keys = []
+    for b in blobstore.BlobInfo.all():
+      keys.append(str(b.key()))
+    self.assertEqual([goodblob_key], keys)
 
 
 logging.basicConfig(filename='/dev/null')

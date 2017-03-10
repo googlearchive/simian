@@ -136,7 +136,8 @@ def LoginToServer(secure_config, client_id, user_settings, client_exit=None):
   client_params = urllib.urlencode(client_params)
 
   url = flight_common.GetServerURL()
-  client = mac_client.SimianAuthClient(hostname=url)
+  client = mac_client.SimianAuthClient(
+      flight_common.GetClientIdentifier('auto')['uuid'], hostname=url)
   token = client.GetAuthToken()
   response = client.PostReportBody(client_params)
   feedback = {}

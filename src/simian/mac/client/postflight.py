@@ -69,7 +69,8 @@ def RunPostflight(runtype):
     sys.exit(0)
 
   url = flight_common.GetServerURL()
-  client = mac_client.SimianAuthClient(hostname=url)
+  client = mac_client.SimianAuthClient(
+      flight_common.GetClientIdentifier('auto')['uuid'], hostname=url)
   client.SetAuthToken(flight_common.GetAuth1Token())
 
   # read SecureConfig.plist.

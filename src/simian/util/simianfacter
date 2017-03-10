@@ -4,6 +4,8 @@
 
 """Script to output Simian dependent facter-like output of various variables."""
 
+import argparse
+import json
 import re
 import subprocess
 from simian import settings
@@ -29,7 +31,7 @@ def Exec(cmd):
     return p.returncode, stdout, stderr
   except (IOError, OSError), e:
     return (99, '', str(e))
-    
+
 
 def GetSerialNumber():
   """Returns the machine serial number."""
@@ -37,37 +39,39 @@ def GetSerialNumber():
       ['system_profiler', 'SPHardwareDataType'])
 
   serial_number = 'UNKNOWN_SERIAL_NUMBER'
-  
+
   if return_code != 0:
     return serial_number
 
-  serial_number_re = re.compile('Serial number[^:]+:\s+(.*)', re.IGNORECASE)  
-  
+  serial_number_re = re.compile('Serial number[^:]+:\s+(.*)', re.IGNORECASE)
+
   for l in stdout.splitlines():
     m = serial_number_re.search(l)
     if m:
       serial_number = m.group(1)
       break
-  
+
   return serial_number
 
 
 def GetFacterFacts():
   """Returns a dictionary of facter facts."""
-  return_code, stdout, unused_stderr = Exec(['facter', '-p'])
+  return_code, stdout, unused_stderr = Exec(['facter', '--show-legacy', '-p', '-j'])
 
-  # If execution of factor was successful build the client identifier
+  # If execution of facter was successful build the client identifier
   if return_code != 0:
     return {}
 
   facts = {}
 
-  # Iterate over the facter output and create a dictionary of the output
-  lines = stdout.splitlines()
-  for line in lines:
-    (key, unused_sep, value) = line.split(' ', 2)
-    value = value.strip()
-    facts[key] = value
+  try:
+    json_facts = json.loads(stdout)
+    for k in json_facts:
+      facts[k] = json_facts[k]
+  except ValueError, e:
+    logging.error('There was a problem scanning facter JSON output.')
+    logging.error('Error: %s', str(e))
+
   return facts
 
 
@@ -83,12 +87,21 @@ SETTINGS_FACTER = {
 
 
 def main():
+  parser = argparse.ArgumentParser(description='Display system facts.')
+  parser.add_argument('json', metavar='j', type=str, action='store_true',
+                      help='output JSON')
+  args = parser.parse_args()
+
   facts = GetFacterFacts()
   # place Simian configs where facter is lacking (may be 100%).
   for name in SETTINGS_FACTER:
     if name not in facts:
       facts[name] = SETTINGS_FACTER[name]
-  print """certname => %(certname)s
+
+  if args.json:
+    print json.dumps(facts)
+  else:
+    print """certname => %(certname)s
 primary_user => %(primary_user)s
 sp_local_host_name => %(sp_local_host_name)s
 configtrack => %(configtrack)s

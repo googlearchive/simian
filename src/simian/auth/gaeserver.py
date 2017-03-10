@@ -34,8 +34,6 @@ import os
 import time
 
 
-import webapp2
-
 from google.appengine import runtime
 from google.appengine.api import datastore
 from google.appengine.api import memcache
@@ -331,7 +329,6 @@ def DoMunkiAuth(fake_noauth=None, require_level=None):
 
   if require_level is None:
     require_level = LEVEL_BASE
-
 
   cookie_str = os.environ.get('HTTP_COOKIE', None)
   if not cookie_str:

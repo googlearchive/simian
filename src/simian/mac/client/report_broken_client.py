@@ -63,7 +63,8 @@ def main():
   params = {'details': details, 'reason': options.reason}
 
   url = flight_common.GetServerURL()
-  c = client.SimianAuthClient(hostname=url)
+  c = client.SimianAuthClient(
+      flight_common.GetClientIdentifier('auto')['uuid'], hostname=url)
   c.GetAuthToken()
   c.PostReport('broken_client', params)
   print 'Reported broken client to server.'

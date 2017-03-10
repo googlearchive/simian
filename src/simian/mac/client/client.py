@@ -81,6 +81,10 @@ class BaseSimianClient(object):
 class SimianAuthClient(BaseSimianClient, client.SimianAuthClient):
   """Client perform authentication steps with Simian server."""
 
+  def __init__(self, uuid, **kwargs):
+    self.uuid = uuid
+    client.SimianAuthClient.__init__(self, root_ok=True, **kwargs)
+
   def _GetPuppetSslDetails(self, cert_fname=None, interactive_user=False):
     """Get Puppet SSL details.
 

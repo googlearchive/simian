@@ -22,7 +22,7 @@ Classes:
 
 import datetime
 import logging
-import time
+import os
 import uuid
 
 import webapp2
@@ -71,7 +71,7 @@ class AuthSessionCleanup(webapp2.RequestHandler):
         prefix, level, min_age_seconds, cursor=query.cursor())
 
   def get(self):
-    """Handle GET"""
+    """Handle GET."""
     for lvl in gaeserver.ALL_LEVELS:
       if lvl != gaeserver.LEVEL_APPLESUS:
         self._DeferRemoveExpiredAuthSessions(
@@ -86,7 +86,6 @@ class MarkComputersInactive(webapp2.RequestHandler):
   """Class to mark all inactive hosts as such in Datastore."""
 
   def get(self):
-    """Handle GET."""
     count = models.Computer.MarkInactive()
     logging.info('Complete! Marked %s inactive.', count)
 
@@ -142,38 +141,60 @@ class VerifyPackages(webapp2.RequestHandler):
 
   def get(self):
     """Handle GET."""
-    # Verify that all PackageInfo entities older than a week have a file in
-    # Blobstore.
+    self._NotifyAboutPkgInfosWithoutFile()
+    self._ScheduleRemovalOfOrphanedBlobs()
+
+  def _NotifyAboutPkgInfosWithoutFile(self):
+    """Verify that entities older than a week have a file in Blobstore."""
     for p in models.PackageInfo.all():
       if p.blobstore_key and blobstore.BlobInfo.get(p.blobstore_key):
         continue
       elif p.mtime < (datetime.datetime.utcnow() - datetime.timedelta(days=7)):
-
         subject = 'Package is lacking a file: %s' % p.filename
         body = (
             'The following package is lacking a DMG file: \n'
             'https://%s/admin/package/%s' % (
                 settings.SERVER_HOSTNAME, p.filename))
-        mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
+        mail.SendMail(settings.EMAIL_ADMIN_LIST, subject, body, defer=False)
 
-    # Verify all Blobstore Blobs have associated PackageInfo entities.
-    for b in blobstore.BlobInfo.all():
+  @classmethod
+  def _DoubleCheckAndRemove(cls, infos):
+    for blob_info in infos:
+      key = blob_info.key()
+      pkg = models.PackageInfo.all().filter('blobstore_key =', key).get()
+      if pkg:
+        continue
+      logging.info(
+          'deleting orphaned blob: %s %s', blob_info.filename, str(key))
+      blob_info.delete()
+
+  @classmethod
+  def _ScheduleRemovalOfOrphanedBlobs(cls, cursor=None):
+    query = blobstore.BlobInfo.all()
+    if cursor is not None:
+      query.with_cursor(cursor)
+    infos = query.fetch(settings.ENTITIES_PER_DEFERRED_TASK)
+
+    orphaned = []
+    for blob_info in infos:
       # Filter by blobstore_key as duplicate filenames are allowed in Blobstore.
-      key = b.key()
-      max_attempts = 5
-      for i in xrange(1, max_attempts + 1):
-        p = models.PackageInfo.all().filter('blobstore_key =', key).get()
-        if p:
-          break
-        elif i == max_attempts:
-          if not b.filename and not b.size:
-            b.delete()
-            break
-          subject = 'Orphaned Blob in Blobstore: %s' % b.filename
-          body = (
-              'An orphaned Blob exists in Blobstore. Use App Engine Admin '
-              'Console\'s "Blob Viewer" to locate and delete this Blob.\n\n'
-              'Filename: %s\nBlobstore Key: %s' % (b.filename, key))
-          mail.SendMail([settings.EMAIL_ADMIN_LIST], subject, body)
-          break
-        time.sleep(1)
+      key = blob_info.key()
+      pkg = models.PackageInfo.all().filter('blobstore_key =', key).get()
+      is_orphaned = pkg is None
+      if is_orphaned:
+        orphaned.append(blob_info)
+
+    if orphaned:
+      # Datastore is eventually consistent.
+      # related package info can be available later.
+      deferred_name = 'remove_orphaned_blobs_%s' % str(uuid.uuid1())
+      deferred.defer(
+          cls._DoubleCheckAndRemove, orphaned,
+          _name=deferred_name, _countdown=600)
+    if len(infos) == settings.ENTITIES_PER_DEFERRED_TASK:
+      deferred_name = 'find_orphaned_blobs_%s' % str(uuid.uuid1())
+      deferred.defer(
+          cls._ScheduleRemovalOfOrphanedBlobs, query.cursor(),
+          _name=deferred_name)
+
+

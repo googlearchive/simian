@@ -22,6 +22,7 @@ import datetime
 import errno
 import fcntl
 import httplib
+import json
 import logging
 import os
 import platform
@@ -54,7 +55,7 @@ except ImportError:
   OBJC_OK = False
 
 
-FACTER_CMD = '/usr/local/bin/simianfacter'
+FACTER_CMD = ['/usr/local/bin/simianfacter', '-j']
 DATETIME_STR_FORMAT = '%Y-%m-%d %H:%M:%S'
 DELIMITER = '|'
 APPLE_SUS_PLIST = '/Library/Preferences/com.apple.SoftwareUpdate.plist'
@@ -75,6 +76,9 @@ if DEBUG:
   logging.getLogger().setLevel(logging.DEBUG)
 else:
   logging.getLogger().setLevel(logging.INFO)
+
+
+_facts = {}
 
 
 class Error(Exception):
@@ -202,6 +206,7 @@ def Exec(cmd, env=None, timeout=0, waitfor=0):
     environ.update(env)
     env = environ
 
+  logging.debug('Executing: %s', cmd)
   p = subprocess.Popen(
       cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
 
@@ -326,6 +331,11 @@ def GetFacterFacts():
   Returns:
     dict, facter contents
   """
+  global _facts
+
+  if _facts:
+    return _facts
+
   return_code, stdout, unused_stderr = Exec(
       FACTER_CMD, timeout=300, waitfor=0.5)
   if return_code != 0:
@@ -333,14 +343,17 @@ def GetFacterFacts():
 
   # Iterate over the facter output and create a dictionary of the contents.
   facts = {}
-  for line in stdout.splitlines():
-    try:
-      key, unused_sep, value = line.split(' ', 2)
-      value = value.strip()
-      facts[key] = value
-    except ValueError:
-      logging.warning('Ignoring invalid facter output line: %s', line)
-  return facts
+
+  try:
+    json_facts = json.loads(stdout)
+    for k in json_facts:
+      facts[k] = json_facts[k]
+  except ValueError, e:
+    logging.error(
+        'There was a problem scanning facter JSON output. %s', str(e))
+
+  _facts = facts
+  return _facts
 
 
 def GetSystemUptime():
@@ -432,7 +445,7 @@ def GetClientIdentifier(runtype=None):
 
   # client_management_enabled facter support; defaults to enabled.
   mgmt_enabled = facts.get(
-      'client_management_enabled', 'true').lower() == 'true'
+      'client_management_enabled', True)
 
   # Determine if the computer is on the corp network or not.
   on_corp = None
