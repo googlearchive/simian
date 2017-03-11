@@ -297,6 +297,8 @@ class AuthModuleTest(basetest.TestCase):
     email_two = 'user2@example.com'
     email_three = 'user3@example.com'
 
+    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
+    setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
     with mock.patch.object(auth, 'IsAdminUser', return_value=True):
       test_resolver.email = email_one
       self.assertTrue(test_resolver._IsAllowedToPropose())
