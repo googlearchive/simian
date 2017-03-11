@@ -30,7 +30,14 @@ VE: virtualenv python_check
 	[ -d VE ] || \
 	${PYTHON} $(shell type -p virtualenv) --no-site-packages VE
 
-test: m2crypto VE
+src/tests/gae_server.zip:
+	rm -Rf tmp/gae_server
+	mkdir -p tmp/gae_server
+	curl -o tmp/master.zip https://codeload.github.com/GoogleCloudPlatform/python-compat-runtime/zip/739bf8f575afe68f4df0e446ed405aa767aa870d
+	unzip -q tmp/master.zip -d tmp/gae_server
+	cd tmp/gae_server/python-compat-runtime-*/appengine-compat/exported_appengine_sdk/ && zip -q -r ../../../../../src/tests/gae_server.zip *
+
+test: m2crypto VE src/tests/gae_server.zip
 	[ -f test ] || \
 	VE/bin/python VE/bin/easy_install-${PYTHON_VERSION} "${PWD}"/simian_M2Crypto-*-py${PYTHON_VERSION}-macosx-${OSX_VERSION}*.egg && \
 	env SIMIAN_CONFIG_PATH="${PWD}/etc/simian/" \
