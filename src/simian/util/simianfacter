@@ -88,7 +88,7 @@ SETTINGS_FACTER = {
 
 def main():
   parser = argparse.ArgumentParser(description='Display system facts.')
-  parser.add_argument('json', metavar='j', type=str, action='store_true',
+  parser.add_argument('-j', dest='json', action='store_true',
                       help='output JSON')
   args = parser.parse_args()
 

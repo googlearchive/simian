@@ -435,7 +435,7 @@ def GetClientIdentifier(runtype=None):
   simian_track = (facts.get('simiantrack', None))
 
   # Apple SUS integration.
-  applesus = facts.get('applesus', 'true').lower() == 'true'
+  applesus = facts.get('applesus', True)
 
   site = facts.get('site', None)
 
