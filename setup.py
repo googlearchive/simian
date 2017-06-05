@@ -43,7 +43,7 @@ REQUIRE_BASE = [
     'pyasn1==0.1.9',  # 0.2.2 break tests
     'tlslite==0.4.9',
     'pyyaml>=3.10',
-    'requests',
+    'requests==2.14.2',
     'GoogleAppEngineCloudStorageClient',
 ]
 
