@@ -81,7 +81,6 @@ ${SDIST}: VE clean_sdist client_config
 server_config:
 	src/simian/util/create_gae_bundle.sh $(PWD)
 	sed -i "" "s/^application:.*/application: `PYTHONPATH=. python src/simian/util/appid_generator.py`/" gae_bundle/app.yaml
-	src/simian/util/link_module.sh PyYAML
 	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
@@ -144,7 +143,6 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
-	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -171,7 +169,6 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
-	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -198,7 +195,6 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
-	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -223,7 +219,6 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
-	-R .eggs/PyYAML-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \

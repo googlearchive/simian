@@ -42,7 +42,6 @@ REQUIRE_BASE = [
     'setuptools>=18.2',
     'pyasn1==0.1.9',  # 0.2.2 break tests
     'tlslite==0.4.9',
-    'pyyaml>=3.10',
     'requests==2.14.2',
     'GoogleAppEngineCloudStorageClient',
 ]
@@ -57,6 +56,7 @@ REQUIRE_TEST = REQUIRE_BASE + [
     'mock',
     'mox>=0.5.3',
     'Pillow',  # needed for google_apputils init_all_stubs() (for imging stub)
+    'pyyaml>=3.10',
     'pyfakefs',
     'unittest2',
     'webapp2',
