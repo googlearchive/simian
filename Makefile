@@ -126,7 +126,8 @@ m2crypto:
 	M2Crypto-0.22.3-py2.7-macosx-10.9-intel.egg \
 	M2Crypto-0.22.3-py2.7-macosx-10.10-intel.egg \
 	M2Crypto-0.22.3-py2.7-macosx-10.11-intel.egg \
-	M2Crypto-0.22.3-py2.7-macosx-10.12-intel.egg ; do \
+	M2Crypto-0.22.3-py2.7-macosx-10.12-intel.egg \
+	M2Crypto-0.22.3-py2.7-macosx-10.13-intel.egg ; do \
 	[[ -f "simian_$${egg}" ]] || curl -o "simian_$${egg}" "https://storage.googleapis.com/m2crypto_eggs/$${egg}" ; \
 	done
 
@@ -143,6 +144,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
+	-R simian_M2Crypto-*-10.13-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -169,6 +171,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
+	-R simian_M2Crypto-*-10.13-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -195,6 +198,7 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
+	-R simian_M2Crypto-*-10.13-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
@@ -219,6 +223,7 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R simian_M2Crypto-*-10.10-*.egg \
 	-R simian_M2Crypto-*-10.11-*.egg \
 	-R simian_M2Crypto-*-10.12-*.egg \
+	-R simian_M2Crypto-*-10.13-*.egg \
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
