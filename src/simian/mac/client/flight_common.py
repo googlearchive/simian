@@ -899,9 +899,16 @@ def RepairClient():
       'munkiclient.dmg')
   mount_path = tempfile.mkdtemp(prefix='munki_repair_client_', dir='/tmp')
 
+  if hasattr(fetch, 'MunkiDownloadError'):
+    # munki 2.8
+    DownloadError = fetch.MunkiDownloadError
+  else:
+    # munki 3.0.3
+    DownloadError = fetch.DownloadError
+
   try:
     updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download_path)
-  except fetch.MunkiDownloadError as e:
+  except DownloadError as e:
     raise RepairClientError(
         u'MunkiDownloadError getting Munki client: %s' % e)
 
