@@ -37,6 +37,7 @@ OSX_VERSIONS = {
     '10': 'Yosemite (OS X 10.10)',
     '11': 'El Capitan (OS X 10.11)',
     '12': 'Sierra (macOS 10.12)',
+    '13': 'High Sierra (macOS 10.13)',
 }
 
 

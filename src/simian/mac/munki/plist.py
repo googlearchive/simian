@@ -1563,6 +1563,8 @@ def GetXmlStr(value, indent_num=None):
     str_xml.append('%s<string>%s</string>' % (indent, EscapeString(value)))
   elif value_type is int:
     str_xml.append('%s<integer>%d</integer>' % (indent, value))
+  elif value_type is long:
+    str_xml.append('%s<integer>%d</integer>' % (indent, value))
   elif value_type is float:
     str_xml.append('%s<real>%f</real>' % (indent, value))
   elif value_type is bool:

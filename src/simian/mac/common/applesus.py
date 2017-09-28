@@ -33,7 +33,7 @@ from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = frozenset(['10.9', '10.10', '10.11', '10.12'])
+OS_VERSIONS = frozenset(['10.9', '10.10', '10.11', '10.12', '10.13'])
 
 _CATALOG_REGENERATION_LOCK_NAME = 'applesus_catalog_regeneration_%s_%s'
 
