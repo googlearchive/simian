@@ -46,7 +46,7 @@ params = urllib.urlencode(params)
 
 # Always use the following value for the Content-type header.
 headers = { "Content-type": "application/x-www-form-urlencoded" }
-conn = httplib.HTTPConnection(CLOSURE_SERVICE_DOMAIN)
+conn = httplib.HTTPSConnection(CLOSURE_SERVICE_DOMAIN)
 conn.request('POST', '/compile', params, headers)
 response = conn.getresponse()
 response_text = response.read()
