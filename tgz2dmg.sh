@@ -169,7 +169,7 @@ ${PKGBUILD} --root "${TMPDIR}/contents" \
     "${pkgout}"
 
 if [[ -z "$PKGONLY" ]]; then
-  hdiutil create -srcfolder "${TMPDIR}/pkg" -layout NONE -volname Simian "$OUT"
+  hdiutil create -fs HFS+ -srcfolder "${TMPDIR}/pkg" -layout NONE -volname Simian "$OUT"
 fi
 
 rm -rf "${TMPDIR}"
