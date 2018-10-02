@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ OSX_VERSIONS = {
     '11': 'El Capitan (OS X 10.11)',
     '12': 'Sierra (macOS 10.12)',
     '13': 'High Sierra (macOS 10.13)',
+    '14': 'Mojave (macOS 10.14)',
 }
 
 
@@ -174,7 +175,6 @@ class ReleaseReport(admin.AdminHandler):
     Returns:
       result: String, which OSs will get the install.
     """
-    # TODO(user): This should handle minor releases as well.
     # If a minimum or maximum OS is set, this reads only the 4th character,
     # which will correspond with the major OS version.
     min_os_major = GetOSXMajorVersion(min_os)

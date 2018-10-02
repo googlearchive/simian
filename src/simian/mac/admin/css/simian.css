@@ -107,6 +107,18 @@
   background-color: #F9EDBE !important;
 }
 
+.unsignedpkg {
+  background-color: #FFADBE
+}
+
+.activeunsignedpkg {
+  background-color: #EEADBE
+}
+
+.signedpkg {
+  background-color: #FFFFFF
+}
+
 /** Tables **/
 
 table.barChart {

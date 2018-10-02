@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,6 +38,17 @@ from simian.mac.munki import plist as plist_lib
 
 
 PACKAGE_LOCK_PREFIX = 'pkgsinfo_'
+
+PLIST_SIGNATURES = [
+    'installcheck_script_signature',
+    'installer_item_hash_signature',
+    'postinstall_script_signature',
+    'preinstall_script_signature',
+    'preuninstall_script_signature',
+    'uninstallcheck_script_signature',
+    'postuninstall_script_signature',
+    'uninstall_script_signature',
+]
 
 
 class MunkiError(base.Error):
@@ -141,6 +152,9 @@ class Catalog(BaseMunkiModel):
         pkgsinfo_dicts.append(p.plist.GetXmlContent(indent_num=1))
         mtimes.append(p.mtime)
 
+      if name in settings.Settings.GetItem('early_force_catalogs'):
+        pkgsinfo_dicts = cls.ProcessEarlyForceDates(pkgsinfo_dicts)
+
       catalog = constants.CATALOG_PLIST_XML % '\n'.join(pkgsinfo_dicts)
 
       c = cls.get_or_insert(name)
@@ -159,6 +173,26 @@ class Catalog(BaseMunkiModel):
       raise
     finally:
       lock.Release()
+
+  @classmethod
+  def ProcessEarlyForceDates(cls, pkgsinfo_dicts):
+    processed_pkgsinfo_dicts = []
+    date_regex = re.compile(r'\s{8}<key>force_install_after_date</key>\n'
+                            r'\s{8}<date>\d{4}-\d{2}-\d{2}T13:00:00Z</date>\n')
+    for pkginfo in pkgsinfo_dicts:
+      match = date_regex.search(pkginfo)
+      if match:
+        new_dt = datetime.datetime.strptime(
+            match.group().split('<date>')[1].split('T13:00:00Z')[0], '%Y-%m-%d')
+        adjusted_dt = new_dt - datetime.timedelta(
+            days=settings.GetItem('early_force_days'))
+        new_dt_string = adjusted_dt.strftime('%Y-%m-%d')
+        new_pkginfo = pkginfo.split('<key>force_install_after_date</key>\n')[0]
+        new_pkginfo += ('<key>force_install_after_date</key>\n        '
+                        '<date>%sT13:00:00Z</date>\n' % new_dt_string)
+        new_pkginfo += pkginfo.split(match.group())[1]
+      processed_pkgsinfo_dicts.append(pkginfo)
+    return processed_pkgsinfo_dicts
 
 
 class Manifest(BaseMunkiModel):
@@ -313,6 +347,14 @@ class PackageInfo(BaseMunkiModel):
     self.blobstore_key = str(blob_info.key())
 
   blob_info = property(_GetBlobInfo, _SetBlobInfo)
+
+  def plist_is_signed(self):
+    if not self.plist.get('metadata_signature', False):
+      return False
+    for value in PLIST_SIGNATURES:
+      if not self.plist.get(value, False):
+        return False
+    return True
 
   @property
   def approval_required(self):

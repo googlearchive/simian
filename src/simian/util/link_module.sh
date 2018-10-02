@@ -7,7 +7,7 @@ set -e
 GAE_BUNDLE=gae_bundle/
 
 function find_module() {
-  python <<EOF
+  VE/bin/python <<EOF
 import imp
 try:
  print imp.find_module('$1')[1]

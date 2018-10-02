@@ -131,7 +131,6 @@ handlers:
   secure: always
   login: required
 
-
 ### Catchall handler
 
 - url: /.*

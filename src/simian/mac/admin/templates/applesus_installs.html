@@ -4,13 +4,13 @@
 
 {% block page-content %}
 
-{% ifnotequal pkg "all" %}
+{% if pkg != "all" %}
   {% if failures %}
    <h2>Failed Apple SUS Installs: {{ pkg }}</h2>
   {% else %}
     <h2>Successful Apple SUS Installs: {{ pkg }}</h2>
   {% endif %}
-{% endifnotequal %}
+{% endif %}
 
 <div style="margin-bottom:5px;">
   {% include "results_pagination.html" %}

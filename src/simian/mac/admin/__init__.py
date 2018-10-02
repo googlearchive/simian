@@ -24,6 +24,8 @@ QUERY_LIMITS = [25, 50, 100, 250, 500, 1000, 2000]
 DEFAULT_COMPUTER_FETCH_LIMIT = 25
 CONTENT_SECURITY_POLICY_HEADER = 'Content-Security-Policy'
 _CONTENT_SECURITY_POLICY = "frame-ancestors 'self'"
+REFERRER_POLICY_HEADER = 'Referrer-Policy'
+_REFERRER_POLICY = 'no-referrer'
 
 
 class Error(Exception):
@@ -141,6 +143,8 @@ class AdminHandler(webapp2.RequestHandler):
     # https://en.wikipedia.org/wiki/Clickjacking
     self.response.headers.add_header(
         CONTENT_SECURITY_POLICY_HEADER, _CONTENT_SECURITY_POLICY)
+    self.response.headers.add_header(
+        REFERRER_POLICY_HEADER, _REFERRER_POLICY)
 
   @classmethod
   def XsrfProtected(cls, action):

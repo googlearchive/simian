@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -91,6 +91,7 @@ class Packages(admin.AdminHandler):
       pkg['install_types'] = p.install_types
       pkg['manifest_mod_access'] = p.manifest_mod_access
       pkg['description'] = p.description
+      pkg['plist_is_signed'] = p.plist_is_signed()
       packages.append(pkg)
 
     packages.sort(key=lambda pkg: pkg['munki_name'].lower())

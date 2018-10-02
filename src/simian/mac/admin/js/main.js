@@ -120,21 +120,12 @@ simian.makeUUIDHover = function() {
       goog.dom.createDom(
           goog.dom.TagName.DIV, {'id': 'host_popup'},
           goog.dom.createDom(goog.dom.TagName.SPAN, {'class': 'popup_pointer'}),
-          goog.dom.createDom(
-              goog.dom.TagName.DIV,
-              {'id': 'host_popup_loading', 'style': 'display: none;'},
-              goog.dom.createDom(goog.dom.TagName.IMG, {
-                'src': '/admin/static/loading_222.gif',
-                'style': 'width: 16px; height: 16px; margin: 5px 3px;',
-                'alt': 'loading'
-              })),
           goog.dom.createDom(goog.dom.TagName.DIV, {'id': 'host_popup_info'})));
   goog.dom.appendChild(document.body, div);
   var hc = new goog.ui.HoverCard(
       function(e) { return goog.dom.classes.has(e, 'uuidhover'); }, false);
   var popup = goog.dom.$('host_popup_container');
   var content = goog.dom.$('host_popup_info');
-  var loading = goog.dom.$('host_popup_loading');
   hc.setElement(popup);
   var onTrigger = function(event) {
     hc.setPosition(new goog.positioning.AnchoredPosition(
@@ -143,7 +134,13 @@ simian.makeUUIDHover = function() {
   };
   goog.events.listen(hc, goog.ui.HoverCard.EventType.TRIGGER, onTrigger);
   var onBeforeShow = function() {
-    content.innerHTML = loading.innerHTML;
+    goog.dom.removeChildren(content);
+    goog.dom.appendChild(content, goog.dom.createDom(goog.dom.TagName.IMG, {
+      'src': '/admin/static/loading_222.gif',
+      'style': 'width: 16px; height: 16px; margin: 5px 3px;',
+      'alt': 'loading'
+    }));
+
     var host_href = hc.getAnchorElement().getAttribute('href');
     simian.xhr(host_href + '?format=popup', '', 'get',
               function(e) {

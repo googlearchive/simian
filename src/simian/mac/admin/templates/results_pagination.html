@@ -1,5 +1,5 @@
 <div style="display:inline;">
-{% ifnotequal results_count limit %}
+{% if results_count != limit %}
   {% if results_count %}
     Displaying all {{ results_count }} results.
   {% endif %}
@@ -8,9 +8,9 @@
   <form name="limit-form" method="GET" action="{{ request_path }}"
         style="display: inline;">
     {% for key, value in request_query_params.items %}
-      {% ifnotequal key "limit" %}
+      {% if key != "limit" %}
         <input type="hidden" name="{{ key }}" value="{{ value }}"/>
-      {% endifnotequal %}
+      {% endif %}
     {% endfor %}
     <select name="limit" onChange="javascript:this.parentNode.submit()">
       {% for opt in limits %}
@@ -29,5 +29,5 @@
       <a class="button" href="{{ next_page_link }}">Next {{ limit }} &raquo;</a>
     </span>
   {% endif %}
-{% endifnotequal %}
+{% endif %}
 </div>

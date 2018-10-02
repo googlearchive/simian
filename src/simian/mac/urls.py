@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ app = webapp2.WSGIApplication([
     (r'/catalogs/([\w\-\.]+)$', catalogs.Catalogs),
     # GET munki manifests.
     (r'/manifests/([\w\-\_\.\=\|\%]+)$', manifests.Manifests),
-    (r'/icons/([\w\-\_\.\=\|\%]+)$', icons.Icons),
+    (r'/icons/([\s\w\-\_\.\=\|\%]+)$', icons.Icons),
     # GET munki packages.
     (r'/pkgs/([\w\-\. \%]+)$', pkgs.Packages),
     (r'/pkgs\-userauth/([\w\-\. \%]+)$', pkgs.Packages),  # forces user auth.

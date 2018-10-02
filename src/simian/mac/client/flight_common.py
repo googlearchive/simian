@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@ from simian.mac.client import version
 try:
   from munkilib import FoundationPlist as fpl
   from munkilib import munkicommon
-  from munkilib import updatecheck
   from munkilib import fetch
   import SystemConfiguration as sys_config
   import Foundation
@@ -907,7 +906,7 @@ def RepairClient():
     DownloadError = fetch.DownloadError
 
   try:
-    updatecheck.getResourceIfChangedAtomically('%s/repair' % url, download_path)
+    fetch.munki_resource('%s/repair' % url, download_path)
   except DownloadError as e:
     raise RepairClientError(
         u'MunkiDownloadError getting Munki client: %s' % e)

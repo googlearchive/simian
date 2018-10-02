@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,20 +28,18 @@ Functions:
 """
 
 
-
-
-
 import base64
 import datetime
 import hashlib
 import re
 import time
-import pyasn1
+
+
 from pyasn1.codec.der import decoder as der_decoder
 from pyasn1.codec.der import encoder as der_encoder
 import pyasn1.error
 from pyasn1.type import univ
-import pyasn1.type.useful
+from pyasn1_modules import rfc2459
 
 from simian.auth import tlslite_bridge
 
@@ -237,15 +235,14 @@ class X509Certificate(BaseDataObject):
     """Convert a timestamp from a x509 cert into a Python datetime.
 
     Args:
-      ts: str, timestamp like yymmddhhmmssZ where Z is always present
-          denoting zulu time
+      ts: pyasn1_modules.rfc2459.Time
     Returns:
       datetime object with no tzinfo class, but values in UTC
     Raises:
       CertificateValueError: error in a value in the certificate
     """
     try:
-      t = time.strptime(str(ts), self.TIMESTAMP_FMT)
+      t = time.strptime(str(ts[0]), self.TIMESTAMP_FMT)
     except ValueError, e:
       raise CertificateValueError('Timestamp %s: %s' % (ts, str(e)))
 
@@ -269,7 +266,7 @@ class X509Certificate(BaseDataObject):
     """Get X509 V3 extension fields from a sequence.
 
     Args:
-      seq: pyasn1.type.univ.Sequence
+      seq: pyasn1_modules.rfc2459.Extensions
     Returns:
       dict containing these keys if present in input sequence = {
         'key_usage': tuple of X509V3_KEY_USAGE_BIT_FIELDS items,
@@ -281,6 +278,8 @@ class X509Certificate(BaseDataObject):
         as expected way and cannot be parsed
       CertificateValueError: error in a value in the certificate
     """
+    # convert to pyasn1.type.univ.Sequence
+    seq = der_decoder.decode(der_encoder.encode(seq))[0]
     output = {}
     cert_key_usage = []
 
@@ -332,7 +331,9 @@ class X509Certificate(BaseDataObject):
           # The lack of a value, not the existence of a False value,
           # is how one determines that the cert is not a CA cert.
           # So just look for True to confirm.
-          if True in encaps_seq[0]:  # case 1, 3
+
+          # case 1, 3
+          if len(encaps_seq[0]) and encaps_seq[0][0]:
             output['may_act_as_ca'] = True
 
       elif oid == OID_X509V3_KEY_USAGE:
@@ -397,11 +398,15 @@ class X509Certificate(BaseDataObject):
     Follows RFC4514 section 2.4.
 
     Args:
-      value: string, like "Foo" from "OU=Foo"
+      value: pyasn1_modules.rfc2459.AttributeValue
     Returns:
       str, a new str if escaped, otherwise the same str.
     """
-    value = str(value)  # pyasn1 PrintableString -> str
+
+    if isinstance(value, rfc2459.AttributeValue):
+      value = der_decoder.decode(value.asOctets())[0]
+    else:
+      value = str(value)
 
     # using a regex to sub() leads to problems when adjacent target chars
     # lead to overlapping matches. do this by hand.
@@ -432,11 +437,7 @@ class X509Certificate(BaseDataObject):
     """Assemble multiple DN fields into a string output.
 
     Args:
-      seq: pyasn1.type.univ.Sequence, structured like =
-        (
-          ( (oid,value), ),
-          ( (oid,value), ),
-        )
+      seq: pyasn1_modules.rfc2459.Name
     Returns:
       str like 'OU=Foo,C=Bar'
     Raises:
@@ -445,8 +446,8 @@ class X509Certificate(BaseDataObject):
     output = []
     delimiter = ','
     try:
-      for i in seq:
-        oid, value = i[0]
+      for i in seq[0]:
+        oid, value = i[0]['type'], i[0]['value']
         if oid in OID_NAME:
           new_value = self._AttributeValueToString(value)
           output.append('%s=%s' % (OID_NAME[oid], new_value))
@@ -460,7 +461,7 @@ class X509Certificate(BaseDataObject):
     """Get cert fields from a sequence.
 
     Args:
-      seq: pyasn1.type.univ.Sequence
+      seq: pyasn1_modules.rfc2459.Certificate
     Returns:
       dict {
           'serial_num': int,
@@ -480,41 +481,33 @@ class X509Certificate(BaseDataObject):
       CertificateValueError: error in a value in the certificate
     """
     try:
-      # Certificate Fields.  See RFC, section 4.1
-      # must have at least as many fields as we are searching for.
-      # length is likely 8.
-      if len(seq) < 6:
-        raise CertificateParseError('Too few certificate field sequences')
-
       # only support version 3 at this time because this code looks for
       # the x509v3 extensions in sequence 7.
-      if seq[0] != X509_CERT_VERSION_3:
-        raise CertificateParseError('X509 version %s not supported' % seq[0])
+      if seq['version'] != X509_CERT_VERSION_3:
+        raise CertificateParseError(
+            'X509 version %s not supported' % seq['version'])
 
-      # get serial number
-      serial_num = int(seq[1])
+      serial_num = int(seq['serialNumber'])
 
-      # get signature algorithm
-      cert_sig_algorithm = self._GetSignatureAlgorithmFromSequence(seq[2])
+      cert_sig_algorithm = self._GetSignatureAlgorithmFromSequence(
+          seq['signature'])
 
-      # get issuer
-      cert_issuer = self._AssembleDNSequence(seq[3])
+      cert_issuer = self._AssembleDNSequence(seq['issuer'])
 
-      # get validity time
-      if (seq[4][0].isSameTypeWith(pyasn1.type.useful.UTCTime()) and
-          seq[4][1].isSameTypeWith(pyasn1.type.useful.UTCTime())):
-        (before_ts, after_ts) = seq[4]
-        cert_valid_notbefore = self._CertTimestampToDatetime(before_ts)
-        cert_valid_notafter = self._CertTimestampToDatetime(after_ts)
+      if (seq['validity']['notBefore'].isSameTypeWith(rfc2459.Time()) and
+          seq['validity']['notAfter'].isSameTypeWith(rfc2459.Time())):
+        cert_valid_notbefore = self._CertTimestampToDatetime(
+            seq['validity']['notBefore'])
+        cert_valid_notafter = self._CertTimestampToDatetime(
+            seq['validity']['notAfter'])
       else:
         raise CertificateParseError('Validity time structure')
 
-      # get subject
-      cert_subject = self._AssembleDNSequence(seq[5])
+      cert_subject = self._AssembleDNSequence(seq['subject'])
 
       # parse X509V3 extensions
       if len(seq) > 7:
-        v3_output = self._GetV3ExtensionFieldsFromSequence(seq[7])
+        v3_output = self._GetV3ExtensionFieldsFromSequence(seq['extensions'])
       else:
         v3_output = {}
 
@@ -544,7 +537,7 @@ class X509Certificate(BaseDataObject):
     """Get signature algorithm from a sequence.
 
     Args:
-      seq: pyasn1.type.univ.Sequence
+      seq: pyasn1_modules.rfc2459.AlgorithmIdentifier
     Returns:
       dict {
           'sig_type': str OID value
@@ -555,15 +548,11 @@ class X509Certificate(BaseDataObject):
       CertificateValueError: error in a value in the certificate
     """
     try:
-      # RFC 4.1.1.2
-      if len(seq) != 2:
-        raise CertificateParseError('Cannot parse signature algorithm')
-
-      if seq[0] not in self.SIGNATURE_ALGORITHMS:
+      if seq['algorithm'] not in self.SIGNATURE_ALGORITHMS:
         raise CertificateValueError(
-            'Unsupported signature algorithm %s' % str(seq[0]))
+            'Unsupported signature algorithm %s' % str(seq['algorithm']))
 
-      output = {'sig_algorithm': seq[0]}
+      output = {'sig_algorithm': seq['algorithm']}
     except (IndexError, TypeError, AttributeError), e:
       raise CertificateParseError(str(e))
 
@@ -628,16 +617,12 @@ class X509Certificate(BaseDataObject):
           'Top of certificate should consist of 1+ sequences')
 
     # the x509 cert starts out with one top level sequence.
-    seq = seq[0]
+    certificate = seq[0]
 
-    # the x509 cert should only have a few top-level sequences in it.
-    # they are:
-    #   Certificate Fields   [0]
-    #   signatureAlgorithm   [1]
-    #   signatureValue       [2]
-    fields = self._GetFieldsFromSequence(seq[0])
-    sigalg = self._GetSignatureAlgorithmFromSequence(seq[1])
-    sig = self._GetSignatureFromSequence(seq[2])
+    fields = self._GetFieldsFromSequence(certificate['tbsCertificate'])
+    sigalg = self._GetSignatureAlgorithmFromSequence(
+        certificate['signatureAlgorithm'])
+    sig = self._GetSignatureFromSequence(certificate['signatureValue'])
 
     cert = {}
     cert.update(fields)
@@ -669,7 +654,7 @@ class X509Certificate(BaseDataObject):
     """
     # break the client cert into pieces
     try:
-      c = der_decoder.decode(bytes_str)
+      c = der_decoder.decode(bytes_str, asn1Spec=rfc2459.Certificate())
     except pyasn1.error.PyAsn1Error, e:
       raise CertificateASN1FormatError('DER decode: %s' % str(e))
 

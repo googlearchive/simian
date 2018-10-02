@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import tests.appenginesdk
 import mox
 import stubout
 
+from google.appengine.ext import testbed
 from google.apputils import app
 from google.apputils import basetest
 from simian.mac.models import base as models
@@ -535,6 +536,37 @@ class KeyValueCacheTest(mox.MoxTestBase):
     self.mox.ReplayAll()
     self.assertFalse(self.cls.IpInList(self.key, ip))
     self.mox.VerifyAll()
+
+
+class KValueCacheTest(basetest.TestCase):
+
+  def setUp(self):
+    super(KValueCacheTest, self).setUp()
+
+    self.testbed = testbed.Testbed()
+
+    self.testbed.activate()
+    self.testbed.setup_env(
+        overwrite=True,
+        USER_EMAIL='user@example.com',
+        USER_ID='123',
+        USER_IS_ADMIN='0',
+        DEFAULT_VERSION_HOSTNAME='example.appspot.com')
+
+    self.testbed.init_all_stubs()
+
+  def tearDown(self):
+    super(KValueCacheTest, self).tearDown()
+    self.testbed.deactivate()
+
+  def testSetSerializedItemLargeValue(self):
+    key = 'id11'
+    value = '1' * 1000005 + '2'
+
+    # testbed enforces the byte limit.
+    models.KeyValueCache.SetSerializedItem(key, value)
+
+    self.assertEqual(value, models.KeyValueCache.GetSerializedItem(key)[0])
 
 
 def main(unused_argv):

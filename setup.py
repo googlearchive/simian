@@ -40,7 +40,8 @@ except ImportError:
 
 REQUIRE_BASE = [
     'setuptools>=18.2',
-    'pyasn1==0.1.9',  # 0.2.2 break tests
+    'pyasn1==0.4.2',
+    'pyasn1_modules==0.2.2',
     'tlslite==0.4.9',
     'requests==2.14.2',
     'GoogleAppEngineCloudStorageClient',
@@ -55,8 +56,8 @@ REQUIRE_SETUP = REQUIRE_BASE + [
 REQUIRE_TEST = REQUIRE_BASE + [
     'mock',
     'mox>=0.5.3',
-    'Pillow',  # needed for google_apputils init_all_stubs() (for imging stub)
     'pyyaml>=3.10',
+    'Pillow',  # needed for google_apputils init_all_stubs() (for imging stub)
     'pyfakefs',
     'unittest2',
     'webapp2',

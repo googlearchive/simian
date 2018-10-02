@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -220,7 +220,7 @@ class HandlersTest(test.RequestHandlerTest):
         reports.REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT)
     self.mox.ReplayAll()
     self.assertEqual(
-        {'pkill_installd': True, 'pkill_softwareupdated': True, 'repair': True,
+        {'pkill_installd': True, 'pkill_softwareupdated': True,
          'logging_level': 3, 'upload_logs': True},
         self.c.GetReportFeedback(uuid, report_type, computer=computer))
     self.mox.VerifyAll()
@@ -626,8 +626,8 @@ class HandlersTest(test.RequestHandlerTest):
 logging.basicConfig(filename='/dev/null')
 
 
-def main(unused_argv):
-  test.main(unused_argv)
+def main(argv):
+  test.main(argv)
 
 
 if __name__ == '__main__':

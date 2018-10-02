@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ from simian.mac.models import constants
 from simian.mac.munki import plist
 
 
-OS_VERSIONS = frozenset(['10.9', '10.10', '10.11', '10.12', '10.13'])
+OS_VERSIONS = frozenset(['10.9', '10.10', '10.11', '10.12', '10.13', '10.14'])
 
 _CATALOG_REGENERATION_LOCK_NAME = 'applesus_catalog_regeneration_%s_%s'
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,6 +68,10 @@ def RunPostflight(runtype):
   if runtype == 'logoutinstall':
     sys.exit(0)
 
+# Ensure MSU is installed to /Applications
+  if not IsAppInPlace():
+    flight_common.RepairClient()
+
   url = flight_common.GetServerURL()
   client = mac_client.SimianAuthClient(
       flight_common.GetClientIdentifier('auto')['uuid'], hostname=url)
@@ -91,10 +95,6 @@ def RunPostflight(runtype):
   flight_common.UploadAllManagedInstallReports(
       client, client_id.get('on_corp', 'None'))
 
-  # Ensure MSU is installed to /Applications
-  if not IsAppInPlace():
-    flight_common.RepairClient()
-
   if not client.LogoutAuthToken():
     logging.error('Logout failed')
 
@@ -107,4 +107,4 @@ def RunPostflight(runtype):
   # Mark successful run by writing to last success file.
   NoteLastSuccess()
 
-  logging.debug('Preflight completed successfully.')
+  logging.debug('Postflight completed successfully.')

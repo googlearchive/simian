@@ -3,9 +3,9 @@
 {% block title %}Statistics{% endblock %}
 
 {% block page-content %}
-{% ifequal report_type "track" %}
+{% if report_type == "track" %}
   <h2>Statistics for track: {{ report_filter }}</h2>
-{% endifequal %}
+{% endif %}
 
 {% if summary %}
   {% if limit %}
@@ -143,13 +143,13 @@
           <table class="minimal-table">
             <tr>
               <th>Package</th>
-              <th style="text-align: right;">{% ifequal section "success" %}Installs{% else %}Failures{% endifequal %}</th>
+              <th style="text-align: right;">{% if section == "success" %}Installs{% else %}Failures{% endif %}</th>
             </tr>
             {% for package in section_data.packages %}
               <tr>
                 <td>{{ package.0 }}</td>
                 <td style="text-align: right">
-                  <a href="/admin/installs?pkg={{ package.0 }}{% ifequal section "failure" %}&failures=1{% endifequal %}">{{ package.1 }}</a>
+                  <a href="/admin/installs?pkg={{ package.0 }}{% if section == "failure" %}&failures=1{% endif %}">{{ package.1 }}</a>
                 </td>
                 <td style="text-align: right;">
                   <span class="note2">({{ package.2|floatformat:"1"}}%)</span>
@@ -160,7 +160,7 @@
              <tr>
                <td>(all packages)</td>
                <td style="text-align: right;">
-                 <a href="/admin/installs{% ifequal section "failure" %}?failures=1{% endifequal %}">{{ section_data.total }}</a>
+                 <a href="/admin/installs{% if section == "failure" %}?failures=1{% endif %}">{{ section_data.total }}</a>
                </td>
                <td style="text-align: right;">
                  <span class="note2">(100%)</span>
@@ -175,7 +175,7 @@
     </div>
   {% endif %}
 
-  {% ifnotequal report_type "site" %}
+  {% if report_type != "site" %}
     {% if client_site_enabled %}
       <div class="zippy_toggle {% if cached_mtime %}expanded{% endif %} sectionheader" title="by_site">Client Count By Site
         {% if cached_mtime %}<div class="last-cached">cached {{ cached_mtime|timesince }} ago</div>{% endif %}
@@ -196,7 +196,7 @@
         </ol>
       </div>
     {% endif %}
-  {% endifnotequal %}
+  {% endif %}
 
 {% else %}
 
@@ -206,10 +206,10 @@
 
 {% endif %}  {# endif summary  #}
 
-  {% ifequal report_type "pkgs_to_install" %}
+  {% if report_type == "pkgs_to_install" %}
     <h3>Pending: {{ pkg }}</h3>
     <a href="/admin/installs">Back to installs list</a><br />
-  {% endifequal %}
+  {% endif %}
 
   {% if computers %}
 
@@ -261,11 +261,11 @@
       <td>{{ c.hostname }}</td>
       <td>{{ c.serial }}</td>
       <td>
-        {% ifequal report "host" %}
+        {% if report == "host" %}
           {{ c.uuid }}
         {% else %}
           {{ c.uuid|host_uuid_link }}
-        {% endifequal %}
+        {% endif %}
       </td>
       <td><a href="/admin?filter-type=owner&filter={{ c.owner }}"
           >{{ c.owner }}</a></td>

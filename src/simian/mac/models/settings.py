@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ SETTINGS = {
     'list_of_categories': {
         'type': 'string',
         'title': 'Categories',
-        'comment': 'Software categories as a comma-seperated list.',
+        'comment': 'Software categories as a comma-separated list.',
         'default': 'Productivity, Developer Tools, Utilities',
     },
     'email_admin_list': {
@@ -239,6 +239,18 @@ SETTINGS = {
         'comment': 'comes before the version name, e.g. "running".',
         'default': 'running',
     },
+    'early_force_catalogs': {
+        'type': 'string',
+        'title': 'Early Force By Dates For Catalogs',
+        'comment': 'Catalogs as a comma-separated list.',
+        'default': 'unstable',
+    },
+    'early_force_days': {
+        'type': 'integer',
+        'title': 'Days Early For Early Force By Dates',
+        'comment': 'Days early force by dates will be for selected catalogs',
+        'default': 7,
+    }
 }
 
 

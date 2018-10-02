@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 import httplib
 import logging
 
+from google.appengine.api import datastore_errors
 from google.appengine.ext import deferred
 from google.appengine.runtime import apiproxy_errors
 
@@ -55,8 +56,11 @@ class UploadFile(handlers.AuthenticationHandler):
       l.name = file_name
       try:
         l.put()
-      except apiproxy_errors.RequestTooLargeError:
-        logging.warning('UploadFile log too large; truncating...')
+      except (
+          apiproxy_errors.RequestTooLargeError,
+          datastore_errors.BadRequestError):
+        # detastore raises BadRequestError now, if file too large.
+        logging.warning('UploadFile may be log too large; truncating...')
         # Datastore has a 1MB entity limit and models.ClientLogFile.log_file
         # uses zlib compression. Anecdotal evidence of a handlful of log files
         # over 8MB in size compress down to well under 1MB. Therefore, slice

@@ -21,15 +21,15 @@
           <tr>
             <td style="width:110px;text-align:right;">
               <select name="filter-type">
-                <option value="hostname" {% ifequal search_type "hostname" %}selected{% endifequal %}>Hostname</option>
-                <option value="os_version" {% ifequal search_type "os_version" %}selected{% endifequal %}>OS Version</option>
-                <option value="serial" {% ifequal search_type "serial" %}selected{% endifequal %}>Serial</option>
-                <option value="site" {% ifequal search_type "site" %}selected{% endifequal %}>Site</option>
-                <option value="owner" {% ifequal search_type "owner" %}selected{% endifequal %}
+                <option value="hostname" {% if search_type == "hostname" %}selected{% endif %}>Hostname</option>
+                <option value="os_version" {% if search_type == "os_version" %}selected{% endif %}>OS Version</option>
+                <option value="serial" {% if search_type == "serial" %}selected{% endif %}>Serial</option>
+                <option value="site" {% if search_type == "site" %}selected{% endif %}>Site</option>
+                <option value="owner" {% if search_type == "owner" %}selected{% endif %}
                         {% if not search_type %}selected{% endif %}>Username</option>
-                <option value="uuid" {% ifequal search_type "uuid" %}selected{% endifequal %}>UUID</option>
-                <option value="tag" {% ifequal search_type "tag" %}selected{% endifequal %}>Tag</option>
-                <option value="group" {% ifequal search_type "group" %}selected{% endifequal %}>Group</option>
+                <option value="uuid" {% if search_type == "uuid" %}selected{% endif %}>UUID</option>
+                <option value="tag" {% if search_type == "tag" %}selected{% endif %}>Tag</option>
+                <option value="group" {% if search_type == "group" %}selected{% endif %}>Group</option>
               </select>
             </td>
             <td>
@@ -82,17 +82,17 @@
         {% for key, value in menu.items %}
           {% if is_admin or not value.admin_only %}
           {% if value.url %}
-            <li {% ifequal report_type item.type %}class="selected"{% endifequal %}>
+            <li {% if report_type == item.type %}class="selected"{% endif %}>
               <a href="{{ value.url }}">{{ value.name }}</a>
             </li>
           {% else %}
             {% if value.subitems %}
               <li><a class="zippy_toggle
-              {% for subitem in item.subitems %}{% ifequal report_type subitem.type %}expanded{% endifequal %}{% endfor %}"
+              {% for subitem in item.subitems %}{% if report_type == subitem.type %}expanded{% endif %}{% endfor %}"
                      title="zippy_{{ key }}">{{ value.name }}</a>
                 <ul id="zippy_{{ key }}">
                 {% for subkey, subitem in value.subitems.items %}
-                  <li {% ifequal report_type subitem.type %}class="selected"{% endifequal %}>
+                  <li {% if report_type == subitem.type %}class="selected"{% endif %}>
                     <a href="{{ subitem.url }}">{{ subitem.name }}</a>
                   </li>
                 {% endfor %}

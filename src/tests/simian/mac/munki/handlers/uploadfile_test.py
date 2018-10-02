@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,8 +100,8 @@ class UploadFileHandlerTest(test.RequestHandlerTest):
 logging.basicConfig(filename='/dev/null')
 
 
-def main(unused_argv):
-  test.main(unused_argv)
+def main(argv):
+  test.main(argv)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1204,7 +1204,6 @@ class SimianAuthClientTest(basetest.TestCase):
     """Test GetAuthToken()."""
     with mock.patch.object(self.pac, 'DoSimianAuth'):
       self.pac._cookie_token = 'token'
-
       self.assertEqual(self.pac.GetAuthToken(), 'token')
 
   def testLogoutAuthToken(self):

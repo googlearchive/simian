@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,6 +44,10 @@ class InvalidArgumentsError(Error):
 COMPUTER_ACTIVE_DAYS = 30
 # Default memcache seconds for memcache-backed datastore entities
 MEMCACHE_SECS = 300
+
+# Actual limit is 1,000,000 but some entity overhead
+# causing that to be an unreliable upper-bound.
+_MEMCACHE_ENTITY_SIZE_LIMIT = 900000
 
 
 class BaseModel(db.Model):
@@ -684,7 +688,15 @@ class KeyValueCache(BaseModel):
     """Returns the deserialized value of a serialized cache."""
     entity = cls.MemcacheWrappedGet(key)
     if entity and entity.blob_value:
-      return util.Deserialize(entity.blob_value), entity.mtime
+      data = entity.blob_value
+      mtime = entity.mtime
+      i = 1
+      while entity and len(entity.blob_value) >= _MEMCACHE_ENTITY_SIZE_LIMIT:
+        entity = cls.MemcacheWrappedGet('%s_shard_%s' % (key, i))
+        if entity and entity.blob_value:
+          data += entity.blob_value
+        i += 1
+      return util.Deserialize(data), mtime
     else:
       return {}, None
 
@@ -697,7 +709,15 @@ class KeyValueCache(BaseModel):
       value: any, a value of any kind to serialize and cache.
     """
     value = util.Serialize(value)
-    cls.MemcacheWrappedSet(key, 'blob_value', value)
+    i = 0
+    while value:
+      shard = value[:_MEMCACHE_ENTITY_SIZE_LIMIT]
+      if i == 0:
+        cls.MemcacheWrappedSet(key, 'blob_value', shard)
+      else:
+        cls.MemcacheWrappedSet('%s_shard_%s' % (key, i), 'blob_value', shard)
+      i += 1
+      value = value[_MEMCACHE_ENTITY_SIZE_LIMIT:]
 
   @classmethod
   def GetItem(cls, name):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -76,14 +76,6 @@ class AuthModuleTest(test.RequestHandlerTest):
     self.MockDoMunkiAuth(and_return=session)
     self.request.get('logout').AndReturn(True)
     auth.gaeserver.LogoutSession(session).AndReturn(None)
-    self.mox.ReplayAll()
-    self.c.get()
-    self.mox.VerifyAll()
-
-  def testGetWithoutLogout(self):
-    """Tests get() without logout."""
-    self.MockDoMunkiAuth()
-    self.request.get('logout').AndReturn(False)
     self.mox.ReplayAll()
     self.c.get()
     self.mox.VerifyAll()

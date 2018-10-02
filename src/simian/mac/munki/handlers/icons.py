@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,12 @@ class Icons(handlers.AuthenticationHandler):
 
   def get(self, name):
     auth.DoAnyAuth()
+
+    if name == '_icon_hashes.plist':
+      # munki 3.1 starts reading hashes from special plist.
+      # to avoid 404 spam in logs, replying with 200.
+      return
+
     try:
       bucket = settings.ICONS_GCS_BUCKET
     except AttributeError:

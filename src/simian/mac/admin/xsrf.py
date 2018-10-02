@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,8 @@ def XsrfTokenValidate(token, action, user=None, timestamp=None, time_=time):
     user = users.get_current_user().email()
   if not timestamp:
     try:
-      _, timestr = base64.urlsafe_b64decode(str(token)).split(XSRF_DELIMITER, 1)
+      _, timestr = base64.urlsafe_b64decode(str(token)).rsplit(
+          XSRF_DELIMITER, 1)
       timestamp = float(timestr)
     except (ValueError, TypeError):
       return False

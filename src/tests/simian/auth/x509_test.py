@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,21 +16,34 @@
 #
 """x509 module tests."""
 
-
-
 import array
 import types
-from google.apputils import app
-from google.apputils import basetest
+
 import mox
 import stubout
-from pyasn1.type import univ
-from simian.auth import x509
+from pyasn1_modules import rfc2459
+
+from google.apputils import app
+from google.apputils import basetest
 from simian.auth import tlslite_bridge
+from simian.auth import x509
 
 
-class Error(Exception):
-  """Base Error."""
+def _RDNSeqFromTuple(values):
+  seq = rfc2459.RDNSequence()
+  for i, v in enumerate(values):
+    oi_type = '.'.join([str(x) for x in v[0]])
+    typevalue = rfc2459.AttributeTypeAndValue()
+    typevalue.setComponentByPosition(0, rfc2459.AttributeType(oi_type))
+    typevalue.setComponentByPosition(1, rfc2459.AttributeValue(v[1]))
+    seq.setComponentByPosition(
+        i,
+        rfc2459.RelativeDistinguishedName().setComponentByPosition(
+            0, typevalue))
+
+  return rfc2459.Name().setComponentByPosition(0, seq)
+
+
 
 
 class X509ModuleTest(mox.MoxTestBase):
@@ -263,13 +276,13 @@ class BaseDataObjectTest(mox.MoxTestBase):
     mock_dataobj = self.mox.CreateMockAnything()
     mock_dataobj._GetDataDict().AndReturn({'foo': 123})
 
-    def mock_setattr(cls, key, value):
-      self.assertEquals(key, 'GetFoo')
+    def MockSetattr(_, key, value):
+      self.assertEqual(key, 'GetFoo')
       self.assertTrue(type(value) is types.FunctionType)
       self.assertEqual(123, value(mock_dataobj))
 
     self.mox.ReplayAll()
-    x509.BaseDataObject.CreateGetMethod('Foo', 'foo', setattr_=mock_setattr)
+    x509.BaseDataObject.CreateGetMethod('Foo', 'foo', setattr_=MockSetattr)
     self.mox.VerifyAll()
 
 
@@ -361,7 +374,7 @@ class X509CertificateTest(mox.MoxTestBase):
     x509.datetime.datetime(*time_ary[0:7]).AndReturn('datetime')
 
     self.mox.ReplayAll()
-    self.assertEqual('datetime', self.x._CertTimestampToDatetime('ts'))
+    self.assertEqual('datetime', self.x._CertTimestampToDatetime(('ts', None)))
     self.mox.VerifyAll()
 
   def testStrToArray(self):
@@ -377,215 +390,8 @@ class X509CertificateTest(mox.MoxTestBase):
     x509.time.strptime('ts', self.x.TIMESTAMP_FMT).AndRaise(ValueError)
 
     self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateValueError,
-        self.x._CertTimestampToDatetime, 'ts')
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDKeyUsage(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_key_usage = univ.OctetString('\x03e_key_usage')
-    d_key_usage = ((1, 0, 1),)
-
-    x509.der_decoder.decode(e_key_usage).AndReturn(d_key_usage)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_KEY_USAGE, e_key_usage),
-    )
-
-    output = {
-        'key_usage': (
-            x509.X509V3_KEY_USAGE_BIT_FIELDS[0],
-            x509.X509V3_KEY_USAGE_BIT_FIELDS[2],
-            ),
-    }
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        output,
-        self.x._GetV3ExtensionFieldsFromSequence(seq))
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDKeyUsageBadParse(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    e_key_usage = univ.OctetString('e_key_usage')
-    d_key_usage = ((1, 0, 1),)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_KEY_USAGE, e_key_usage),
-    )
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetV3ExtensionFieldsFromSequence,
-        seq)
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraint(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = univ.OctetString('e_basic_const')
-    d_basic_const = ((True,), '')
-
-    x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_BASIC_CONSTRAINTS, e_basic_const),
-    )
-
-    output = {
-        'may_act_as_ca': True,
-    }
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        output,
-        self.x._GetV3ExtensionFieldsFromSequence(seq))
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintForm2(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = univ.OctetString('e_basic_const')
-    d_basic_const = ((True,), '')
-
-    x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_BASIC_CONSTRAINTS, True, e_basic_const),
-    )
-
-    output = {
-        'may_act_as_ca': True,
-    }
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        output,
-        self.x._GetV3ExtensionFieldsFromSequence(seq))
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintBadForm(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = univ.OctetString('e_basic_const')
-    d_basic_const = ((True,), '')
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_BASIC_CONSTRAINTS, True, e_basic_const, 'what', 'ugh'),
-    )
-
-    output = {
-        'may_act_as_ca': True,
-    }
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetV3ExtensionFieldsFromSequence,
-        seq)
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDBasicConstraintPaths(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_basic_const = univ.OctetString('e_basic_const')
-    d_basic_const = ((True,), ['unsupported path data'])
-
-    x509.der_decoder.decode(e_basic_const).AndReturn(d_basic_const)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_BASIC_CONSTRAINTS, e_basic_const),
-    )
-
-    output = {
-        'may_act_as_ca': True,
-    }
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetV3ExtensionFieldsFromSequence,
-        seq)
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDSubjectAltName(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    e_mspn = univ.OctetString('\x30mspn der encoded')
-    d_mspn = (
-        (x509.OID_MS_NT_PRINCIPAL_NAME, 'foo'),
-    )
-
-    x509.der_decoder.decode(e_mspn).AndReturn(d_mspn)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_SUBJECT_ALT_NAME, e_mspn),
-    )
-
-    output = {
-        'subject_alt_name': 'X_MS_NT_Principal_Name=foo',
-    }
-
-    self.mox.ReplayAll()
-    self.assertEqual(
-        output,
-        self.x._GetV3ExtensionFieldsFromSequence(seq))
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDSubjectAltNameBadForm(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    e_mspn = univ.OctetString('mspn der encoded wrong encapsulation')
-    d_mspn = (
-        (x509.OID_MS_NT_PRINCIPAL_NAME, 'foo'),
-    )
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_SUBJECT_ALT_NAME, e_mspn),
-    )
-
-    output = {
-        'subject_alt_name': 'X_MS_NT_Principal_Name=foo',
-    }
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetV3ExtensionFieldsFromSequence,
-        seq)
-    self.mox.VerifyAll()
-
-  def testGetV3ExtensionFieldsFromSequenceWhenOIDSubjectAltNameUnknownOID(self):
-    """Test _GetV3ExtensionFieldsFromSequence()."""
-    self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
-    unknown_oid = (1, 2, 3)
-    e_mspn = univ.OctetString('\x30mspn der encoded')
-    d_mspn = (
-        (unknown_oid, 'foo'),
-    )
-
-    x509.der_decoder.decode(e_mspn).AndReturn(d_mspn)
-
-    seq = (
-      ('junk', ('value', 'value')),
-      (x509.OID_X509V3_SUBJECT_ALT_NAME, e_mspn),
-    )
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetV3ExtensionFieldsFromSequence,
-        seq)
+    self.assertRaises(x509.CertificateValueError,
+                      self.x._CertTimestampToDatetime, ('ts', None))
     self.mox.VerifyAll()
 
   def testAttributeValueToString(self):
@@ -653,10 +459,9 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testAssembleDNSequence(self):
     """Test _AssembleDNSequence()."""
-    value = (
-      ((x509.OID_ID['CN'], 'foo'),),
-      ((x509.OID_ID['OU'], 'bar'),),
-    )
+    value = _RDNSeqFromTuple((
+        (x509.OID_ID['CN'], 'foo'),
+        (x509.OID_ID['OU'], 'bar'),))
     self.mox.StubOutWithMock(self.x, '_AttributeValueToString')
     self.x._AttributeValueToString('foo').AndReturn('foo')
     self.x._AttributeValueToString('bar').AndReturn('bar')
@@ -667,21 +472,9 @@ class X509CertificateTest(mox.MoxTestBase):
   def testAssembleDNSequenceWhenUnknownOID(self):
     """Test _AssembleDNSequence()."""
     bad_oid = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-    value = (
-      ((bad_oid, 'foo'),),
-      ((x509.OID_ID['OU'], 'bar'),),
-    )
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._AssembleDNSequence,
-        value)
-
-  def testAssembleDNSequenceWhenBadStructure(self):
-    """Test _AssembleDNSequence()."""
-    value = (
-      (x509.OID_ID['CN'], 'foo'),     # bad structure
-      ((x509.OID_ID['OU'], 'bar'),),
-    )
+    value = _RDNSeqFromTuple((
+        (bad_oid, 'foo'),
+        (x509.OID_ID['OU'], 'bar'),))
     self.assertRaises(
         x509.CertificateParseError,
         self.x._AssembleDNSequence,
@@ -689,16 +482,14 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testGetFieldsFromSequence(self):
     """Test _GetFieldsFromSequence()."""
-    sig_alg_seq = ('a','b')
+    sig_alg_seq = ('a', 'b')
     sig_alg = 'sigalg'
     before_ts = self.mox.CreateMockAnything()
     after_ts = self.mox.CreateMockAnything()
     mock_utctime = self.mox.CreateMockAnything()
     self.stubs.Set(x509.pyasn1.type.useful, 'UTCTime', mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    before_ts.isSameTypeWith(mock_utctime).AndReturn(True)
-    after_ts.isSameTypeWith(mock_utctime).AndReturn(True)
+    before_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(True)
+    after_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(True)
     serial_num = 12345
     v3ext = {
         'may_act_as_ca': 123,
@@ -706,16 +497,19 @@ class X509CertificateTest(mox.MoxTestBase):
         'subject_alt_name': 'subj alt name',
     }
 
-    seq = (
-        x509.X509_CERT_VERSION_3,
-        serial_num,
-        sig_alg_seq,
-        (((x509.OID_ID['CN'], 'issuer'),),),
-        (before_ts, after_ts),
-        (((x509.OID_ID['CN'], 'subject'),),),
-        'public key',
-        'x509v3 extensions',
-    )
+    seq = {
+        'version': x509.X509_CERT_VERSION_3,
+        'serialNumber': serial_num,
+        'signature': sig_alg_seq,
+        'issuer': (((x509.OID_ID['CN'], 'issuer'),),),
+        'validity': {
+            'notBefore': before_ts,
+            'notAfter': after_ts
+        },
+        'subject': (((x509.OID_ID['CN'], 'subject'),),),
+        'extensions': 'x509v3 extensions',
+        'extra_key': 'dsadas'
+    }
     seq_encoded = 'raw bytes'
     before_dt = 'before_dt'
     after_dt = 'after_dt'
@@ -727,57 +521,35 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(x509.der_encoder, 'encode', True)
     self.x._GetSignatureAlgorithmFromSequence(
         sig_alg_seq).AndReturn(sig_alg)
-    self.x._AssembleDNSequence(seq[3]).AndReturn('CN=issuer')
+    self.x._AssembleDNSequence(seq['issuer']).AndReturn('CN=issuer')
     self.x._CertTimestampToDatetime(before_ts).AndReturn(before_dt)
     self.x._CertTimestampToDatetime(after_ts).AndReturn(after_dt)
-    self.x._AssembleDNSequence(seq[5]).AndReturn('CN=subject')
-    self.x._GetV3ExtensionFieldsFromSequence(seq[7]).AndReturn(v3ext)
+    self.x._AssembleDNSequence(seq['subject']).AndReturn('CN=subject')
+    self.x._GetV3ExtensionFieldsFromSequence(seq['extensions']).AndReturn(v3ext)
     x509.der_encoder.encode(seq).AndReturn(seq_encoded)
 
     self.mox.ReplayAll()
     output = self.x._GetFieldsFromSequence(seq)
     self._CheckSaneCertFields(output)
-    self.assertEqual(
-        output, {
-            'serial_num': serial_num,
-            'issuer': u'CN=issuer',
-            'subject': u'CN=subject',
-            'valid_notbefore': before_dt,
-            'valid_notafter': after_dt,
-            'fields_data': seq_encoded,
-            'sig_algorithm': sig_alg,
-            'may_act_as_ca': v3ext['may_act_as_ca'],
-            'key_usage': v3ext['key_usage'],
-            'subject_alt_name': v3ext['subject_alt_name'],
-        })
-    self.mox.VerifyAll()
-
-  def testGetFieldsFromSequenceWhenSeqShort(self):
-    """Test _GetFieldsFromSequence()."""
-    serial_num = 12345
-
-    seq = (
-        x509.X509_CERT_VERSION_3,
-        serial_num,
-    )   # fails (length of entire sequence too short)
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetFieldsFromSequence, seq)
+    self.assertEqual({
+        'serial_num': serial_num,
+        'issuer': u'CN=issuer',
+        'subject': u'CN=subject',
+        'valid_notbefore': before_dt,
+        'valid_notafter': after_dt,
+        'fields_data': seq_encoded,
+        'sig_algorithm': sig_alg,
+        'may_act_as_ca': v3ext['may_act_as_ca'],
+        'key_usage': v3ext['key_usage'],
+        'subject_alt_name': v3ext['subject_alt_name'],
+    }, output)
     self.mox.VerifyAll()
 
   def testGetFieldsFromSequenceWhenWrongVersion(self):
     """Test _GetFieldsFromSequence()."""
-    seq = (
-        x509.X509_CERT_VERSION_3 * 2,  # fails
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-    )
+    seq = {
+        'version': x509.X509_CERT_VERSION_3 * 2,  # fails
+    }
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -787,33 +559,34 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testGetFieldsFromSequenceWhenValidityNotBeforeFail(self):
     """Test _GetFieldsFromSequence()."""
-    sig_alg_seq = ('a','b')
+    sig_alg_seq = ('a', 'b')
     sig_alg = 'sigalg'
     before_ts = self.mox.CreateMockAnything()
     after_ts = self.mox.CreateMockAnything()
     mock_utctime = self.mox.CreateMockAnything()
     self.stubs.Set(x509.pyasn1.type.useful, 'UTCTime', mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    before_ts.isSameTypeWith(mock_utctime).AndReturn(False)  # fails
+    before_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(False)  # fails
     serial_num = 12345
     bad_oid_cn = (9) * 10
 
-    seq = (
-        x509.X509_CERT_VERSION_3,
-        serial_num,
-        sig_alg_seq,
-        (((x509.OID_ID['CN'], 'issuer'),),),
-        (before_ts, after_ts),
-        (((x509.OID_ID['CN'], 'subject'),),),
-        'public key',
-        'x509v3 extensions',
-    )
+    seq = {
+        'version': x509.X509_CERT_VERSION_3,
+        'serialNumber': serial_num,
+        'signature': sig_alg_seq,
+        'issuer': (((x509.OID_ID['CN'], 'issuer'),),),
+        'validity': {
+            'notBefore': before_ts,
+            'notAfter': after_ts
+        },
+        'subject': (((x509.OID_ID['CN'], 'subject'),),),
+        'extensions': 'x509v3 extensions',
+    }
 
     self.mox.StubOutWithMock(self.x, '_GetSignatureAlgorithmFromSequence')
     self.mox.StubOutWithMock(self.x, '_AssembleDNSequence')
     self.x._GetSignatureAlgorithmFromSequence(
         sig_alg_seq).AndReturn(sig_alg)
-    self.x._AssembleDNSequence(seq[3]).AndReturn('CN=issuer')
+    self.x._AssembleDNSequence(seq['issuer']).AndReturn('CN=issuer')
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -823,35 +596,35 @@ class X509CertificateTest(mox.MoxTestBase):
 
   def testGetFieldsFromSequenceWhenValidityNotAfterFail(self):
     """Test _GetFieldsFromSequence()."""
-    sig_alg_seq = ('a','b')
+    sig_alg_seq = ('a', 'b')
     sig_alg = 'sigalg'
     before_ts = self.mox.CreateMockAnything()
     after_ts = self.mox.CreateMockAnything()
     mock_utctime = self.mox.CreateMockAnything()
     self.stubs.Set(x509.pyasn1.type.useful, 'UTCTime', mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    before_ts.isSameTypeWith(mock_utctime).AndReturn(True)
-    after_ts.isSameTypeWith(mock_utctime).AndReturn(False)  # fails
+    before_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(True)
+    after_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(False)  # fails
     serial_num = 12345
     bad_oid_cn = (9) * 10
 
-    seq = (
-        x509.X509_CERT_VERSION_3,
-        serial_num,
-        sig_alg_seq,
-        (((x509.OID_ID['CN'], 'issuer'),),),
-        (before_ts, after_ts),
-        (((x509.OID_ID['CN'], 'subject'),),),
-        'public key',
-        'x509v3 extensions',
-    )
+    seq = {
+        'version': x509.X509_CERT_VERSION_3,
+        'serialNumber': serial_num,
+        'signature': sig_alg_seq,
+        'issuer': (((x509.OID_ID['CN'], 'issuer'),),),
+        'validity': {
+            'notBefore': before_ts,
+            'notAfter': after_ts
+        },
+        'subject': (((x509.OID_ID['CN'], 'subject'),),),
+        'extensions': 'x509v3 extensions',
+    }
 
     self.mox.StubOutWithMock(self.x, '_GetSignatureAlgorithmFromSequence')
     self.mox.StubOutWithMock(self.x, '_AssembleDNSequence')
     self.x._GetSignatureAlgorithmFromSequence(
         sig_alg_seq).AndReturn(sig_alg)
-    self.x._AssembleDNSequence(seq[3]).AndReturn('CN=issuer')
+    self.x._AssembleDNSequence(seq['issuer']).AndReturn('CN=issuer')
 
     self.mox.ReplayAll()
     self.assertRaises(
@@ -867,22 +640,21 @@ class X509CertificateTest(mox.MoxTestBase):
     after_ts = self.mox.CreateMockAnything()
     mock_utctime = self.mox.CreateMockAnything()
     self.stubs.Set(x509.pyasn1.type.useful, 'UTCTime', mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    mock_utctime().AndReturn(mock_utctime)
-    before_ts.isSameTypeWith(mock_utctime).AndReturn(True)
-    after_ts.isSameTypeWith(mock_utctime).AndReturn(True)
+    before_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(True)
+    after_ts.isSameTypeWith(mox.IgnoreArg()).AndReturn(True)
     serial_num = 12345
-    v3ext = { 'may_act_as_ca': 123, 'key_usage': (1, 2, 3) }
 
-    seq = (
-        x509.X509_CERT_VERSION_3,
-        serial_num,
-        sig_alg_seq,
-        (((x509.OID_ID['CN'], 'issuer'),),),
-        (before_ts, after_ts),
-        (((x509.OID_ID['CN'], 'subject'),),),
-        'public key',
-    )
+    seq = {
+        'version': x509.X509_CERT_VERSION_3,
+        'serialNumber': serial_num,
+        'signature': sig_alg_seq,
+        'issuer': (((x509.OID_ID['CN'], 'issuer'),),),
+        'validity': {
+            'notBefore': before_ts,
+            'notAfter': after_ts
+        },
+        'subject': (((x509.OID_ID['CN'], 'subject'),),),
+    }
     seq_encoded = 'raw bytes'
     before_dt = 'before_dt'
     after_dt = 'after_dt'
@@ -893,10 +665,10 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(x509.der_encoder, 'encode', True)
     self.x._GetSignatureAlgorithmFromSequence(
         sig_alg_seq).AndReturn(sig_alg)
-    self.x._AssembleDNSequence(seq[3]).AndReturn('CN=issuer')
+    self.x._AssembleDNSequence(seq['issuer']).AndReturn('CN=issuer')
     self.x._CertTimestampToDatetime(before_ts).AndReturn(before_dt)
     self.x._CertTimestampToDatetime(after_ts).AndReturn(after_dt)
-    self.x._AssembleDNSequence(seq[5]).AndReturn('CN=subject')
+    self.x._AssembleDNSequence(seq['subject']).AndReturn('CN=subject')
     x509.der_encoder.encode(seq).AndReturn(seq_encoded)
 
     self.mox.ReplayAll()
@@ -917,7 +689,7 @@ class X509CertificateTest(mox.MoxTestBase):
   def testGetSignatureAlgorithmFromSequence(self):
     """Test _GetSignatureAlgorithmFromSequence()."""
     alg = self.x.SIGNATURE_ALGORITHMS[0]
-    seq = (alg, '')
+    seq = {'algorithm': alg}
     output = self.x._GetSignatureAlgorithmFromSequence(seq)
     self._CheckSaneCertFields(output)
     self.assertEqual(output['sig_algorithm'], alg)
@@ -926,24 +698,9 @@ class X509CertificateTest(mox.MoxTestBase):
     """Test _GetSignatureAlgorithmFromSequence()."""
     alg = (5, 4, 3, 2, 1)  # fake OID
     self.assertFalse(alg in self.x.SIGNATURE_ALGORITHMS)
-    seq = (alg, '')
+    seq = {'algorithm': alg}
     self.assertRaises(
         x509.CertificateValueError,
-        self.x._GetSignatureAlgorithmFromSequence, seq)
-
-  def testGetSignatureAlgorithmFromSequenceWhenJunkSeq(self):
-    """Test _GetSignatureAlgorithmFromSequence()."""
-    alg = self.x.SIGNATURE_ALGORITHMS[0]
-    seq = (alg, '', '', '')
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetSignatureAlgorithmFromSequence, seq)
-
-  def testGetSignatureAlgorithmFromSequenceWhenJunk(self):
-    """Test _GetSignatureAlgorithmFromSequence()."""
-    seq = True
-    self.assertRaises(
-        x509.CertificateParseError,
         self.x._GetSignatureAlgorithmFromSequence, seq)
 
   def testGetSignatureFromSequence(self):
@@ -981,31 +738,26 @@ class X509CertificateTest(mox.MoxTestBase):
         self.x._GetSignatureFromSequence, non_binary_seq)
     self.mox.VerifyAll()
 
-  def testGetSignatureFromSequenceWhenJunkInput(self):
-    """Test _GetSignatureFromSequence()."""
-    junk_seq = ['a'] * 1024
-
-    self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateParseError,
-        self.x._GetSignatureFromSequence, junk_seq)
-    self.mox.VerifyAll()
-
   def testGetCertSequencesFromTopSequence(self):
     """Test GetCertSequencesFromTopSequence()."""
-    seq = ((0, 1, 2),)
+    seq = ({'tbsCertificate': 0, 'signatureAlgorithm': 1, 'signatureValue': 2},)
 
     self.mox.StubOutWithMock(self.x, '_GetFieldsFromSequence')
     self.mox.StubOutWithMock(self.x, '_GetSignatureAlgorithmFromSequence')
     self.mox.StubOutWithMock(self.x, '_GetSignatureFromSequence')
 
-    self.x._GetFieldsFromSequence(seq[0][0]).AndReturn({'a':1})
-    self.x._GetSignatureAlgorithmFromSequence(seq[0][1]).AndReturn({'b':1})
-    self.x._GetSignatureFromSequence(seq[0][2]).AndReturn({'c':1})
+    self.x._GetFieldsFromSequence(seq[0]['tbsCertificate']).AndReturn({'a': 1})
+    self.x._GetSignatureAlgorithmFromSequence(
+        seq[0]['signatureAlgorithm']).AndReturn({
+            'b': 1
+        })
+    self.x._GetSignatureFromSequence(seq[0]['signatureValue']).AndReturn({
+        'c': 1
+    })
 
     self.mox.ReplayAll()
     o = self.x._GetCertSequencesFromTopSequence(seq)
-    self.assertEqual(o, {'a':1, 'b':1, 'c':1})
+    self.assertEqual(o, {'a': 1, 'b': 1, 'c': 1})
     self.mox.VerifyAll()
 
   def testGetCertSequencesFromTopSequenceWhenBadTuple(self):
@@ -1048,22 +800,22 @@ class X509CertificateTest(mox.MoxTestBase):
     self.mox.StubOutWithMock(self.x, '_GetPublicKeyFromByteString')
     self.mox.StubOutWithMock(self.x, 'Reset')
 
-    bytes = 'bytes'
+    data = 'bytes'
     seq = 'seq'
     certseq = {'certseq': 1}
     pubkey = {'pubkey': 1}
-    cert = { 'entire_byte_string': bytes }
+    cert = {'entire_byte_string': data}
     cert.update(base_cert)
     cert.update(certseq)
     cert.update(pubkey)
 
-    x509.der_decoder.decode(bytes).AndReturn(seq)
+    x509.der_decoder.decode(data, asn1Spec=mox.IgnoreArg()).AndReturn(seq)
     self.x._GetCertSequencesFromTopSequence(seq).AndReturn(certseq)
-    self.x._GetPublicKeyFromByteString(bytes).AndReturn(pubkey)
+    self.x._GetPublicKeyFromByteString(data).AndReturn(pubkey)
     self.x.Reset().AndReturn(None)
 
     self.mox.ReplayAll()
-    self.x.LoadFromByteString(bytes)
+    self.x.LoadFromByteString(data)
     self.assertEqual(self.x._cert, cert)
     self.mox.VerifyAll()
 
@@ -1071,14 +823,14 @@ class X509CertificateTest(mox.MoxTestBase):
     """Test LoadFromByteString()."""
     self.mox.StubOutWithMock(x509.der_decoder, 'decode', True)
 
-    bytes = 'bytes'
+    data = 'bytes'
 
-    x509.der_decoder.decode(bytes).AndRaise(x509.pyasn1.error.PyAsn1Error)
+    x509.der_decoder.decode(
+        data, asn1Spec=mox.IgnoreArg()).AndRaise(x509.pyasn1.error.PyAsn1Error)
 
     self.mox.ReplayAll()
-    self.assertRaises(
-        x509.CertificateASN1FormatError,
-        self.x.LoadFromByteString, bytes)
+    self.assertRaises(x509.CertificateASN1FormatError,
+                      self.x.LoadFromByteString, data)
     self.mox.VerifyAll()
 
   def testCheckValidityWhenObtainUtc(self):

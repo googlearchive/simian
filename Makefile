@@ -1,5 +1,5 @@
 #
-# Copyright 2011 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 
 OSX_VERSION=$(shell sw_vers -productVersion 2>/dev/null | cut -d. -f1-2)
@@ -84,6 +84,7 @@ server_config:
 	src/simian/util/link_module.sh pytz
 	src/simian/util/link_module.sh tlslite
 	src/simian/util/link_module.sh pyasn1
+	src/simian/util/link_module.sh pyasn1_modules
 	src/simian/util/link_module.sh GoogleAppEngineCloudStorageClient
 	VE/bin/python src/simian/util/compile_js.py gae_bundle/simian/mac/admin/js/simian.js
 
@@ -148,6 +149,7 @@ ${SIMIAN}.dmg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
+	-R .eggs/pyasn1_modules-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
 	-R .eggs/pytz-*.egg \
@@ -175,6 +177,7 @@ ${SIMIAN}.pkg: os_check ${SDIST} clean_contents contents.tar.gz m2crypto vep
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
+	-R .eggs/pyasn1_modules-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
 	-R .eggs/pytz-*.egg \
@@ -202,6 +205,7 @@ ${SIMIAN}-and-${MUNKI}.pkg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
+	-R .eggs/pyasn1_modules-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
 	-R .eggs/pytz-*.egg \
@@ -227,6 +231,7 @@ ${SIMIAN}-and-${MUNKI}.dmg: os_check ${SDIST} clean_contents m2crypto add_munkic
 	-R .eggs/WebOb-*.egg \
 	-R .eggs/google_apputils-*.egg \
 	-R .eggs/pyasn1-*.egg \
+	-R .eggs/pyasn1_modules-*.egg \
 	-R .eggs/python_dateutil-*.egg \
 	-R .eggs/python_gflags-*.egg \
 	-R .eggs/pytz-*.egg \

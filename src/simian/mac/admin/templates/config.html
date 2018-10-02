@@ -9,11 +9,11 @@
   <dt><h3>{{ pem_name }}</h3></dt>
   <dd style="margin-left: 6px">
   {% if pem.pem %}
-    {% ifequal pem.validation "Valid" %}
+    {% if pem.validation == "Valid" %}
       <span style="color: green;">Valid</span>
     {% else %}
       <span style="color: red;">{{ pem.validation }}</span>
-    {% endifequal %}
+    {% endif %}
   {% else %}
     <span style="color: red;">Missing</span>
   {% endif %}
@@ -65,12 +65,12 @@
       {% else %}
         {# TODO: change to elif when GAE supports Django 1.4 #}
         {% if setting.type == "random_str" %}
-          {% ifequal name "xsrf_secret" %}
+          {% if name == "xsrf_secret" %}
             <form action="/admin/config" method="post">
           {% else %}
             <form action="/admin/config" method="post"
                   onsubmit="return simian.ajaxSubmit(this, function(json) {simian.setTextContent(document.getElementById('setting_{{ name }}'), json['values'][0]['value']);});">
-          {% endifequal %}
+          {% endif %}
             <input type="hidden" name="setting" value="{{ name }}"/>
             <input type="hidden" name="xsrf_token" value="{{ xsrf_token }}"/>
             <span id="setting_{{ name }}">{{ setting.value }}</span>

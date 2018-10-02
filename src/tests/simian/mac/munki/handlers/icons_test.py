@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,11 +48,14 @@ class IconsModuleTest(test.AppengineTest):
 
     content = 'IMAGE_CONTENT'
     with gcs.open(
-        '/test/%s.png' % base64.urlsafe_b64encode('filename'), 'w') as f:
+        '/test/%s.png' % base64.urlsafe_b64encode('Fname Dogfood'), 'w') as f:
       f.write(content)
-    resp = self.testapp.get('/icons/filename.png', status=httplib.OK)
+    resp = self.testapp.get('/icons/Fname Dogfood.png', status=httplib.OK)
 
     self.assertEqual(content, resp.body)
+
+  def testHashesPlist(self, _):
+    self.testapp.get('/icons/_icon_hashes.plist', status=httplib.OK)
 
 
 def main(unused_argv):

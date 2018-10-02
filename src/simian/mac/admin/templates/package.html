@@ -155,26 +155,35 @@
 {% else %}
 
 <div style="display:inline-block;margin:0;padding:0">
-    {% if not pkg_safe_to_modify %}
-      <div class="infopanel">
-        {% if is_admin_user %}
-          <div style="float:right">
-            <a onclick="unlockform.submit();" class="red button" style="margin: 6px 0 6px 10px">Unlock Package</a>
-          </div>
-        {% endif %}
-        {% if approval_required %}
-            Some fields have been disabled because this package is in at least
-            one catalog.<br/>
-            Please remove it from all catalogs and save before making other
-            changes.
-        {% else %}
-            Some fields have been disabled because this package is either in
-            stable or testing.<br/>
-            Please move to unstable and save before making other changes.
-        {% endif %}
-        <div style="clear: both;"></div>
-      </div>
-    {% endif %}
+  {% if not pkg.plist_is_signed %}
+  <div class="infopanel">
+    <span style="color:red;font-weight:bold">
+      Plist is Not Signed
+    </span>
+    - This package will not be served to users with plist signature verification turned on.
+    <div style="clear: both;"></div>
+  </div>
+  {% endif %}
+  {% if not pkg_safe_to_modify %}
+    <div class="infopanel">
+      {% if is_admin_user %}
+        <div style="float:right">
+          <a onclick="unlockform.submit();" class="red button" style="margin: 6px 0 6px 10px">Unlock Package</a>
+        </div>
+      {% endif %}
+      {% if approval_required %}
+          Some fields have been disabled because this package is in at least
+          one catalog.<br/>
+          Please remove it from all catalogs and save before making other
+          changes.
+      {% else %}
+          Some fields have been disabled because this package is either in
+          stable or testing.<br/>
+          Please move to unstable and save before making other changes.
+      {% endif %}
+      <div style="clear: both;"></div>
+    </div>
+  {% endif %}
 
   <div class="formcolumn">
     <label>Disk Image</label>

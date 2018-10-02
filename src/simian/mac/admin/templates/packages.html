@@ -113,11 +113,23 @@
       </thead>
       <tbody>
       {% for pkg in packages %}
-        <tr {% if pkg.filename == active_pkg %} class="activepkg"{% endif %}
+        <tr {% if pkg.filename == active_pkg %}
+              {% if pkg.plist_is_signed %}
+                class="activepkg"
+              {% else %}
+                class="activeunsignedpkg"
+              {% endif %}
+            {% else %}
+              {% if pkg.plist_is_signed %}
+                class="signedpkg"
+              {% else %}
+                class="unsignedpkg"
+              {% endif %}
+            {% endif %}
             id="package-{{ pkg.filename }}">
           <td>
             {% if is_admin or can_upload or is_support_user %}
-              <a href="/admin/package/{{ pkg.filename }}"
+              <a href="/admin/package/{{ pkg.filename }}?report_type={{ report_type }}"
                  title="{{ pkg.description|escape }}">{{ pkg.munki_name }}</a>
             {% else %}
               <span title="{{ pkg.description|escape }}">

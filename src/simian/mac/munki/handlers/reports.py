@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -125,9 +125,11 @@ class Reports(handlers.AuthenticationHandler):
         # check if preflight_count_since_postflight warrants a repair.
         if (c.preflight_count_since_postflight >=
             REPAIR_CLIENT_PREFLIGHT_COUNT_SINCE_POSTFLIGHT):
+          # disable repair since it's non-functional
+          # TODO(b/111302920): re-enable after repair functionality is fixed.
           feedback['pkill_installd'] = True
           feedback['pkill_softwareupdated'] = True
-          feedback['repair'] = True
+          # feedback['repair'] = True
           feedback['logging_level'] = 3
           feedback['upload_logs'] = True
 

@@ -100,9 +100,9 @@
 
     <form class="search" method="GET" style="display: inline; float: right;">
       <select name="filter_field" style="float: left;">
-        <option value="target" {% ifequal mods_filter "target" %}selected{% endifequal %}>Target</option>
-        <option value="package" {% ifequal mods_filter "package" %}selected{% endifequal %}>Package</option>
-        <option value="admin" {% ifequal mods_filter "admin" %}selected{% endifequal %}>Admin</option>
+        <option value="target" {% if mods_filter == "target" %}selected{% endif %}>Target</option>
+        <option value="package" {% if mods_filter == "package" %}selected{% endif %}>Package</option>
+        <option value="admin" {% if mods_filter == "admin" %}selected{% endif %}>Admin</option>
       </select>
       <input type="text" name="filter_value" value="{{ mods_filter_value }}" />
       <input type="hidden" name="mod_type" value="{{ mod_type }}" />

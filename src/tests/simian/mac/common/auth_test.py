@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -297,27 +297,9 @@ class AuthModuleTest(basetest.TestCase):
     email_two = 'user2@example.com'
     email_three = 'user3@example.com'
 
-    setattr(auth.settings, 'ENABLE_PROPOSALS_GROUP', True)
-    setattr(auth.settings, 'PROPOSALS_GROUP', 'group')
     with mock.patch.object(auth, 'IsAdminUser', return_value=True):
       test_resolver.email = email_one
       self.assertTrue(test_resolver._IsAllowedToPropose())
-
-    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
-      with mock.patch.object(
-          auth, 'IsGroupMember', return_value=True) as mock_is_group_member:
-        test_resolver.email = email_two
-        self.assertTrue(test_resolver._IsAllowedToPropose())
-        mock_is_group_member.assert_called_once_with(
-            email_two, 'proposals_group', remote_group_lookup=True)
-
-    with mock.patch.object(auth, 'IsAdminUser', return_value=False):
-      with mock.patch.object(
-          auth, 'IsGroupMember', return_value=False) as mock_is_group_member:
-        test_resolver.email = email_three
-        self.assertFalse(test_resolver._IsAllowedToPropose())
-        mock_is_group_member.assert_called_once_with(
-            email_three, 'proposals_group', remote_group_lookup=True)
 
   def testIsAllowedToUploadProposalsOff(self):
     """Test PermissionResolver._IsAllowedToUpload() with proposals."""

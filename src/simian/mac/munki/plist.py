@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1561,9 +1561,7 @@ def GetXmlStr(value, indent_num=None):
     str_xml.append(DictToXml(value, indent_num=indent_num))
   elif value_type is str or value_type is unicode:
     str_xml.append('%s<string>%s</string>' % (indent, EscapeString(value)))
-  elif value_type is int:
-    str_xml.append('%s<integer>%d</integer>' % (indent, value))
-  elif value_type is long:
+  elif value_type is int or value_type is long:
     str_xml.append('%s<integer>%d</integer>' % (indent, value))
   elif value_type is float:
     str_xml.append('%s<real>%f</real>' % (indent, value))

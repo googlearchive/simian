@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc. All Rights Reserved.
+# Copyright 2018 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ class Package(admin.AdminHandler):
     p.unattended = p.plist.get('unattended_install')
     p.unattended_uninstall = p.plist.get('unattended_uninstall')
     p.version = p.plist['version']
+    p.plist_is_signed = p.plist_is_signed()
     force_install_after_date = p.plist.get('force_install_after_date', None)
     if force_install_after_date:
       p.force_install_after_date = datetime.datetime.strftime(
@@ -66,7 +67,7 @@ class Package(admin.AdminHandler):
       p.force_install_after_date_time = datetime.datetime.strftime(
           force_install_after_date, '%H:%M')
 
-    if self.request.referrer and self.request.referrer.endswith('proposals'):
+    if self.request.get('report_type') == 'proposals':
       return_address = '/admin/proposals'
       return_title = 'proposals'
     else:
