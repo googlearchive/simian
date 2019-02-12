@@ -1,4 +1,10 @@
-![ci](https://travis-ci.org/google/simian.svg?branch=master)
+### Status: Archived
+
+This repository has been archived and is [no longer maintained](https://groups.google.com/forum/#!topic/simian-discuss/IoG626TXjPM).
+
+Simian has served Google well for many years, so we’d love to see development continue with someone else as maintainer.
+If you’re interested in taking Simian over, please fork the project.
+
 ### Overview
 
 **Note 1: OS X 10.6, 10.7, 10.8 support dropped (22 April 2016)**
